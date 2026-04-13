@@ -42,7 +42,7 @@ const _allFeatures = [
   _Feature(route: '/admin/branches', label: 'Sucursales', description: 'Sucursales por empresa', icon: Icons.store_rounded),
   _Feature(route: '/organization/sellers', label: 'Vendedores', description: 'Gestión de vendedores', icon: Icons.store_mall_directory_rounded),
   _Feature(route: '/people', label: 'Personal', description: 'Gestión de personas / empleados', icon: Icons.badge_rounded),
-  _Feature(route: '/products', label: 'Catálogo de Productos', description: 'Productos, presentaciones, catálogo', icon: Icons.inventory_2_rounded),
+  _Feature(route: '/products', label: 'Artículos', description: 'Productos, presentaciones, catálogo', icon: Icons.inventory_2_rounded),
   _Feature(route: '/products/types', label: 'Tipos de Producto', description: 'Clasificación de tipos de producto', icon: Icons.category_rounded),
   _Feature(route: '/products/brands', label: 'Marcas', description: 'Marcas registradas', icon: Icons.branding_watermark_rounded),
   _Feature(route: '/products/price-types', label: 'Tipos de Precio', description: 'Tipos de precios y monedas', icon: Icons.price_change_rounded),

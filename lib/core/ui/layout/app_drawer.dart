@@ -126,7 +126,7 @@ class AppDrawer extends ConsumerWidget {
                 // Productos
                 _CollapsibleHeader(label: 'Productos', sectionKey: 'productos', isExpanded: isExp('productos'), onTap: () => toggle('productos')),
                 if (isExp('productos')) ...[
-                  if (perms.canAccessRoute('/products')) _navItem(context, '/products', Icons.inventory_2_rounded, 'Catálogo', primary: true),
+                  if (perms.canAccessRoute('/products')) _navItem(context, '/products', Icons.inventory_2_rounded, 'Artículos', primary: true),
                   if (perms.canAccessRoute('/products/types')) _navItem(context, '/products/types', Icons.category_rounded, 'Tipos de producto'),
                   if (perms.canAccessRoute('/products/brands')) _navItem(context, '/products/brands', Icons.branding_watermark_rounded, 'Marcas'),
                   if (perms.canAccessRoute('/products/storage-conditions')) _navItem(context, '/products/storage-conditions', Icons.thermostat_rounded, 'Condiciones almac.'),
