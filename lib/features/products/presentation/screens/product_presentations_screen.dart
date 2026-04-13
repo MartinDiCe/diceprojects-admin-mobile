@@ -22,10 +22,12 @@ class _PresentationDto {
   final String sku;
   final String? barcode;
   final String presentationTypeCode;
-  final String uomCode;
-  final double conversionFactor;
-  final double? basePrice;
+  final String baseUnitCode;
+  final double conversionToBaseQty;
   final bool isDefault;
+  final bool allowsSale;
+  final bool allowsPurchase;
+  final bool allowsStock;
   final bool active;
   final bool hasMovements;
 
@@ -34,10 +36,12 @@ class _PresentationDto {
     required this.sku,
     this.barcode,
     required this.presentationTypeCode,
-    required this.uomCode,
-    required this.conversionFactor,
-    this.basePrice,
+    required this.baseUnitCode,
+    required this.conversionToBaseQty,
     required this.isDefault,
+    required this.allowsSale,
+    required this.allowsPurchase,
+    required this.allowsStock,
     required this.active,
     required this.hasMovements,
   });
@@ -48,11 +52,15 @@ class _PresentationDto {
         sku: json['sku']?.toString() ?? '',
         barcode: json['barcode']?.toString(),
         presentationTypeCode: json['presentationTypeCode']?.toString() ?? '',
-        uomCode: json['uomCode']?.toString() ?? '',
-        conversionFactor: (json['conversionFactor'] as num?)?.toDouble() ?? 1.0,
-        basePrice: (json['basePrice'] as num?)?.toDouble(),
+        baseUnitCode: json['baseUnitCode']?.toString() ?? '',
+        conversionToBaseQty: (json['conversionToBaseQty'] as num?)?.toDouble()
+            ?? (json['unitQuantity'] as num?)?.toDouble()
+            ?? 1.0,
         isDefault: json['isDefault'] == true,
-        active: json['active'] == true,
+        allowsSale: json['allowsSale'] != false,
+        allowsPurchase: json['allowsPurchase'] == true,
+        allowsStock: json['allowsStock'] != false,
+        active: json['active'] != false,
         hasMovements: json['hasMovements'] == true,
       );
 }
@@ -159,8 +167,7 @@ class _ProductPresentationsScreenState
     if (confirmed != true) return;
     try {
       final dio = ref.read(dioProvider);
-      await dio.delete(
-          '/v1/products/${widget.productId}/presentations/${pr.id}');
+      await dio.delete('/v1/presentations/${pr.id}');
       _load();
     } catch (e) {
       if (mounted) {
@@ -277,7 +284,7 @@ class _PresentationCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              '${item.presentationTypeCode} · ${item.uomCode} · x${item.conversionFactor}',
+              '${item.presentationTypeCode} · ${item.baseUnitCode} · x${item.conversionToBaseQty}',
               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             ),
             if (item.barcode != null)
@@ -285,11 +292,16 @@ class _PresentationCard extends StatelessWidget {
                 'Barcode: ${item.barcode}',
                 style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
               ),
-            if (item.basePrice != null)
-              Text(
-                'Precio base: \$${item.basePrice!.toStringAsFixed(2)}',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-              ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                _FlagChip('Venta', item.allowsSale),
+                const SizedBox(width: 4),
+                _FlagChip('Compra', item.allowsPurchase),
+                const SizedBox(width: 4),
+                _FlagChip('Stock', item.allowsStock),
+              ],
+            ),
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -341,6 +353,29 @@ class _Chip extends StatelessWidget {
 
 // ─────────────────────────────── Bottom Sheet Form ──────────────────────────
 
+class _FlagChip extends StatelessWidget {
+  final String label;
+  final bool active;
+  const _FlagChip(this.label, this.active);
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        decoration: BoxDecoration(
+          color: active ? Colors.green.shade50 : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: active ? Colors.green.shade700 : Colors.grey.shade400,
+          ),
+        ),
+      );
+}
+
 class _PresentationFormSheet extends ConsumerStatefulWidget {
   final String productId;
   final _PresentationDto? existing;
@@ -363,10 +398,13 @@ class _PresentationFormSheetState
   late final TextEditingController _skuCtrl;
   late final TextEditingController _barcodeCtrl;
   late final TextEditingController _factorCtrl;
-  late final TextEditingController _priceCtrl;
 
   String? _presentationTypeCode;
-  String? _uomCode;
+  String? _baseUnitCode;
+  bool _isDefault = false;
+  bool _allowsSale = true;
+  bool _allowsPurchase = false;
+  bool _allowsStock = true;
   bool _saving = false;
   String? _error;
 
@@ -380,11 +418,13 @@ class _PresentationFormSheetState
     _skuCtrl = TextEditingController(text: e?.sku ?? '');
     _barcodeCtrl = TextEditingController(text: e?.barcode ?? '');
     _factorCtrl =
-        TextEditingController(text: e?.conversionFactor.toString() ?? '1');
-    _priceCtrl = TextEditingController(
-        text: e?.basePrice != null ? e!.basePrice!.toString() : '');
+        TextEditingController(text: e?.conversionToBaseQty.toString() ?? '1');
     _presentationTypeCode = e?.presentationTypeCode;
-    _uomCode = e?.uomCode;
+    _baseUnitCode = e?.baseUnitCode;
+    _isDefault = e?.isDefault ?? false;
+    _allowsSale = e?.allowsSale ?? true;
+    _allowsPurchase = e?.allowsPurchase ?? false;
+    _allowsStock = e?.allowsStock ?? true;
   }
 
   @override
@@ -392,7 +432,6 @@ class _PresentationFormSheetState
     _skuCtrl.dispose();
     _barcodeCtrl.dispose();
     _factorCtrl.dispose();
-    _priceCtrl.dispose();
     super.dispose();
   }
 
@@ -400,11 +439,10 @@ class _PresentationFormSheetState
       List<_CatOption> presTypes, List<_CatOption> uomList) async {
     if (!_formKey.currentState!.validate()) return;
 
-    // Auto-pick first option if not yet selected
     final typeCode =
         _presentationTypeCode ?? (presTypes.isNotEmpty ? presTypes.first.code : '');
     final uomCode =
-        _uomCode ?? (uomList.isNotEmpty ? uomList.first.code : '');
+        _baseUnitCode ?? (uomList.isNotEmpty ? uomList.first.code : '');
 
     if (typeCode.isEmpty || uomCode.isEmpty) {
       setState(() => _error = 'Seleccioná tipo y unidad de medida.');
@@ -421,17 +459,19 @@ class _PresentationFormSheetState
       final barcode = _barcodeCtrl.text.trim().isEmpty
           ? null
           : _barcodeCtrl.text.trim();
-      final basePrice = double.tryParse(_priceCtrl.text.trim());
+      final factor = double.tryParse(_factorCtrl.text.trim()) ?? 1.0;
 
       if (!_isEdit) {
-        final factor = double.tryParse(_factorCtrl.text.trim()) ?? 1.0;
         final body = <String, dynamic>{
           'sku': _skuCtrl.text.trim(),
           'presentationTypeCode': typeCode,
-          'uomCode': uomCode,
-          'conversionFactor': factor,
+          'baseUnitCode': uomCode,
+          'conversionToBaseQty': factor,
+          'isDefault': _isDefault,
+          'allowsSale': _allowsSale,
+          'allowsPurchase': _allowsPurchase,
+          'allowsStock': _allowsStock,
           if (barcode != null) 'barcode': barcode,
-          if (basePrice != null) 'basePrice': basePrice,
         };
         await dio.post(
           '/v1/products/${widget.productId}/presentations',
@@ -440,12 +480,16 @@ class _PresentationFormSheetState
       } else {
         final body = <String, dynamic>{
           if (!_hasMovements) 'presentationTypeCode': typeCode,
-          if (!_hasMovements) 'uomCode': uomCode,
+          if (!_hasMovements) 'baseUnitCode': uomCode,
+          if (!_hasMovements) 'conversionToBaseQty': factor,
           'barcode': barcode,
-          if (basePrice != null) 'basePrice': basePrice else 'basePrice': null,
+          'isDefault': _isDefault,
+          'allowsSale': _allowsSale,
+          'allowsPurchase': _allowsPurchase,
+          'allowsStock': _allowsStock,
         };
-        await dio.put(
-          '/v1/products/${widget.productId}/presentations/${widget.existing!.id}',
+        await dio.patch(
+          '/v1/presentations/${widget.existing!.id}',
           data: body,
         );
       }
@@ -574,12 +618,12 @@ class _PresentationFormSheetState
                   decoration: _dec('Unidad de medida *', 'Error al cargar'),
                 ),
                 data: (uomList) {
-                  if (_uomCode == null && uomList.isNotEmpty) {
-                    _uomCode = uomList.first.code;
+                  if (_baseUnitCode == null && uomList.isNotEmpty) {
+                    _baseUnitCode = uomList.first.code;
                   }
                   return DropdownButtonFormField<String>(
-                    value: uomList.any((u) => u.code == _uomCode)
-                        ? _uomCode
+                    value: uomList.any((u) => u.code == _baseUnitCode)
+                        ? _baseUnitCode
                         : (uomList.isNotEmpty ? uomList.first.code : null),
                     decoration: _dec('Unidad de medida *', ''),
                     isExpanded: true,
@@ -591,7 +635,7 @@ class _PresentationFormSheetState
                         .toList(),
                     onChanged: _hasMovements
                         ? null
-                        : (v) => setState(() => _uomCode = v),
+                        : (v) => setState(() => _baseUnitCode = v),
                     validator: (v) =>
                         (v == null || v.isEmpty) ? 'Requerido' : null,
                   );
@@ -604,41 +648,64 @@ class _PresentationFormSheetState
                 decoration: _dec('Barcode', 'Opcional'),
               ),
               const SizedBox(height: 12),
-              // Conversion factor (only create)
-              if (!_isEdit) ...[
-                TextFormField(
-                  controller: _factorCtrl,
-                  enabled: !_hasMovements,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: _dec(
-                      'Factor de conversión', '1',
-                      helper: 'Multiplicador respecto a la unidad base'),
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Requerido';
-                    if (double.tryParse(v.trim()) == null) {
-                      return 'Debe ser un número válido';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-              ],
-              // Base price
+              // Conversion factor (always visible)
               TextFormField(
-                controller: _priceCtrl,
+                controller: _factorCtrl,
+                enabled: !_hasMovements,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
-                decoration: _dec('Precio base', '0.00', helper: 'Opcional'),
+                decoration: _dec(
+                    'Factor de conversión a unidad base *', '1',
+                    helper: _hasMovements
+                        ? 'No editable: existen movimientos'
+                        : 'Cantidad de unidad base que contiene esta presentación'),
                 validator: (v) {
-                  if (v == null || v.trim().isEmpty) return null;
+                  if (v == null || v.trim().isEmpty) return 'Requerido';
                   if (double.tryParse(v.trim()) == null) {
                     return 'Debe ser un número válido';
                   }
                   return null;
                 },
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
+              // isDefault toggle
+              SwitchListTile(
+                title: const Text('Presentación predeterminada',
+                    style: TextStyle(fontSize: 14)),
+                value: _isDefault,
+                onChanged: (v) => setState(() => _isDefault = v),
+                contentPadding: EdgeInsets.zero,
+                activeColor: AppColors.accent,
+              ),
+              const Divider(height: 8),
+              // Operational flags
+              const Text('Permisos operativos',
+                  style: TextStyle(fontSize: 12, color: Colors.grey)),
+              SwitchListTile(
+                title: const Text('Permite venta',
+                    style: TextStyle(fontSize: 14)),
+                value: _allowsSale,
+                onChanged: (v) => setState(() => _allowsSale = v),
+                contentPadding: EdgeInsets.zero,
+                activeColor: Colors.green,
+              ),
+              SwitchListTile(
+                title: const Text('Permite compra',
+                    style: TextStyle(fontSize: 14)),
+                value: _allowsPurchase,
+                onChanged: (v) => setState(() => _allowsPurchase = v),
+                contentPadding: EdgeInsets.zero,
+                activeColor: Colors.green,
+              ),
+              SwitchListTile(
+                title: const Text('Permite stock',
+                    style: TextStyle(fontSize: 14)),
+                value: _allowsStock,
+                onChanged: (v) => setState(() => _allowsStock = v),
+                contentPadding: EdgeInsets.zero,
+                activeColor: Colors.green,
+              ),
+              const SizedBox(height: 8),
               // Save button
               presTypesAsync.maybeWhen(
                 data: (types) => uomAsync.maybeWhen(
