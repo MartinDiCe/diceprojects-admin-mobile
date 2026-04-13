@@ -1,5 +1,6 @@
 import 'package:app_diceprojects_admin/core/config/app_config.dart';
 import 'package:app_diceprojects_admin/core/errors/error_handler.dart';
+import 'package:app_diceprojects_admin/core/http/auth_interceptor.dart';
 import 'package:app_diceprojects_admin/core/http/dio_client.dart';
 import 'package:app_diceprojects_admin/core/storage/secure_storage.dart';
 import 'package:app_diceprojects_admin/core/utils/jwt_decoder.dart';
@@ -70,8 +71,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
   final SecureStorageService _storage;
   final Dio _dio;
 
-  AuthNotifier(this._storage, this._dio) : super(const AuthState()) {
+  AuthNotifier(this._storage, this._dio, AuthInterceptor authInterceptor)
+      : super(const AuthState()) {
+    // Registrar callback de logout en el interceptor para reaccionar a tokens
+    // expirados o respuestas 401 sin generar dependencia circular.
+    authInterceptor.onUnauthorized = _forceLogout;
     _hydrate();
+  }
+
+  /// Versión silenciosa de logout para uso interno (token expirado / 401).
+  void _forceLogout() {
+    if (!mounted) return;
+    _storage.deleteAll();
+    state = const AuthState(isInitialized: true);
   }
 
   Future<void> _hydrate() async {
@@ -224,5 +236,6 @@ final authNotifierProvider =
   (ref) => AuthNotifier(
     ref.read(secureStorageProvider),
     ref.read(dioProvider),
+    ref.read(authInterceptorProvider),
   ),
 );

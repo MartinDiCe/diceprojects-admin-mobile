@@ -11,8 +11,16 @@ final secureStorageProvider = Provider<SecureStorageService>(
   (_) => SecureStorageService(),
 );
 
+/// Provider separado para el interceptor de auth, permite que [AuthNotifier]
+/// registre su callback de logout sin crear una dependencia circular.
+final authInterceptorProvider = Provider<AuthInterceptor>((ref) {
+  final storage = ref.read(secureStorageProvider);
+  return AuthInterceptor(storage);
+});
+
 final dioProvider = Provider<Dio>((ref) {
   final storage = ref.read(secureStorageProvider);
+  final authInterceptor = ref.read(authInterceptorProvider);
 
   final dio = Dio(
     BaseOptions(
@@ -28,7 +36,7 @@ final dioProvider = Provider<Dio>((ref) {
 
   dio.interceptors.addAll([
     CorrelationInterceptor(),
-    AuthInterceptor(storage),
+    authInterceptor,
     LoggingInterceptor(),
     ErrorInterceptor(), // último: convierte errores HTTP en AppError estructurado
   ]);

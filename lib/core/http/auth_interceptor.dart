@@ -6,6 +6,10 @@ import 'package:dio/dio.dart';
 class AuthInterceptor extends Interceptor {
   final SecureStorageService _storage;
 
+  /// Callback invocado cuando el token está expirado o el servidor devuelve 401.
+  /// Registrado externamente por [AuthNotifier] para evitar dependencia circular.
+  void Function()? onUnauthorized;
+
   AuthInterceptor(this._storage);
 
   bool _isPublicAuthPath(String path) {
@@ -34,6 +38,7 @@ class AuthInterceptor extends Interceptor {
       // to reject even public endpoints, and breaks re-login.
       if (JwtDecoder.isExpired(token)) {
         await _storage.delete(AppConfig.tokenKey);
+        onUnauthorized?.call(); // limpia el AuthState en memoria
         handler.next(options);
         return;
       }
@@ -49,5 +54,14 @@ class AuthInterceptor extends Interceptor {
       }
     }
     handler.next(options);
+  }
+
+  @override
+  void onError(DioException err, ErrorInterceptorHandler handler) {
+    if (err.response?.statusCode == 401) {
+      _storage.delete(AppConfig.tokenKey);
+      onUnauthorized?.call();
+    }
+    handler.next(err);
   }
 }
