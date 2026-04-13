@@ -295,6 +295,28 @@ class _StockOverviewScreenState extends ConsumerState<StockOverviewScreen> {
                       padding: EdgeInsets.symmetric(vertical: 8),
                       child: CircularProgressIndicator(),
                     ))
+                  else if (selectedProductId != null && presentations.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.amber.shade200),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.amber.shade700, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Este producto no tiene presentaciones. Creá una desde el portal web: Productos → detalle del producto → sección Presentaciones.',
+                              style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
                   else if (selectedProductId != null)
                     DropdownButtonFormField<String>(
                       value: selectedPresentationId,
@@ -302,7 +324,7 @@ class _StockOverviewScreenState extends ConsumerState<StockOverviewScreen> {
                         labelText: 'Presentación',
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                      hint: Text(presentations.isEmpty ? 'Sin presentaciones' : 'Seleccioná una'),
+                      hint: const Text('Seleccioná una'),
                       items: presentations.map((p) {
                         final pid  = p['presentationId']?.toString() ?? '';
                         final sku  = p['sku']?.toString() ?? '';

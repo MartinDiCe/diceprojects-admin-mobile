@@ -150,7 +150,13 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         queryParameters: companyId != null ? {'companyId': companyId} : null,
       );
       final list = (resp.data as List? ?? [])
-          .map((e) => _PhotoItem(id: e['imageId']?.toString(), url: e['url']?.toString()))
+          .map((e) => _PhotoItem(
+                id: e['imageId']?.toString(),
+                url: e['url']?.toString(),
+                sortOrder: e['sortOrder'] is int
+                    ? e['sortOrder'] as int
+                    : int.tryParse(e['sortOrder']?.toString() ?? ''),
+              ))
           .toList();
       if (mounted && (list.isNotEmpty || !preserveOnEmpty)) {
         setState(() { _photos..clear()..addAll(list); });
@@ -158,33 +164,80 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     } catch (_) {}
   }
 
+  int _nextSortOrderBase(List<_PhotoItem> existing) {
+    var maxSortOrder = -1;
+    for (final p in existing) {
+      final so = p.sortOrder;
+      if (so != null && so > maxSortOrder) maxSortOrder = so;
+    }
+    if (maxSortOrder >= 0) return maxSortOrder + 1;
+    final serverCount = existing.where((p) => p.id != null).length;
+    return serverCount;
+  }
+
   Future<void> _pickAndUploadMultiple() async {
+    if (widget.productId == null) return;
     final picker = ImagePicker();
     final picked = await picker.pickMultiImage(maxWidth: 1200, imageQuality: 85);
     if (picked.isEmpty || !mounted) return;
-    setState(() { _isUploading = true; _uploadDone = 0; _uploadTotal = picked.length; });
-    try {
-      final auth = ref.read(authNotifierProvider);
-      final companyId = (auth.isAdminGlobal ? _selectedCompanyId : auth.tenantId) ?? '';
-      final dio = ref.read(dioProvider);
-      for (var i = 0; i < picked.length; i++) {
-        final xfile = picked[i];
-        final bytes = await File(xfile.path).readAsBytes();
+
+    final existingBefore = List<_PhotoItem>.from(_photos);
+    final baseSortOrder = _nextSortOrderBase(existingBefore);
+
+    final localItems = <_PhotoItem>[];
+    for (var i = 0; i < picked.length; i++) {
+      final xfile = picked[i];
+      localItems.add(_PhotoItem(
+        localId: '${DateTime.now().microsecondsSinceEpoch}-$i',
+        localPath: xfile.path,
+        sortOrder: baseSortOrder + i,
+      ));
+    }
+
+    setState(() {
+      _isUploading = true;
+      _uploadDone = 0;
+      _uploadTotal = picked.length;
+      _photos.addAll(localItems);
+    });
+
+    var failed = 0;
+    String? lastError;
+
+    final auth = ref.read(authNotifierProvider);
+    final companyId = auth.isAdminGlobal ? _selectedCompanyId : auth.tenantId;
+    final dio = ref.read(dioProvider);
+
+    for (var i = 0; i < picked.length; i++) {
+      final xfile = picked[i];
+      final sortOrder = baseSortOrder + i;
+      try {
         final formData = FormData.fromMap({
-          'file': MultipartFile.fromBytes(bytes, filename: 'image_$i.jpg',
-              contentType: DioMediaType('image', 'jpeg')),
-          'sortOrder': _photos.length + i,
-          if (companyId.isNotEmpty) 'companyId': companyId,
+          'file': await MultipartFile.fromFile(xfile.path, filename: 'image_$sortOrder.jpg'),
         });
-        await dio.post('/v1/products/${widget.productId}/images/upload', data: formData);
+        final qp = <String, dynamic>{'sortOrder': sortOrder};
+        if (companyId != null && companyId.isNotEmpty) qp['companyId'] = companyId;
+        await dio.post(
+          '/v1/products/${widget.productId}/images/upload',
+          data: formData,
+          queryParameters: qp,
+        );
+      } catch (e) {
+        failed++;
+        lastError = ErrorHandler.handle(e).message;
+      } finally {
         if (mounted) setState(() => _uploadDone = i + 1);
       }
-    } catch (e) {
-      if (mounted) _snack('Error al subir: ${ErrorHandler.handle(e).message}');
-    } finally {
-      if (mounted) setState(() => _isUploading = false);
     }
-    await _loadImages(preserveOnEmpty: true);
+
+    if (mounted) {
+      setState(() => _isUploading = false);
+      if (failed > 0) {
+        _snack('Algunas imágenes fallaron ($failed/${picked.length}): ${lastError ?? "Error"}');
+      }
+    }
+
+    await _loadImages();
   }
 
   Future<void> _deleteImage(String photoId) async {
@@ -217,7 +270,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                 padding: const EdgeInsets.only(right: 8),
                 child: _PhotoThumb(
                   photo: p,
-                  onDelete: () => _deleteImage(p.id!),
+                  onDelete: (p.id != null && !_isUploading) ? () => _deleteImage(p.id!) : null,
                 ),
               )),
               _AddPhotoCard(
@@ -330,6 +383,11 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
             const SizedBox(height: 12),
             // Fotos — solo en modo edición
             if (widget.productId != null) _buildPhotosCard(),
+            // Presentaciones — solo en modo edición
+            if (widget.productId != null) ...[
+              const SizedBox(height: 12),
+              _PresentationsNavCard(productId: widget.productId!),
+            ],
             const SizedBox(height: 24),
             AppButton(label: ns.isSaving ? 'Guardando…' : (widget.productId == null ? 'Crear Producto' : 'Guardar cambios'), onPressed: ns.isSaving ? null : _save),
           ],
@@ -390,20 +448,104 @@ class _Banner extends StatelessWidget {
   Widget build(BuildContext context) => Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFFFEBEE), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFEF9A9A))), child: Row(children: [const Icon(Icons.error_outline, color: Color(0xFFC62828), size: 18), const SizedBox(width: 8), Expanded(child: Text(message, style: const TextStyle(color: Color(0xFFC62828), fontSize: 13)))]));
 }
 
+class _PresentationsNavCard extends StatelessWidget {
+  final String productId;
+  const _PresentationsNavCard({required this.productId});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 12, offset: Offset(0, 3))],
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: Icon(Icons.view_module_rounded, color: AppColors.accent, size: 22),
+        title: const Text('Presentaciones', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+        subtitle: const Text('Administrar SKUs, tipos y unidades', style: TextStyle(fontSize: 12)),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: () => context.push('/products/$productId/presentations'),
+      ),
+    );
+  }
+}
+
 class _PhotoItem {
   final String? id;
   final String? url;
-  const _PhotoItem({this.id, this.url});
+  final String? localId;
+  final String? localPath;
+  final int? sortOrder;
+  const _PhotoItem({this.id, this.url, this.localId, this.localPath, this.sortOrder});
 }
 
 class _PhotoThumb extends StatelessWidget {
   final _PhotoItem photo;
-  final VoidCallback onDelete;
+  final VoidCallback? onDelete;
   const _PhotoThumb({required this.photo, required this.onDelete});
+
+  Widget _buildFullscreenContent() {
+    if (photo.localPath != null) {
+      return Image.file(
+        File(photo.localPath!),
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white, size: 48),
+      );
+    } else if (photo.url != null) {
+      return Image.network(
+        _absoluteImageUrl(photo.url!),
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white, size: 48),
+      );
+    }
+    return const Icon(Icons.image_not_supported, color: Colors.white, size: 48);
+  }
+
+  void _showFullscreen(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                panEnabled: true,
+                minScale: 0.8,
+                maxScale: 5.0,
+                child: _buildFullscreenContent(),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: IconButton(
+                icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     Widget content;
-    if (photo.url != null) {
+    if (photo.localPath != null) {
+      content = Image.file(
+        File(photo.localPath!),
+        fit: BoxFit.cover,
+        width: 100,
+        height: 100,
+        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
+      );
+    } else if (photo.url != null) {
       content = Image.network(
         _absoluteImageUrl(photo.url!),
         fit: BoxFit.cover,
@@ -416,21 +558,25 @@ class _PhotoThumb extends StatelessWidget {
     }
     return Stack(
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: SizedBox(width: 100, height: 100, child: content),
-        ),
-        Positioned(
-          top: 3, right: 3,
-          child: GestureDetector(
-            onTap: onDelete,
-            child: Container(
-              padding: const EdgeInsets.all(3),
-              decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-              child: const Icon(Icons.close, size: 12, color: Colors.white),
-            ),
+        GestureDetector(
+          onTap: () => _showFullscreen(context),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: SizedBox(width: 100, height: 100, child: content),
           ),
         ),
+        if (onDelete != null)
+          Positioned(
+            top: 3, right: 3,
+            child: GestureDetector(
+              onTap: onDelete,
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                child: const Icon(Icons.close, size: 12, color: Colors.white),
+              ),
+            ),
+          ),
       ],
     );
   }
