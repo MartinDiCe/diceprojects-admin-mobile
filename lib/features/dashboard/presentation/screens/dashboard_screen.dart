@@ -1,10 +1,62 @@
+import 'package:app_diceprojects_admin/core/http/dio_client.dart';
 import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
 import 'package:app_diceprojects_admin/core/ui/layout/app_shell.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/fade_in_slide.dart';
 import 'package:app_diceprojects_admin/features/auth/presentation/controllers/auth_notifier.dart';
+import 'package:app_diceprojects_admin/features/permissions/permissions_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+// ─── Stats providers ──────────────────────────────────────────────────────────
+final _tenantsCountProvider = FutureProvider.autoDispose<int>((ref) async {
+  try {
+    final r = await ref.watch(dioProvider).get('/v1/tenants/count');
+    return (r.data['count'] as num?)?.toInt() ?? 0;
+  } catch (_) { return -1; }
+});
+
+final _usersCountProvider = FutureProvider.autoDispose<int>((ref) async {
+  try {
+    final r = await ref.watch(dioProvider).get('/v1/users/count');
+    return (r.data['count'] as num?)?.toInt() ?? 0;
+  } catch (_) { return -1; }
+});
+
+// ─── Feature catalog for search ─────────────────────────────────────────────
+class _Feature {
+  final String route, label, description;
+  final IconData icon;
+  const _Feature({required this.route, required this.label, required this.description, required this.icon});
+}
+
+const _allFeatures = [
+  _Feature(route: '/iam/users', label: 'Usuarios', description: 'Gestión de usuarios del sistema', icon: Icons.person_rounded),
+  _Feature(route: '/iam/invitations', label: 'Invitaciones', description: 'Invitar nuevos usuarios', icon: Icons.mail_rounded),
+  _Feature(route: '/iam/permissions', label: 'Permisos', description: 'Gestión de permisos del sistema', icon: Icons.lock_rounded),
+  _Feature(route: '/authorization', label: 'Roles y Accesos', description: 'Definición de roles y políticas de acceso', icon: Icons.shield_rounded),
+  _Feature(route: '/logs/audit', label: 'Auditoría', description: 'Registro de eventos del sistema', icon: Icons.history_rounded),
+  _Feature(route: '/logs/apitraces', label: 'API Traces', description: 'Trazas de llamadas a la API', icon: Icons.api_rounded),
+  _Feature(route: '/admin/tenants', label: 'Empresas', description: 'Gestión de tenants / empresas', icon: Icons.business_rounded),
+  _Feature(route: '/admin/branches', label: 'Sucursales', description: 'Sucursales por empresa', icon: Icons.store_rounded),
+  _Feature(route: '/organization/sellers', label: 'Vendedores', description: 'Gestión de vendedores', icon: Icons.store_mall_directory_rounded),
+  _Feature(route: '/people', label: 'Personal', description: 'Gestión de personas / empleados', icon: Icons.badge_rounded),
+  _Feature(route: '/products', label: 'Artículos', description: 'Productos, presentaciones, catálogo', icon: Icons.inventory_2_rounded),
+  _Feature(route: '/products/types', label: 'Tipos de Producto', description: 'Clasificación de tipos de producto', icon: Icons.category_rounded),
+  _Feature(route: '/products/brands', label: 'Marcas', description: 'Marcas registradas', icon: Icons.branding_watermark_rounded),
+  _Feature(route: '/products/price-types', label: 'Tipos de Precio', description: 'Tipos de precios y monedas', icon: Icons.price_change_rounded),
+  _Feature(route: '/products/stock-statuses', label: 'Estados de Stock', description: 'Configuración de estados de inventario', icon: Icons.inventory_rounded),
+  _Feature(route: '/products/unit-of-measure', label: 'Unidades de Medida', description: 'Unidades para cantidades y dimensiones', icon: Icons.straighten_rounded),
+  _Feature(route: '/warehouse', label: 'Depósitos', description: 'Gestión de depósitos y almacenes', icon: Icons.warehouse_rounded),
+  _Feature(route: '/warehouse/stock', label: 'Stock', description: 'Niveles de stock por depósito', icon: Icons.inventory_2_rounded),
+  _Feature(route: '/core/toggles', label: 'Feature Flags', description: 'Activar / desactivar funcionalidades', icon: Icons.toggle_on_rounded),
+  _Feature(route: '/core/parameters', label: 'Parámetros', description: 'Configuración global del sistema', icon: Icons.settings_rounded),
+  _Feature(route: '/core/currencies', label: 'Monedas', description: 'Monedas disponibles en el sistema', icon: Icons.attach_money_rounded),
+  _Feature(route: '/marketing/leads', label: 'Leads', description: 'Gestión de leads de marketing', icon: Icons.trending_up_rounded),
+  _Feature(route: '/marketing/destacados', label: 'Destacados', description: 'Contenido destacado en el catálogo', icon: Icons.star_rounded),
+  _Feature(route: '/logs/notifications', label: 'Notificaciones enviadas', description: 'Historial de notificaciones del sistema', icon: Icons.notifications_rounded),
+];
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -36,23 +88,17 @@ class DashboardScreen extends ConsumerWidget {
               ),
               actions: [
                 IconButton(
-                  onPressed: () {
-                  },
+                  tooltip: 'Notificaciones enviadas',
+                  onPressed: () => context.push('/logs/notifications'),
                   icon: Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      Icon(Icons.notifications_none_rounded,
-                          color: AppColors.ink),
+                      Icon(Icons.notifications_none_rounded, color: AppColors.ink),
                       Positioned(
-                        top: -1,
-                        right: -1,
+                        top: -1, right: -1,
                         child: Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: AppColors.error,
-                            shape: BoxShape.circle,
-                          ),
+                          width: 8, height: 8,
+                          decoration: const BoxDecoration(color: AppColors.error, shape: BoxShape.circle),
                         ),
                       ),
                     ],
@@ -60,15 +106,14 @@ class DashboardScreen extends ConsumerWidget {
                 ),
                 Padding(
                   padding: const EdgeInsets.only(right: 16),
-                  child: CircleAvatar(
-                    radius: 16,
-                    backgroundColor:
-                        isDark ? AppColors.surface : AppColors.surfaceVariant,
-                    child: Text(
-                      username[0].toUpperCase(),
-                      style: TextStyle(
-                        color: AppColors.ink,
-                        fontWeight: FontWeight.w800,
+                  child: GestureDetector(
+                    onTap: () => context.push('/profile'),
+                    child: CircleAvatar(
+                      radius: 16,
+                      backgroundColor: isDark ? AppColors.surface : AppColors.surfaceVariant,
+                      child: Text(
+                        username[0].toUpperCase(),
+                        style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.w800),
                       ),
                     ),
                   ),
@@ -109,25 +154,33 @@ class DashboardScreen extends ConsumerWidget {
                       const SizedBox(height: 16),
                       const _InfraHealthCard(),
                       const SizedBox(height: 14),
-                      const Row(
+                      Row(
                         children: [
                           Expanded(
-                            child: _StatCard(
-                              icon: Icons.view_list_rounded,
-                              label: 'MICROSERVICIOS',
-                              value: '42',
-                              footer: '+2 nuevos',
-                              footerColor: AppColors.success,
+                            child: ref.watch(_tenantsCountProvider).when(
+                              data: (n) => _StatCard(
+                                icon: Icons.business_rounded,
+                                label: 'EMPRESAS',
+                                value: n < 0 ? '—' : '$n',
+                                footer: n < 0 ? 'Sin acceso' : 'Tenants activos',
+                                footerColor: n < 0 ? AppColors.textMuted : AppColors.success,
+                              ),
+                              loading: () => const _StatCard(icon: Icons.business_rounded, label: 'EMPRESAS', value: '...', footer: '', footerColor: Colors.grey),
+                              error: (_, __) => const _StatCard(icon: Icons.business_rounded, label: 'EMPRESAS', value: '—', footer: 'Error', footerColor: Colors.red),
                             ),
                           ),
-                          SizedBox(width: 12),
+                          const SizedBox(width: 12),
                           Expanded(
-                            child: _StatCard(
-                              icon: Icons.mail_outline_rounded,
-                              label: 'INVITACIONES',
-                              value: '15',
-                              footer: '0 Pendientes',
-                              footerColor: AppColors.warning,
+                            child: ref.watch(_usersCountProvider).when(
+                              data: (n) => _StatCard(
+                                icon: Icons.people_rounded,
+                                label: 'USUARIOS',
+                                value: n < 0 ? '—' : '$n',
+                                footer: n < 0 ? 'Sin acceso' : 'Usuarios registrados',
+                                footerColor: n < 0 ? AppColors.textMuted : AppColors.accent,
+                              ),
+                              loading: () => const _StatCard(icon: Icons.people_rounded, label: 'USUARIOS', value: '...', footer: '', footerColor: Colors.grey),
+                              error: (_, __) => const _StatCard(icon: Icons.people_rounded, label: 'USUARIOS', value: '—', footer: 'Error', footerColor: Colors.red),
                             ),
                           ),
                         ],
@@ -152,37 +205,62 @@ class DashboardScreen extends ConsumerWidget {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      _ActivityCardList(
-                        items: [
-                          _ActivityItem(
-                            icon: Icons.login_rounded,
-                            iconBg: AppColors.accentLight,
-                            title: 'Logins de $username',
-                            subtitle: 'HOY: 3',
-                            when: 'HACE 1M',
-                          ),
-                          const _ActivityItem(
-                            icon: Icons.bolt_rounded,
-                            iconBg: AppColors.errorLight,
-                            title: 'Sistema detectó alta carga en',
-                            link: 'Auth-Service',
-                            when: 'HACE 2M',
-                          ),
-                          const _ActivityItem(
-                            icon: Icons.check_circle_rounded,
-                            iconBg: AppColors.successLight,
-                            title: 'Carlos Ruiz aceptó la invitación',
-                            link: 'Módulo Marketing',
-                            when: 'HACE 15M',
-                          ),
-                          const _ActivityItem(
-                            icon: Icons.rocket_launch_rounded,
-                            iconBg: AppColors.accentLight,
-                            title: 'Martín Diaz desplegó versión 2.4',
-                            link: 'API-Gateway',
-                            when: 'HACE 1H',
-                          ),
-                        ],
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(children: [
+                              const Icon(Icons.history_rounded, size: 18),
+                              const SizedBox(width: 8),
+                              Text('Actividad Reciente', style: TextStyle(color: AppColors.ink, fontSize: 14, fontWeight: FontWeight.w800)),
+                              const Spacer(),
+                              TextButton(
+                                onPressed: () => context.push('/logs/apitraces'),
+                                child: const Text('Ver trazas'),
+                              ),
+                            ]),
+                            const SizedBox(height: 10),
+                            Text(
+                              'Utilizá los módulos de trazas y auditoría para ver la actividad en tiempo real.',
+                              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () => context.push('/logs/apitraces'),
+                                  icon: const Icon(Icons.api_rounded, size: 16),
+                                  label: const Text('API Traces'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.accent,
+                                    side: BorderSide(color: AppColors.border),
+                                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () => context.push('/logs/audit'),
+                                  icon: const Icon(Icons.manage_search_rounded, size: 16),
+                                  label: const Text('Auditoría'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.accent,
+                                    side: BorderSide(color: AppColors.border),
+                                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              ),
+                            ]),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 8),
                     ],
@@ -207,37 +285,151 @@ String _friendlyFirstName(String username) {
   return base[0].toUpperCase() + base.substring(1);
 }
 
-class _DashboardSearchBar extends StatelessWidget {
+class _DashboardSearchBar extends ConsumerStatefulWidget {
   const _DashboardSearchBar();
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-      child: Row(
-        children: [
-          Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: 'Buscar funcionalidad...',
-                hintStyle:
-                    TextStyle(color: AppColors.textMuted, fontSize: 13.5),
-                border: InputBorder.none,
+  ConsumerState<_DashboardSearchBar> createState() => _DashboardSearchBarState();
+}
+
+class _DashboardSearchBarState extends ConsumerState<_DashboardSearchBar> {
+  final _ctrl = TextEditingController();
+  final _focusNode = FocusNode();
+  String _query = '';
+  bool _open = false;
+  final _layerLink = LayerLink();
+  OverlayEntry? _overlay;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() {
+      if (_focusNode.hasFocus && _query.isEmpty) {
+        setState(() => _open = false);
+      } else if (!_focusNode.hasFocus) {
+        Future.delayed(const Duration(milliseconds: 180), _closeOverlay);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    _focusNode.dispose();
+    _closeOverlay();
+    super.dispose();
+  }
+
+  List<_Feature> _filtered() {
+    final perms = ref.read(permissionsProvider);
+    final q = _query.toLowerCase().trim();
+    return _allFeatures.where((f) {
+      final allowed = perms.canAccessRoute(f.route);
+      if (!allowed) return false;
+      if (q.isEmpty) return true;
+      return f.label.toLowerCase().contains(q) || f.description.toLowerCase().contains(q);
+    }).toList();
+  }
+
+  void _openOverlay() {
+    _closeOverlay();
+    final results = _filtered();
+    if (results.isEmpty) return;
+    _overlay = OverlayEntry(builder: (ctx) {
+      return Positioned(
+        width: 340,
+        child: CompositedTransformFollower(
+          link: _layerLink,
+          showWhenUnlinked: false,
+          offset: const Offset(0, 48),
+          child: Material(
+            elevation: 10,
+            borderRadius: BorderRadius.circular(14),
+            color: AppColors.surface,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 280),
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                shrinkWrap: true,
+                itemCount: results.length,
+                separatorBuilder: (_, __) => Divider(height: 1, color: AppColors.border),
+                itemBuilder: (_, i) {
+                  final f = results[i];
+                  return ListTile(
+                    leading: Icon(f.icon, color: AppColors.accent, size: 20),
+                    title: Text(f.label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                    subtitle: Text(f.description, style: TextStyle(fontSize: 11, color: AppColors.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    dense: true,
+                    onTap: () {
+                      _closeOverlay();
+                      _ctrl.clear();
+                      setState(() { _query = ''; _open = false; });
+                      context.push(f.route);
+                    },
+                  );
+                },
               ),
-              style: TextStyle(color: AppColors.ink, fontSize: 13.5),
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) {
-              },
             ),
           ),
-        ],
+        ),
+      );
+    });
+    Overlay.of(context).insert(_overlay!);
+    setState(() => _open = true);
+  }
+
+  void _closeOverlay() {
+    _overlay?.remove();
+    _overlay = null;
+  }
+
+  void _onChanged(String v) {
+    setState(() => _query = v);
+    if (v.isNotEmpty) {
+      _openOverlay();
+    } else {
+      _closeOverlay();
+      setState(() => _open = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _open ? AppColors.accent : AppColors.border),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        child: Row(
+          children: [
+            Icon(Icons.search_rounded, color: _open ? AppColors.accent : AppColors.textMuted, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _ctrl,
+                focusNode: _focusNode,
+                decoration: InputDecoration(
+                  hintText: 'Buscar funcionalidad...',
+                  hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 13.5),
+                  border: InputBorder.none,
+                ),
+                style: TextStyle(color: AppColors.ink, fontSize: 13.5),
+                textInputAction: TextInputAction.search,
+                onChanged: _onChanged,
+                onTap: () { if (_query.isNotEmpty) _openOverlay(); },
+              ),
+            ),
+            if (_query.isNotEmpty)
+              GestureDetector(
+                onTap: () { _ctrl.clear(); _onChanged(''); },
+                child: Icon(Icons.clear_rounded, color: AppColors.textMuted, size: 18),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -256,95 +448,33 @@ class _InfraHealthCard extends StatelessWidget {
         border: Border.all(color: AppColors.border),
       ),
       padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: AppColors.accentLight,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.bolt_rounded,
-                    color: AppColors.accent, size: 18),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Salud de\nInfraestructura',
-                      style: TextStyle(
-                        color: AppColors.ink,
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w900,
-                        height: 1.05,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Estado global de los sistemas',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '98.4%',
-                    style: TextStyle(
-                      color: AppColors.accent,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'ESTABLE',
-                    style: TextStyle(
-                      color: AppColors.success,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.6,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.accentLight,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.hub_rounded, color: AppColors.accent, size: 22),
           ),
-          const SizedBox(height: 14),
-          SizedBox(
-            height: 110,
-            width: double.infinity,
-            child: CustomPaint(
-              painter: _MiniAreaChartPainter(
-                lineColor: AppColors.accent,
-                fillColor: AppColors.accent.withValues(alpha: 0.16),
-                gridColor: AppColors.border,
-              ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Estado de Servicios',
+                  style: TextStyle(color: AppColors.ink, fontSize: 14, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 2),
+                Text('Monitoreá trazas y errores desde el módulo de logs.',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+              ],
             ),
           ),
-          const SizedBox(height: 8),
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _ChartTick('04:00'),
-              _ChartTick('08:00'),
-              _ChartTick('12:00'),
-              _ChartTick('16:00'),
-              _ChartTick('20:00'),
-              _ChartTick('23:59'),
-            ],
+          TextButton(
+            onPressed: () => context.push('/logs/apitraces'),
+            child: const Text('Ver logs'),
           ),
         ],
       ),

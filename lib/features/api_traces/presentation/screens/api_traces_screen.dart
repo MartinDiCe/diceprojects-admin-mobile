@@ -19,7 +19,6 @@ final _uuidRegex = RegExp(
 /// Replaces full UUIDs in a path with a short placeholder so paths are readable.
 String _cleanPath(String path) => path.replaceAll(_uuidRegex, '{id}');
 
-/// Formats ISO datetime to readable local format: 13/04/2025 10:30
 String _fmtDate(String? raw) {
   if (raw == null || raw.isEmpty) return '';
   try {
@@ -30,6 +29,16 @@ String _fmtDate(String? raw) {
     final mi = dt.minute.toString().padLeft(2, '0');
     return '$d/$mo/${dt.year} $h:$mi';
   } catch (_) {
+    // Try epoch seconds (number string)
+    try {
+      final epoch = double.parse(raw);
+      final dt = DateTime.fromMillisecondsSinceEpoch((epoch * 1000).round(), isUtc: true).toLocal();
+      final d = dt.day.toString().padLeft(2, '0');
+      final mo = dt.month.toString().padLeft(2, '0');
+      final h = dt.hour.toString().padLeft(2, '0');
+      final mi = dt.minute.toString().padLeft(2, '0');
+      return '$d/$mo/${dt.year} $h:$mi';
+    } catch (_) {}
     return raw.length > 16 ? raw.substring(0, 16) : raw;
   }
 }
@@ -97,13 +106,30 @@ class ApiTraceDto {
 
 class ApiTracesNotifier extends ListNotifier<ApiTraceDto> {
   final Dio _dio;
+  // Default: last 7 days
+  DateTime _from = DateTime.now().subtract(const Duration(days: 7));
+  DateTime _to = DateTime.now().add(const Duration(hours: 1));
+
   ApiTracesNotifier(this._dio) : super();
+
+  void setDateRange(DateTime from, DateTime to) {
+    _from = from;
+    _to = to;
+    reload();
+  }
 
   @override
   Future<PaginatedResponse<ApiTraceDto>> fetchPage(PageParams params) async {
+    final fromIso = _from.toUtc().toIso8601String();
+    final toIso   = _to.toUtc().toIso8601String();
     final resp = await _dio.get(
       '/v1/apitraces',
-      queryParameters: params.toQueryParams(),
+      queryParameters: {
+        ...params.toQueryParams(),
+        'from': fromIso,
+        'to':   toIso,
+        'size': 50,
+      },
     );
     return PaginatedResponse.fromJson(resp.data, ApiTraceDto.fromJson);
   }
@@ -114,19 +140,65 @@ final apiTracesNotifierProvider =
   (ref) => ApiTracesNotifier(ref.watch(dioProvider)),
 );
 
-class ApiTracesScreen extends ConsumerWidget {
+// ─────────────────────────── Screen ──────────────────────────────────────────
+
+class ApiTracesScreen extends ConsumerStatefulWidget {
   const ApiTracesScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(apiTracesNotifierProvider);
+  ConsumerState<ApiTracesScreen> createState() => _ApiTracesScreenState();
+}
+
+class _ApiTracesScreenState extends ConsumerState<ApiTracesScreen> {
+  // 0 = 7d, 1 = 30d, 2 = 90d
+  int _rangeIndex = 0;
+  static const _ranges = ['7 días', '30 días', '90 días'];
+  static const _rangeDays = [7, 30, 90];
+
+  void _setRange(int idx) {
+    setState(() => _rangeIndex = idx);
+    final days = _rangeDays[idx];
+    final from = DateTime.now().subtract(Duration(days: days));
+    final to   = DateTime.now().add(const Duration(hours: 1));
+    ref.read(apiTracesNotifierProvider.notifier).setDateRange(from, to);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state    = ref.watch(apiTracesNotifierProvider);
     final notifier = ref.read(apiTracesNotifierProvider.notifier);
 
     return AppPageScaffold(
       title: 'API Traces',
-      searchHint: 'Buscar por path, usuario…',
+      searchHint: 'Buscar por servicio, path…',
       onSearch: notifier.setSearch,
-      body: _buildBody(state, notifier),
+      body: Column(
+        children: [
+          // Date range chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+            child: Row(children: List.generate(_ranges.length, (i) => Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(_ranges[i]),
+                selected: _rangeIndex == i,
+                onSelected: (_) => _setRange(i),
+                selectedColor: AppColors.accent,
+                labelStyle: TextStyle(
+                  color: _rangeIndex == i ? Colors.white : AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+                backgroundColor: AppColors.surface,
+                side: BorderSide(color: _rangeIndex == i ? AppColors.accent : AppColors.border),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+            ))),
+          ),
+          Expanded(child: _buildBody(state, notifier)),
+        ],
+      ),
     );
   }
 
@@ -244,8 +316,8 @@ class ApiTracesScreen extends ConsumerWidget {
                           ),
                         ),
                       const Spacer(),
-                      if (trace.createdDate != null)
-                        Text(_fmtDate(trace.createdDate),
+                      if (trace.requestTimestamp != null || trace.createdDate != null)
+                        Text(_fmtDate(trace.requestTimestamp ?? trace.createdDate),
                             style: TextStyle(
                                 fontSize: 11,
                                 color: AppColors.textSecondary)),

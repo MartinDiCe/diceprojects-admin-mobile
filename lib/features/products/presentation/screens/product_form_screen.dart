@@ -1,4 +1,5 @@
-import 'dart:developer';
+﻿import 'dart:developer';
+import 'dart:io';
 
 import 'package:app_diceprojects_admin/core/errors/error_handler.dart';
 import 'package:app_diceprojects_admin/core/http/dio_client.dart';
@@ -12,6 +13,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:app_diceprojects_admin/core/config/app_config.dart';
+import 'package:image_picker/image_picker.dart';
 
 String _slugify(String input) {
   var s = input.toLowerCase().trim();
@@ -24,10 +27,23 @@ String _slugify(String input) {
   return s;
 }
 
+String _absoluteImageUrl(String url) {
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  final base = AppConfig.apiBaseUrl.replaceFirst(RegExp(r'/api$'), '');
+  return '$base$url';
+}
+
 class _LabeledOption { final String value; final String label; const _LabeledOption({required this.value, required this.label}); }
 class _IdNameOption { final String id; final String label; const _IdNameOption({required this.id, required this.label}); }
 
-const _priceTypeOptions = [ _LabeledOption(value: 'STANDARD', label: 'Estándar'), _LabeledOption(value: 'WHOLESALE', label: 'Mayorista'), _LabeledOption(value: 'RETAIL', label: 'Minorista'), _LabeledOption(value: 'PREMIUM', label: 'Premium') ];
+const _priceTypeOptions = [
+  _LabeledOption(value: 'STANDARD',  label: 'Estándar'),
+  _LabeledOption(value: 'RETAIL',    label: 'Minorista'),
+  _LabeledOption(value: 'WHOLESALE', label: 'Mayorista'),
+  _LabeledOption(value: 'PREMIUM',   label: 'Premium'),
+  _LabeledOption(value: 'FIXED',     label: 'Fijo (requiere precio base)'),
+  _LabeledOption(value: 'CONSULT',   label: 'Consultar precio'),
+];
 const _currencyOptions  = [ _LabeledOption(value: 'ARS', label: 'ARS — Peso argentino'), _LabeledOption(value: 'USD', label: 'USD — Dólar'), _LabeledOption(value: 'EUR', label: 'EUR — Euro') ];
 const _statusOptions    = [ _LabeledOption(value: 'DRAFT', label: 'Borrador'), _LabeledOption(value: 'ACTIVE', label: 'Activo'), _LabeledOption(value: 'INACTIVE', label: 'Inactivo') ];
 const _stockStatusOptions = [ _LabeledOption(value: '', label: 'Sin estado'), _LabeledOption(value: 'IN_STOCK', label: 'En stock'), _LabeledOption(value: 'OUT_OF_STOCK', label: 'Sin stock'), _LabeledOption(value: 'LOW_STOCK', label: 'Stock bajo') ];
@@ -68,7 +84,7 @@ class _ProductFormNotifier extends StateNotifier<_PFS> {
     state = state.copyWith(isSaving: true, clearError: true);
     try {
       List<String> pt(String raw) => raw.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
-      final body = <String, dynamic>{ 'name': s.name.trim(), 'slug': s.slug.trim(), 'companyId': s.companyId ?? '', 'sellerId': s.sellerId ?? '', 'priceTypeCode': s.priceTypeCode, 'statusCode': s.statusCode, 'featured': s.featured, if (s.sku.isNotEmpty) 'sku': s.sku.trim(), if (s.category.isNotEmpty) 'category': s.category.trim(), if (s.description.isNotEmpty) 'description': s.description.trim(), if (s.basePrice.isNotEmpty) 'basePrice': double.tryParse(s.basePrice), 'currencyCode': s.currencyCode, if (s.stockStatusCode.isNotEmpty) 'stockStatusCode': s.stockStatusCode, if (s.tags.isNotEmpty) 'tags': pt(s.tags), if (s.uses.isNotEmpty) 'uses': pt(s.uses), if (s.productTypeId != null) 'productTypeId': s.productTypeId, if (s.storageConditionId != null) 'storageConditionId': s.storageConditionId, if (s.brandId != null) 'brandId': s.brandId, if (s.baseUomCode != null) 'baseUomCode': s.baseUomCode, 'allowFraction': s.allowFraction, 'requiresLot': s.requiresLot, 'requiresExpiration': s.requiresExpiration, 'requiresSerial': s.requiresSerial, if (s.netWeight.isNotEmpty) 'netWeight': double.tryParse(s.netWeight), if (s.grossWeight.isNotEmpty) 'grossWeight': double.tryParse(s.grossWeight), if (s.volume.isNotEmpty) 'volume': double.tryParse(s.volume), if (s.height.isNotEmpty) 'height': double.tryParse(s.height), if (s.width.isNotEmpty) 'width': double.tryParse(s.width), if (s.length.isNotEmpty) 'length': double.tryParse(s.length) };
+      final body = <String, dynamic>{ 'name': s.name.trim(), 'slug': s.slug.trim(), 'companyId': s.companyId ?? '', 'sellerId': s.sellerId ?? '', 'priceTypeCode': s.priceTypeCode, 'statusCode': s.statusCode, 'featured': s.featured, if (s.sku.isNotEmpty) 'sku': s.sku.trim(), if (s.category.isNotEmpty) 'category': s.category.trim(), if (s.description.isNotEmpty) 'description': s.description.trim(), if (s.basePrice.isNotEmpty && double.tryParse(s.basePrice) != null) 'basePrice': double.parse(s.basePrice), 'currencyCode': s.currencyCode, if (s.stockStatusCode.isNotEmpty) 'stockStatusCode': s.stockStatusCode, if (s.tags.isNotEmpty) 'tags': pt(s.tags), if (s.uses.isNotEmpty) 'uses': pt(s.uses), if (s.productTypeId != null) 'productTypeId': s.productTypeId, if (s.storageConditionId != null) 'storageConditionId': s.storageConditionId, if (s.brandId != null) 'brandId': s.brandId, if (s.baseUomCode != null) 'baseUomCode': s.baseUomCode, 'allowFraction': s.allowFraction, 'requiresLot': s.requiresLot, 'requiresExpiration': s.requiresExpiration, 'requiresSerial': s.requiresSerial, if (s.netWeight.isNotEmpty) 'netWeight': double.tryParse(s.netWeight), if (s.grossWeight.isNotEmpty) 'grossWeight': double.tryParse(s.grossWeight), if (s.volume.isNotEmpty) 'volume': double.tryParse(s.volume), if (s.height.isNotEmpty) 'height': double.tryParse(s.height), if (s.width.isNotEmpty) 'width': double.tryParse(s.width), if (s.length.isNotEmpty) 'length': double.tryParse(s.length) };
       if (productId == null) { await _dio.post('/v1/products', data: body); } else { await _dio.put('/v1/products/$productId', data: body); }
       state = state.copyWith(isSaving: false); return true;
     } catch (e) { log('save error: $e'); state = state.copyWith(isSaving: false, error: ErrorHandler.handle(e).message); return false; }
@@ -95,11 +111,19 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   String? _productTypeId, _storageConditionId, _brandId, _baseUomCode, _selectedCompanyId, _selectedSellerId;
   bool _populated = false;
 
+  // ── Images ─────────────────────────────────────────────────────────────────
+  final List<_PhotoItem> _photos = [];
+  bool _isUploading = false;
+  int _uploadDone = 0, _uploadTotal = 0;
+
   @override
   void initState() {
     super.initState();
     _nameCtrl = TextEditingController(); _slugCtrl = TextEditingController(); _skuCtrl = TextEditingController(); _categoryCtrl = TextEditingController(); _descriptionCtrl = TextEditingController(); _basePriceCtrl = TextEditingController(); _tagsCtrl = TextEditingController(); _usesCtrl = TextEditingController(); _netWeightCtrl = TextEditingController(); _grossWeightCtrl = TextEditingController(); _volumeCtrl = TextEditingController(); _heightCtrl = TextEditingController(); _widthCtrl = TextEditingController(); _lengthCtrl = TextEditingController();
     _nameCtrl.addListener(_onNameChanged);
+    if (widget.productId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadImages());
+    }
   }
 
   @override
@@ -114,6 +138,150 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     if (_populated || s.name.isEmpty) return;
     _nameCtrl.text = s.name; _slugCtrl.text = s.slug; _skuCtrl.text = s.sku; _categoryCtrl.text = s.category; _descriptionCtrl.text = s.description; _basePriceCtrl.text = s.basePrice; _tagsCtrl.text = s.tags; _usesCtrl.text = s.uses; _netWeightCtrl.text = s.netWeight; _grossWeightCtrl.text = s.grossWeight; _volumeCtrl.text = s.volume; _heightCtrl.text = s.height; _widthCtrl.text = s.width; _lengthCtrl.text = s.length;
     setState(() { _priceTypeCode = s.priceTypeCode; _currencyCode = s.currencyCode; _statusCode = s.statusCode; _stockStatusCode = s.stockStatusCode; _featured = s.featured; _productTypeId = s.productTypeId; _storageConditionId = s.storageConditionId; _brandId = s.brandId; _baseUomCode = s.baseUomCode; _allowFraction = s.allowFraction; _requiresLot = s.requiresLot; _requiresExpiration = s.requiresExpiration; _requiresSerial = s.requiresSerial; _selectedCompanyId = s.companyId; _selectedSellerId = s.sellerId; _populated = true; _slugTouched = s.slug.isNotEmpty; });
+  }
+
+  Future<void> _loadImages({bool preserveOnEmpty = false}) async {
+    if (widget.productId == null) return;
+    try {
+      final auth = ref.read(authNotifierProvider);
+      final companyId = auth.isAdminGlobal ? _selectedCompanyId : auth.tenantId;
+      final resp = await ref.read(dioProvider).get(
+        '/v1/products/${widget.productId}/images',
+        queryParameters: companyId != null ? {'companyId': companyId} : null,
+      );
+      final list = (resp.data as List? ?? [])
+          .map((e) => _PhotoItem(
+                id: e['imageId']?.toString(),
+                url: e['url']?.toString(),
+                sortOrder: e['sortOrder'] is int
+                    ? e['sortOrder'] as int
+                    : int.tryParse(e['sortOrder']?.toString() ?? ''),
+              ))
+          .toList();
+      if (mounted && (list.isNotEmpty || !preserveOnEmpty)) {
+        setState(() { _photos..clear()..addAll(list); });
+      }
+    } catch (_) {}
+  }
+
+  int _nextSortOrderBase(List<_PhotoItem> existing) {
+    var maxSortOrder = -1;
+    for (final p in existing) {
+      final so = p.sortOrder;
+      if (so != null && so > maxSortOrder) maxSortOrder = so;
+    }
+    if (maxSortOrder >= 0) return maxSortOrder + 1;
+    final serverCount = existing.where((p) => p.id != null).length;
+    return serverCount;
+  }
+
+  Future<void> _pickAndUploadMultiple() async {
+    if (widget.productId == null) return;
+    final picker = ImagePicker();
+    final picked = await picker.pickMultiImage(maxWidth: 1200, imageQuality: 85);
+    if (picked.isEmpty || !mounted) return;
+
+    final existingBefore = List<_PhotoItem>.from(_photos);
+    final baseSortOrder = _nextSortOrderBase(existingBefore);
+
+    final localItems = <_PhotoItem>[];
+    for (var i = 0; i < picked.length; i++) {
+      final xfile = picked[i];
+      localItems.add(_PhotoItem(
+        localId: '${DateTime.now().microsecondsSinceEpoch}-$i',
+        localPath: xfile.path,
+        sortOrder: baseSortOrder + i,
+      ));
+    }
+
+    setState(() {
+      _isUploading = true;
+      _uploadDone = 0;
+      _uploadTotal = picked.length;
+      _photos.addAll(localItems);
+    });
+
+    var failed = 0;
+    String? lastError;
+
+    final auth = ref.read(authNotifierProvider);
+    final companyId = auth.isAdminGlobal ? _selectedCompanyId : auth.tenantId;
+    final dio = ref.read(dioProvider);
+
+    for (var i = 0; i < picked.length; i++) {
+      final xfile = picked[i];
+      final sortOrder = baseSortOrder + i;
+      try {
+        final formData = FormData.fromMap({
+          'file': await MultipartFile.fromFile(xfile.path, filename: 'image_$sortOrder.jpg'),
+        });
+        final qp = <String, dynamic>{'sortOrder': sortOrder};
+        if (companyId != null && companyId.isNotEmpty) qp['companyId'] = companyId;
+        await dio.post(
+          '/v1/products/${widget.productId}/images/upload',
+          data: formData,
+          queryParameters: qp,
+        );
+      } catch (e) {
+        failed++;
+        lastError = ErrorHandler.handle(e).message;
+      } finally {
+        if (mounted) setState(() => _uploadDone = i + 1);
+      }
+    }
+
+    if (mounted) {
+      setState(() => _isUploading = false);
+      if (failed > 0) {
+        _snack('Algunas imágenes fallaron ($failed/${picked.length}): ${lastError ?? "Error"}');
+      }
+    }
+
+    await _loadImages();
+  }
+
+  Future<void> _deleteImage(String photoId) async {
+    try {
+      await ref.read(dioProvider).delete('/v1/products/${widget.productId}/images/$photoId');
+      await _loadImages();
+    } catch (e) {
+      if (mounted) _snack('Error al eliminar: ${ErrorHandler.handle(e).message}');
+    }
+  }
+
+  Widget _buildPhotosCard() {
+    return _Card(
+      title: 'Fotos del Producto',
+      icon: Icons.photo_library_rounded,
+      children: [
+        if (_isUploading)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: LinearProgressIndicator(
+              value: _uploadTotal > 0 ? _uploadDone / _uploadTotal : null,
+            ),
+          ),
+        SizedBox(
+          height: 100,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              ..._photos.map((p) => Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: _PhotoThumb(
+                  photo: p,
+                  onDelete: (p.id != null && !_isUploading) ? () => _deleteImage(p.id!) : null,
+                ),
+              )),
+              _AddPhotoCard(
+                enabled: !_isUploading,
+                onTap: _pickAndUploadMultiple,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _save() async {
@@ -155,22 +323,22 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
             const SizedBox(height: 12),
             // Básico
             _Card(title: 'Información Básica', icon: Icons.info_outline_rounded, children: [
-              AppTextField(controller: _nameCtrl, label: 'Nombre *', hint: 'Nombre del producto', validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null),
+              AppTextField(controller: _nameCtrl, label: 'Nombre *', hint: 'Nombre del producto', helperText: 'Nombre completo del producto tal como aparecerá en el catálogo', validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null),
               const SizedBox(height: 12),
-              TextFormField(controller: _slugCtrl, decoration: _dec('Slug *', 'url-del-producto'), onChanged: (_) => setState(() => _slugTouched = true), validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null),
+              TextFormField(controller: _slugCtrl, decoration: _dec('Slug *', 'url-del-producto', helper: 'Identificador único en la URL. Se genera automáticamente desde el nombre. Solo letras, números y guiones.'), onChanged: (_) => setState(() => _slugTouched = true), validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null),
               const SizedBox(height: 12),
-              AppTextField(controller: _skuCtrl, label: 'SKU', hint: 'Código de producto'),
+              AppTextField(controller: _skuCtrl, label: 'SKU', hint: 'Ej: PROD-001', helperText: 'Código interno del producto (stock-keeping unit). Opcional.'),
               const SizedBox(height: 12),
-              AppTextField(controller: _categoryCtrl, label: 'Categoría', hint: 'Ej: Electrónica'),
+              AppTextField(controller: _categoryCtrl, label: 'Categoría', hint: 'Ej: Electrónica, Alimentos, Ropa…', helperText: 'Agrupación libre del producto. No es un catálogo cerrado.'),
               const SizedBox(height: 12),
-              AppTextField(controller: _descriptionCtrl, label: 'Descripción', hint: 'Descripción del producto', maxLines: 3),
+              AppTextField(controller: _descriptionCtrl, label: 'Descripción', hint: 'Descripción detallada del producto…', maxLines: 3, helperText: 'Texto libre visible en el detalle del producto.'),
             ]),
             const SizedBox(height: 12),
             // Precio
             _Card(title: 'Precio', icon: Icons.attach_money_rounded, children: [
               _StaticDD(label: 'Tipo de precio *', value: _priceTypeCode, options: _priceTypeOptions, onChanged: (v) => setState(() => _priceTypeCode = v ?? 'STANDARD')),
               const SizedBox(height: 12),
-              AppTextField(controller: _basePriceCtrl, label: 'Precio base', hint: '0.00', keyboardType: const TextInputType.numberWithOptions(decimal: true)),
+              AppTextField(controller: _basePriceCtrl, label: 'Precio base', hint: '0.00', helperText: 'Precio de referencia en la moneda seleccionada. Opcional.', keyboardType: const TextInputType.numberWithOptions(decimal: true)),
               const SizedBox(height: 12),
               _StaticDD(label: 'Moneda', value: _currencyCode, options: _currencyOptions, onChanged: (v) => setState(() => _currencyCode = v ?? 'ARS')),
             ]),
@@ -182,9 +350,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
               _StaticDD(label: 'Estado de stock', value: _stockStatusCode, options: _stockStatusOptions, onChanged: (v) => setState(() => _stockStatusCode = v ?? '')),
               CheckboxListTile(dense: true, contentPadding: EdgeInsets.zero, title: const Text('Producto destacado'), value: _featured, onChanged: (v) => setState(() => _featured = v ?? false)),
               const SizedBox(height: 4),
-              AppTextField(controller: _tagsCtrl, label: 'Tags', hint: 'Ej: popular, nuevo (separados por coma)'),
+              AppTextField(controller: _tagsCtrl, label: 'Tags', hint: 'Ej: popular, nuevo, oferta', helperText: 'Palabras clave separadas por coma. Facilitan la búsqueda y filtrado del producto.'),
               const SizedBox(height: 12),
-              AppTextField(controller: _usesCtrl, label: 'Usos', hint: 'Ej: cocina, jardín (separados por coma)'),
+              AppTextField(controller: _usesCtrl, label: 'Usos', hint: 'Ej: cocina, jardín, hogar', helperText: 'Usos o aplicaciones del producto, separados por coma.'),
             ]),
             const SizedBox(height: 12),
             // Clasificación
@@ -193,7 +361,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
               const SizedBox(height: 12),
               _AsyncDD(label: 'Condición de almacenamiento', value: _storageConditionId, async_: ref.watch(_storageConditionsProvider), onChanged: (v) => setState(() => _storageConditionId = v), nullable: true),
               const SizedBox(height: 12),
-              _AsyncDD(label: 'Marca', value: _brandId, async_: ref.watch(_brandsProvider), onChanged: (v) => setState(() => _brandId = v), nullable: true),
+              _AsyncDD(label: 'Marca', value: _brandId, async_: ref.watch(_brandsProvider), onChanged: (v) => setState(() => _brandId = v), nullable: true, emptyHint: 'Sin marcas. Creálas en Productos › Marcas.'),
               const SizedBox(height: 12),
               _AsyncDD(label: 'Unidad de medida base', value: _baseUomCode, async_: ref.watch(_uomProvider), onChanged: (v) => setState(() => _baseUomCode = v), nullable: true),
               const Divider(height: 24),
@@ -212,6 +380,14 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
               const SizedBox(height: 12),
               Row(children: [Expanded(child: _DimF(_widthCtrl, 'Ancho (cm)')), const SizedBox(width: 12), Expanded(child: _DimF(_lengthCtrl, 'Largo (cm)'))]),
             ]),
+            const SizedBox(height: 12),
+            // Fotos — solo en modo edición
+            if (widget.productId != null) _buildPhotosCard(),
+            // Presentaciones — solo en modo edición
+            if (widget.productId != null) ...[
+              const SizedBox(height: 12),
+              _PresentationsNavCard(productId: widget.productId!),
+            ],
             const SizedBox(height: 24),
             AppButton(label: ns.isSaving ? 'Guardando…' : (widget.productId == null ? 'Crear Producto' : 'Guardar cambios'), onPressed: ns.isSaving ? null : _save),
           ],
@@ -221,7 +397,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   }
 }
 
-InputDecoration _dec(String label, String hint) => InputDecoration(labelText: label, hintText: hint, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), filled: true, contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12));
+InputDecoration _dec(String label, String hint, {String? helper}) => InputDecoration(labelText: label, hintText: hint, helperText: helper, helperMaxLines: 3, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), filled: true, contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12));
 
 class _Card extends StatelessWidget {
   final String title; final IconData icon; final List<Widget> children;
@@ -241,14 +417,17 @@ class _StaticDD extends StatelessWidget {
 }
 
 class _AsyncDD extends StatelessWidget {
-  final String label; final String? value; final AsyncValue<List<_IdNameOption>> async_; final ValueChanged<String?> onChanged; final bool nullable;
-  const _AsyncDD({required this.label, required this.value, required this.async_, required this.onChanged, this.nullable = false});
+  final String label; final String? value; final AsyncValue<List<_IdNameOption>> async_; final ValueChanged<String?> onChanged; final bool nullable; final String? emptyHint;
+  const _AsyncDD({required this.label, required this.value, required this.async_, required this.onChanged, this.nullable = false, this.emptyHint});
   @override
   Widget build(BuildContext context) => async_.when(
     loading: () => TextFormField(enabled: false, decoration: _dec(label, 'Cargando…')),
     error: (_, __) => TextFormField(enabled: false, decoration: _dec(label, 'Error al cargar')),
     data: (items) {
       final valid = items.any((o) => o.id == value) ? value : null;
+      if (items.isEmpty && emptyHint != null) {
+        return TextFormField(enabled: false, decoration: _dec(label, emptyHint!, helper: emptyHint));
+      }
       final all = [if (nullable) const _IdNameOption(id: '', label: '— Sin seleccionar —'), ...items];
       return DropdownButtonFormField<String>(value: valid, decoration: _dec(label, ''), isExpanded: true, items: all.map((o) => DropdownMenuItem(value: o.id.isEmpty ? null : o.id, child: Text(o.label, overflow: TextOverflow.ellipsis))).toList(), onChanged: (v) => onChanged(v == null || v.isEmpty ? null : v));
     },
@@ -267,4 +446,168 @@ class _Banner extends StatelessWidget {
   const _Banner(this.message);
   @override
   Widget build(BuildContext context) => Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFFFEBEE), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFEF9A9A))), child: Row(children: [const Icon(Icons.error_outline, color: Color(0xFFC62828), size: 18), const SizedBox(width: 8), Expanded(child: Text(message, style: const TextStyle(color: Color(0xFFC62828), fontSize: 13)))]));
+}
+
+class _PresentationsNavCard extends StatelessWidget {
+  final String productId;
+  const _PresentationsNavCard({required this.productId});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 12, offset: Offset(0, 3))],
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: Icon(Icons.view_module_rounded, color: AppColors.accent, size: 22),
+        title: const Text('Presentaciones', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+        subtitle: const Text('Administrar SKUs, tipos y unidades', style: TextStyle(fontSize: 12)),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: () => context.push('/products/$productId/presentations'),
+      ),
+    );
+  }
+}
+
+class _PhotoItem {
+  final String? id;
+  final String? url;
+  final String? localId;
+  final String? localPath;
+  final int? sortOrder;
+  const _PhotoItem({this.id, this.url, this.localId, this.localPath, this.sortOrder});
+}
+
+class _PhotoThumb extends StatelessWidget {
+  final _PhotoItem photo;
+  final VoidCallback? onDelete;
+  const _PhotoThumb({required this.photo, required this.onDelete});
+
+  Widget _buildFullscreenContent() {
+    if (photo.localPath != null) {
+      return Image.file(
+        File(photo.localPath!),
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white, size: 48),
+      );
+    } else if (photo.url != null) {
+      return Image.network(
+        _absoluteImageUrl(photo.url!),
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white, size: 48),
+      );
+    }
+    return const Icon(Icons.image_not_supported, color: Colors.white, size: 48);
+  }
+
+  void _showFullscreen(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                panEnabled: true,
+                minScale: 0.8,
+                maxScale: 5.0,
+                child: _buildFullscreenContent(),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: IconButton(
+                icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget content;
+    if (photo.localPath != null) {
+      content = Image.file(
+        File(photo.localPath!),
+        fit: BoxFit.cover,
+        width: 100,
+        height: 100,
+        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
+      );
+    } else if (photo.url != null) {
+      content = Image.network(
+        _absoluteImageUrl(photo.url!),
+        fit: BoxFit.cover,
+        width: 100,
+        height: 100,
+        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
+      );
+    } else {
+      content = const Icon(Icons.image_not_supported);
+    }
+    return Stack(
+      children: [
+        GestureDetector(
+          onTap: () => _showFullscreen(context),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: SizedBox(width: 100, height: 100, child: content),
+          ),
+        ),
+        if (onDelete != null)
+          Positioned(
+            top: 3, right: 3,
+            child: GestureDetector(
+              onTap: onDelete,
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                child: const Icon(Icons.close, size: 12, color: Colors.white),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _AddPhotoCard extends StatelessWidget {
+  final bool enabled;
+  final VoidCallback onTap;
+  const _AddPhotoCard({required this.enabled, required this.onTap});
+  @override
+  Widget build(BuildContext context) => Opacity(
+    opacity: enabled ? 1.0 : 0.5,
+    child: GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        width: 100,
+        height: 100,
+        decoration: BoxDecoration(
+          color: AppColors.border.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.add_photo_alternate_outlined, size: 30),
+            SizedBox(height: 4),
+            Text('Agregar', style: TextStyle(fontSize: 11)),
+          ],
+        ),
+      ),
+    ),
+  );
 }

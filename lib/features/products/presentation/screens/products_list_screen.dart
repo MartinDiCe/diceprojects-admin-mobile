@@ -82,11 +82,16 @@ final productsListNotifierProvider =
   (ref) => ProductsListNotifier(ref.watch(dioProvider)),
 );
 
-class ProductsListScreen extends ConsumerWidget {
+class ProductsListScreen extends ConsumerStatefulWidget {
   const ProductsListScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProductsListScreen> createState() => _ProductsListScreenState();
+}
+
+class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(productsListNotifierProvider);
     final notifier = ref.read(productsListNotifierProvider.notifier);
 
@@ -95,7 +100,10 @@ class ProductsListScreen extends ConsumerWidget {
       searchHint: 'Buscar producto…',
       onSearch: notifier.setSearch,
       floatingActionButton: CreateFab(
-        onPressed: () => context.push('/products/new'),
+        onPressed: () async {
+          await context.push('/products/new');
+          notifier.reload();
+        },
         label: 'Nuevo producto',
       ),
       body: _buildBody(context, state, notifier),
@@ -280,10 +288,23 @@ class _ProductTile extends StatelessWidget {
                 const SizedBox(width: 2),
                 PopupMenuButton<String>(
                   onSelected: (v) {
+                    if (v == 'presentations') {
+                      context.push(
+                        '/products/${product.id}/presentations?name=${Uri.encodeComponent(product.name)}',
+                      );
+                    }
                     if (v == 'toggle') _confirmToggle(context);
                     if (v == 'delete') _confirmDelete(context);
                   },
                   itemBuilder: (_) => [
+                    const PopupMenuItem(
+                      value: 'presentations',
+                      child: Row(children: [
+                        Icon(Icons.view_module_rounded, size: 18),
+                        SizedBox(width: 8),
+                        Text('Presentaciones'),
+                      ]),
+                    ),
                     PopupMenuItem(
                       value: 'toggle',
                       child: Text(product.status == 'ACTIVE'

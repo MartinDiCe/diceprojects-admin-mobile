@@ -19,6 +19,8 @@ dependencies:
   google_fonts: ^6.2.1
   cupertino_icons: ^1.0.8
   file_picker: ^8.0.0
+  image_picker: ^1.0.7
+  share_plus: ^10.0.2
 
 dev_dependencies:
   flutter_test:

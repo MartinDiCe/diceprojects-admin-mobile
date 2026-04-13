@@ -1,3 +1,4 @@
+import 'package:app_diceprojects_admin/core/ui/widgets/create_fab.dart';
 import 'package:app_diceprojects_admin/core/http/dio_client.dart';
 import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
 import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
@@ -141,6 +142,27 @@ class _StockOverviewNotifier extends StateNotifier<_StockOverviewState> {
       state = state.copyWith(loadingStock: false, error: e.toString());
     }
   }
+
+  Future<String?> adjustIn({
+    required String warehouseId,
+    required String productPresentationId,
+    required num quantity,
+    String? note,
+  }) async {
+    try {
+      await _dio.post('/v1/stock/adjust-in', data: {
+        'warehouseId': warehouseId,
+        'productPresentationId': productPresentationId,
+        'quantity': quantity,
+        if (note != null && note.isNotEmpty) 'note': note,
+      });
+      // Refresh stock list
+      await selectWarehouse(warehouseId);
+      return null; // success
+    } catch (e) {
+      return e.toString();
+    }
+  }
 }
 
 final _stockOverviewProvider =
@@ -150,18 +172,265 @@ final _stockOverviewProvider =
 
 // ────────────────────────────── Screen ──────────────────────────────
 
-class StockOverviewScreen extends ConsumerWidget {
+class StockOverviewScreen extends ConsumerStatefulWidget {
   const StockOverviewScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(_stockOverviewProvider);
+  ConsumerState<StockOverviewScreen> createState() => _StockOverviewScreenState();
+}
+
+class _StockOverviewScreenState extends ConsumerState<StockOverviewScreen> {
+  bool _adjusting = false;
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  Future<void> _showAdjustInDialog(BuildContext context, String warehouseId) async {
+    final dio = ref.read(dioProvider);
+
+    // Local state for the modal
+    List<Map<String, dynamic>> products = [];
+    List<Map<String, dynamic>> presentations = [];
+    String? selectedProductId;
+    String? selectedProductName;
+    String? selectedPresentationId;
+    bool loadingProducts = true;
+    bool loadingPresentations = false;
+    bool submitting = false;
+    String? errorMsg;
+    final qtyCtrl  = TextEditingController();
+    final noteCtrl = TextEditingController();
+
+    // Fetch products
+    Future<void> fetchProducts(void Function(void Function()) setModal) async {
+      try {
+        final resp = await dio.get('/v1/products', queryParameters: {'size': 100, 'page': 0});
+        final raw = resp.data;
+        final list = raw is Map ? ((raw['content'] ?? raw['items']) as List? ?? []) : (raw as List? ?? []);
+        setModal(() {
+          products = list.map((e) => e as Map<String, dynamic>).toList();
+          loadingProducts = false;
+        });
+      } catch (e) {
+        setModal(() { loadingProducts = false; errorMsg = e.toString(); });
+      }
+    }
+
+    Future<void> fetchPresentations(String productId, void Function(void Function()) setModal) async {
+      setModal(() { loadingPresentations = true; presentations = []; selectedPresentationId = null; });
+      try {
+        final resp = await dio.get('/v1/products/$productId/presentations');
+        final list = (resp.data as List? ?? []).map((e) => e as Map<String, dynamic>).toList();
+        setModal(() { presentations = list; loadingPresentations = false; });
+      } catch (e) {
+        setModal(() { loadingPresentations = false; errorMsg = e.toString(); });
+      }
+    }
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModal) {
+          // Trigger initial product load once
+          if (loadingProducts && products.isEmpty) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => fetchProducts(setModal));
+          }
+
+          return Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(children: [
+                    Expanded(child: Text('Ajuste de Entrada',
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17, color: AppColors.ink))),
+                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                  ]),
+                  const SizedBox(height: 4),
+                  Text('Seleccioná el producto y su presentación para registrar stock.',
+                      style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                  const SizedBox(height: 16),
+
+                  // Product dropdown
+                  loadingProducts
+                      ? const Center(child: CircularProgressIndicator())
+                      : DropdownButtonFormField<String>(
+                          value: selectedProductId,
+                          decoration: InputDecoration(
+                            labelText: 'Producto',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          hint: const Text('Seleccioná un producto'),
+                          items: products.map((p) {
+                            final id   = p['productId']?.toString() ?? p['id']?.toString() ?? '';
+                            final name = p['name']?.toString() ?? id;
+                            return DropdownMenuItem(value: id, child: Text(name, overflow: TextOverflow.ellipsis));
+                          }).toList(),
+                          onChanged: (v) {
+                            if (v == null) return;
+                            selectedProductId   = v;
+                            selectedProductName = products.firstWhere(
+                              (p) => (p['productId'] ?? p['id'])?.toString() == v, orElse: () => {},
+                            )['name']?.toString();
+                            fetchPresentations(v, setModal);
+                          },
+                        ),
+
+                  const SizedBox(height: 12),
+
+                  // Presentation dropdown
+                  if (loadingPresentations)
+                    const Center(child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: CircularProgressIndicator(),
+                    ))
+                  else if (selectedProductId != null && presentations.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.amber.shade200),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.amber.shade700, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Este producto no tiene presentaciones. Creá una desde el portal web: Productos → detalle del producto → sección Presentaciones.',
+                              style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else if (selectedProductId != null)
+                    DropdownButtonFormField<String>(
+                      value: selectedPresentationId,
+                      decoration: InputDecoration(
+                        labelText: 'Presentación',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      hint: const Text('Seleccioná una'),
+                      items: presentations.map((p) {
+                        final pid  = p['presentationId']?.toString() ?? '';
+                        final sku  = p['sku']?.toString() ?? '';
+                        final type = p['presentationTypeCode']?.toString() ?? '';
+                        final qty  = p['unitQuantity']?.toString() ?? '';
+                        final unit = p['baseUnitCode']?.toString() ?? '';
+                        final label = [
+                          if (sku.isNotEmpty) 'SKU: $sku',
+                          if (type.isNotEmpty) type,
+                          if (qty.isNotEmpty) '$qty $unit',
+                        ].join(' · ');
+                        return DropdownMenuItem(value: pid,
+                          child: Text(label.isNotEmpty ? label : pid, overflow: TextOverflow.ellipsis));
+                      }).toList(),
+                      onChanged: (v) => setModal(() => selectedPresentationId = v),
+                    ),
+
+                  const SizedBox(height: 12),
+
+                  // Quantity
+                  TextField(
+                    controller: qtyCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: 'Cantidad',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Note
+                  TextField(
+                    controller: noteCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Nota (opcional)',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+
+                  if (errorMsg != null) ...[
+                    const SizedBox(height: 8),
+                    Text(errorMsg!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                  ],
+                  const SizedBox(height: 20),
+
+                  ElevatedButton(
+                    onPressed: submitting ? null : () async {
+                      final pid = selectedPresentationId;
+                      final qty = num.tryParse(qtyCtrl.text.trim());
+                      if (pid == null || pid.isEmpty) {
+                        setModal(() => errorMsg = 'Seleccioná una presentación.');
+                        return;
+                      }
+                      if (qty == null || qty <= 0) {
+                        setModal(() => errorMsg = 'Ingresá una cantidad válida.');
+                        return;
+                      }
+                      setModal(() { submitting = true; errorMsg = null; });
+                      final err = await ref.read(_stockOverviewProvider.notifier).adjustIn(
+                        warehouseId: warehouseId,
+                        productPresentationId: pid,
+                        quantity: qty,
+                        note: noteCtrl.text.trim(),
+                      );
+                      if (!ctx.mounted) return;
+                      if (err == null) {
+                        Navigator.pop(ctx);
+                      } else {
+                        setModal(() { submitting = false; errorMsg = err; });
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.accent,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: submitting
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text('Confirmar Ingreso', style: TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state    = ref.watch(_stockOverviewProvider);
     final notifier = ref.read(_stockOverviewProvider.notifier);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark   = Theme.of(context).brightness == Brightness.dark;
     final textMuted = isDark ? AppColors.sidebarTextMuted : AppColors.textSecondary;
 
     return AppPageScaffold(
       title: 'Stock',
+      floatingActionButton: state.selectedWarehouseId != null
+          ? CreateFab(
+              label: 'Ajuste Entrada',
+              icon: Icons.add_rounded,
+              onPressed: () => _showAdjustInDialog(context, state.selectedWarehouseId!),
+            )
+          : null,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -209,15 +478,23 @@ class StockOverviewScreen extends ConsumerWidget {
                     : state.stockItems.isEmpty
                         ? const EmptyState(
                             icon: Icons.inventory_2_outlined,
-                            title: 'Sin stock',
-                            message: 'Este depósito no tiene stock registrado.',
+                            title: 'Sin stock registrado',
+                            message:
+                                'Los productos aparecen aquí cuando tienen movimientos de entrada. Usá el botón + para registrar el stock inicial.',
                           )
                         : ListView.builder(
-                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
+                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
                             itemCount: state.stockItems.length,
                             itemBuilder: (ctx, i) {
                               final item = state.stockItems[i];
                               final cardBg = isDark ? AppColors.surface : Colors.white;
+                              // Fallback: show short productPresentationId if no name
+                              final pid  = item.productPresentationId;
+                              final name = item.productName ??
+                                  item.sku ??
+                                  (pid != null && pid.length > 8
+                                      ? '#…${pid.substring(pid.length - 8)}'
+                                      : (pid ?? 'Producto'));
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 8),
                                 decoration: BoxDecoration(
@@ -242,11 +519,9 @@ class StockOverviewScreen extends ConsumerWidget {
                                             : AppColors.accent,
                                         size: 18),
                                   ),
-                                  title: Text(
-                                    item.productName ?? item.sku ?? 'Producto',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w600, fontSize: 14),
-                                  ),
+                                  title: Text(name,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w600, fontSize: 14)),
                                   subtitle: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
