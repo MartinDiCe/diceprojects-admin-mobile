@@ -1,4 +1,4 @@
-import 'dart:developer';
+﻿import 'dart:developer';
 import 'dart:io';
 
 import 'package:app_diceprojects_admin/core/errors/error_handler.dart';
@@ -13,7 +13,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:app_diceprojects_admin/core/ui/widgets/confirm_dialog.dart';
+import 'package:app_diceprojects_admin/core/config/app_config.dart';
 import 'package:image_picker/image_picker.dart';
 
 String _slugify(String input) {
@@ -25,6 +25,12 @@ String _slugify(String input) {
   s = s.replaceAll(RegExp(r'\s+'), '-');
   s = s.replaceAll(RegExp(r'-{2,}'), '-');
   return s;
+}
+
+String _absoluteImageUrl(String url) {
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  final base = AppConfig.apiBaseUrl.replaceFirst(RegExp(r'/api$'), '');
+  return '$base$url';
 }
 
 class _LabeledOption { final String value; final String label; const _LabeledOption({required this.value, required this.label}); }
@@ -106,11 +112,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   bool _populated = false;
 
   // ── Images ─────────────────────────────────────────────────────────────────
-  List<_PhotoItem> _photos = [];
-  bool _photosLoading = false;
+  final List<_PhotoItem> _photos = [];
   bool _isUploading = false;
-  int _uploadDone = 0;
-  int _uploadTotal = 0;
+  int _uploadDone = 0, _uploadTotal = 0;
 
   @override
   void initState() {
@@ -136,137 +140,93 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     setState(() { _priceTypeCode = s.priceTypeCode; _currencyCode = s.currencyCode; _statusCode = s.statusCode; _stockStatusCode = s.stockStatusCode; _featured = s.featured; _productTypeId = s.productTypeId; _storageConditionId = s.storageConditionId; _brandId = s.brandId; _baseUomCode = s.baseUomCode; _allowFraction = s.allowFraction; _requiresLot = s.requiresLot; _requiresExpiration = s.requiresExpiration; _requiresSerial = s.requiresSerial; _selectedCompanyId = s.companyId; _selectedSellerId = s.sellerId; _populated = true; _slugTouched = s.slug.isNotEmpty; });
   }
 
-  Future<void> _loadImages() async {
+  Future<void> _loadImages({bool preserveOnEmpty = false}) async {
     if (widget.productId == null) return;
-    setState(() => _photosLoading = true);
     try {
-      final resp = await ref.read(dioProvider).get('/v1/products/${widget.productId}/images');
-      final list = (resp.data as List? ?? []).map((e) => e as Map<String, dynamic>).toList();
-      if (mounted) {
-        setState(() {
-          _photos = list.map((e) => _PhotoItem(
-            imageId: e['imageId']?.toString(),
-            url: e['url']?.toString(),
-            status: _PhotoStatus.loaded,
-            sortOrder: (e['sortOrder'] as num?)?.toInt() ?? 0,
-          )).toList()..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-          _photosLoading = false;
-        });
+      final auth = ref.read(authNotifierProvider);
+      final companyId = auth.isAdminGlobal ? _selectedCompanyId : auth.tenantId;
+      final resp = await ref.read(dioProvider).get(
+        '/v1/products/${widget.productId}/images',
+        queryParameters: companyId != null ? {'companyId': companyId} : null,
+      );
+      final list = (resp.data as List? ?? [])
+          .map((e) => _PhotoItem(id: e['imageId']?.toString(), url: e['url']?.toString()))
+          .toList();
+      if (mounted && (list.isNotEmpty || !preserveOnEmpty)) {
+        setState(() { _photos..clear()..addAll(list); });
       }
-    } catch (_) {
-      if (mounted) setState(() => _photosLoading = false);
-    }
+    } catch (_) {}
   }
 
   Future<void> _pickAndUploadMultiple() async {
-    if (_isUploading) return;
-    final loadedCount = _photos.where((p) => p.status == _PhotoStatus.loaded).length;
-    final remaining = 5 - loadedCount;
-    if (remaining <= 0) return;
-    List<XFile> selected;
+    final picker = ImagePicker();
+    final picked = await picker.pickMultiImage(maxWidth: 1200, imageQuality: 85);
+    if (picked.isEmpty || !mounted) return;
+    setState(() { _isUploading = true; _uploadDone = 0; _uploadTotal = picked.length; });
     try {
-      selected = await ImagePicker().pickMultiImage(imageQuality: 85);
-    } catch (_) { return; }
-    if (selected.isEmpty || !mounted) return;
-    if (selected.length > remaining) {
-      selected = selected.take(remaining).toList();
-      _snack('Se agregaron las primeras $remaining foto(s). Máximo 5 en total.');
-    }
-    final nextSort = _photos.isEmpty ? 0 : (_photos.map((p) => p.sortOrder).fold(0, (a, b) => a > b ? a : b) + 1);
-    final placeholders = selected.asMap().entries.map((e) => _PhotoItem(
-      localFile: File(e.value.path), status: _PhotoStatus.uploading, sortOrder: nextSort + e.key,
-    )).toList();
-    setState(() { _photos = [..._photos, ...placeholders]; _isUploading = true; _uploadDone = 0; _uploadTotal = selected.length; });
-    for (int i = 0; i < selected.length; i++) {
-      final xfile = selected[i];
-      final sortOrder = nextSort + i;
-      try {
+      final auth = ref.read(authNotifierProvider);
+      final companyId = (auth.isAdminGlobal ? _selectedCompanyId : auth.tenantId) ?? '';
+      final dio = ref.read(dioProvider);
+      for (var i = 0; i < picked.length; i++) {
+        final xfile = picked[i];
         final bytes = await File(xfile.path).readAsBytes();
         final formData = FormData.fromMap({
-          'file': MultipartFile.fromBytes(bytes, filename: 'img_$sortOrder.jpg', contentType: DioMediaType('image', 'jpeg')),
-          'sortOrder': sortOrder,
+          'file': MultipartFile.fromBytes(bytes, filename: 'image_$i.jpg',
+              contentType: DioMediaType('image', 'jpeg')),
+          'sortOrder': _photos.length + i,
+          if (companyId.isNotEmpty) 'companyId': companyId,
         });
-        await ref.read(dioProvider).post('/v1/products/${widget.productId}/images/upload', data: formData);
-      } catch (_) {
-        if (mounted) {
-          final idx = _photos.indexWhere((p) => p.sortOrder == sortOrder && p.status == _PhotoStatus.uploading);
-          if (idx >= 0) {
-            final updated = List<_PhotoItem>.from(_photos);
-            updated[idx] = _PhotoItem(localFile: File(xfile.path), status: _PhotoStatus.error, sortOrder: sortOrder);
-            setState(() => _photos = updated);
-          }
-        }
+        await dio.post('/v1/products/${widget.productId}/images/upload', data: formData);
+        if (mounted) setState(() => _uploadDone = i + 1);
       }
-      if (mounted) setState(() => _uploadDone = i + 1);
+    } catch (e) {
+      if (mounted) _snack('Error al subir: ${ErrorHandler.handle(e).message}');
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
     }
-    await _loadImages();
-    if (mounted) setState(() { _isUploading = false; });
+    await _loadImages(preserveOnEmpty: true);
   }
 
-  Future<void> _deleteImage(String imageId) async {
-    final confirmed = await ConfirmDialog.show(context,
-      title: '¿Eliminar foto?',
-      message: 'Esta imagen se eliminará del producto. No se puede deshacer.',
-      confirmLabel: 'Eliminar',
-      isDangerous: true,
-    );
-    if (!confirmed || !mounted) return;
+  Future<void> _deleteImage(String photoId) async {
     try {
-      await ref.read(dioProvider).delete('/v1/products/${widget.productId}/images/$imageId');
+      await ref.read(dioProvider).delete('/v1/products/${widget.productId}/images/$photoId');
       await _loadImages();
-    } catch (_) {
-      if (mounted) _snack('No se pudo eliminar la foto. Intentá de nuevo.');
+    } catch (e) {
+      if (mounted) _snack('Error al eliminar: ${ErrorHandler.handle(e).message}');
     }
   }
 
   Widget _buildPhotosCard() {
-    final loadedCount = _photos.where((p) => p.status == _PhotoStatus.loaded).length;
     return _Card(
       title: 'Fotos del Producto',
       icon: Icons.photo_library_rounded,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(child: Text(
-              loadedCount == 0 ? 'La primera foto será la imagen principal.' : 'La primera foto es la imagen principal.',
-              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-            )),
-            Text('$loadedCount / 5', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
-              color: loadedCount >= 5 ? AppColors.error : AppColors.textSecondary)),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (_photosLoading)
-          SizedBox(height: 96, child: Row(children: [
-            for (var i = 0; i < 3; i++) ...[if (i > 0) const SizedBox(width: 8),
-              Container(width: 88, height: 88, decoration: BoxDecoration(
-                color: AppColors.border.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(10)))],
-          ]))
-        else
-          SizedBox(
-            height: 96,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _photos.length + (loadedCount < 5 ? 1 : 0),
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (ctx, idx) {
-                if (idx == _photos.length) return _AddPhotoCard(enabled: !_isUploading, onTap: _pickAndUploadMultiple);
-                final photo = _photos[idx];
-                return _PhotoThumb(
-                  photo: photo, isPrimary: idx == 0,
-                  onDelete: photo.imageId != null && photo.status == _PhotoStatus.loaded ? () => _deleteImage(photo.imageId!) : null,
-                );
-              },
+        if (_isUploading)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: LinearProgressIndicator(
+              value: _uploadTotal > 0 ? _uploadDone / _uploadTotal : null,
             ),
           ),
-        if (_isUploading && _uploadTotal > 0) ...[const SizedBox(height: 8),
-          ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(
-            value: _uploadDone / _uploadTotal, backgroundColor: AppColors.border,
-            valueColor: AlwaysStoppedAnimation<Color>(AppColors.accent))),
-          const SizedBox(height: 4),
-          Text('Subiendo $_uploadDone de $_uploadTotal foto(s)...',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary))],
+        SizedBox(
+          height: 100,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              ..._photos.map((p) => Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: _PhotoThumb(
+                  photo: p,
+                  onDelete: () => _deleteImage(p.id!),
+                ),
+              )),
+              _AddPhotoCard(
+                enabled: !_isUploading,
+                onTap: _pickAndUploadMultiple,
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -423,79 +383,55 @@ class _DimF extends StatelessWidget {
   Widget build(BuildContext context) => TextFormField(controller: ctrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: _dec(label, ''));
 }
 
-// ── Photo section models & widgets ────────────────────────────────────────
-
-enum _PhotoStatus { loaded, uploading, error }
+class _Banner extends StatelessWidget {
+  final String message;
+  const _Banner(this.message);
+  @override
+  Widget build(BuildContext context) => Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFFFEBEE), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFEF9A9A))), child: Row(children: [const Icon(Icons.error_outline, color: Color(0xFFC62828), size: 18), const SizedBox(width: 8), Expanded(child: Text(message, style: const TextStyle(color: Color(0xFFC62828), fontSize: 13)))]));
+}
 
 class _PhotoItem {
-  final String? imageId;
+  final String? id;
   final String? url;
-  final File? localFile;
-  final _PhotoStatus status;
-  final int sortOrder;
-  const _PhotoItem({this.imageId, this.url, this.localFile, required this.status, required this.sortOrder});
+  const _PhotoItem({this.id, this.url});
 }
 
 class _PhotoThumb extends StatelessWidget {
   final _PhotoItem photo;
-  final bool isPrimary;
-  final VoidCallback? onDelete;
-  const _PhotoThumb({super.key, required this.photo, required this.isPrimary, this.onDelete});
-
+  final VoidCallback onDelete;
+  const _PhotoThumb({required this.photo, required this.onDelete});
   @override
   Widget build(BuildContext context) {
     Widget content;
-    if (photo.status == _PhotoStatus.uploading) {
-      content = Stack(fit: StackFit.expand, children: [
-        if (photo.localFile != null) Image.file(photo.localFile!, fit: BoxFit.cover),
-        Container(color: Colors.black45, child: const Center(child: SizedBox(width: 24, height: 24,
-          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)))),
-      ]);
-    } else if (photo.status == _PhotoStatus.error) {
-      content = Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 22),
-        const Text('Error', style: TextStyle(fontSize: 10, color: Colors.red)),
-      ]);
+    if (photo.url != null) {
+      content = Image.network(
+        _absoluteImageUrl(photo.url!),
+        fit: BoxFit.cover,
+        width: 100,
+        height: 100,
+        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
+      );
     } else {
-      content = photo.url != null
-          ? Image.network(photo.url!, fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Icon(Icons.broken_image, color: AppColors.textSecondary))
-          : const SizedBox();
+      content = const Icon(Icons.image_not_supported);
     }
-    return SizedBox(
-      width: 88, height: 88,
-      child: Stack(fit: StackFit.expand, children: [
+    return Stack(
+      children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(10),
-          child: Container(
-            width: 88, height: 88,
-            decoration: BoxDecoration(
-              color: AppColors.border.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: isPrimary ? AppColors.accent.withValues(alpha: 0.7) : AppColors.border,
-                width: isPrimary ? 2 : 1,
-              ),
-            ),
-            child: content,
-          ),
+          child: SizedBox(width: 100, height: 100, child: content),
         ),
-        if (isPrimary && photo.status == _PhotoStatus.loaded)
-          Positioned(bottom: 5, left: 5, child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-            decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(5)),
-            child: const Text('Principal', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600)),
-          )),
-        if (onDelete != null)
-          Positioned(top: 4, right: 4, child: GestureDetector(
+        Positioned(
+          top: 3, right: 3,
+          child: GestureDetector(
             onTap: onDelete,
             child: Container(
-              width: 22, height: 22,
-              decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.55), shape: BoxShape.circle),
+              padding: const EdgeInsets.all(3),
+              decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
               child: const Icon(Icons.close, size: 12, color: Colors.white),
             ),
-          )),
-      ]),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -503,33 +439,29 @@ class _PhotoThumb extends StatelessWidget {
 class _AddPhotoCard extends StatelessWidget {
   final bool enabled;
   final VoidCallback onTap;
-  const _AddPhotoCard({super.key, required this.enabled, required this.onTap});
-
+  const _AddPhotoCard({required this.enabled, required this.onTap});
   @override
   Widget build(BuildContext context) => Opacity(
-    opacity: enabled ? 1.0 : 0.45,
+    opacity: enabled ? 1.0 : 0.5,
     child: GestureDetector(
       onTap: enabled ? onTap : null,
       child: Container(
-        width: 88, height: 88,
+        width: 100,
+        height: 100,
         decoration: BoxDecoration(
-          color: AppColors.border.withValues(alpha: 0.2),
+          color: AppColors.border.withValues(alpha: 0.4),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.border, width: 1.5),
+          border: Border.all(color: AppColors.border),
         ),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.add_photo_alternate_outlined, size: 26, color: AppColors.textSecondary),
-          const SizedBox(height: 4),
-          Text('Agregar', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-        ]),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.add_photo_alternate_outlined, size: 30),
+            SizedBox(height: 4),
+            Text('Agregar', style: TextStyle(fontSize: 11)),
+          ],
+        ),
       ),
     ),
   );
-}
-
-class _Banner extends StatelessWidget {
-  final String message;
-  const _Banner(this.message);
-  @override
-  Widget build(BuildContext context) => Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFFFEBEE), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFEF9A9A))), child: Row(children: [const Icon(Icons.error_outline, color: Color(0xFFC62828), size: 18), const SizedBox(width: 8), Expanded(child: Text(message, style: const TextStyle(color: Color(0xFFC62828), fontSize: 13)))]));
 }
