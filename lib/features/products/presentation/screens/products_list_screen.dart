@@ -288,10 +288,23 @@ class _ProductTile extends StatelessWidget {
                 const SizedBox(width: 2),
                 PopupMenuButton<String>(
                   onSelected: (v) {
+                    if (v == 'presentations') {
+                      context.push(
+                        '/products/${product.id}/presentations?name=${Uri.encodeComponent(product.name)}',
+                      );
+                    }
                     if (v == 'toggle') _confirmToggle(context);
                     if (v == 'delete') _confirmDelete(context);
                   },
                   itemBuilder: (_) => [
+                    const PopupMenuItem(
+                      value: 'presentations',
+                      child: Row(children: [
+                        Icon(Icons.view_module_rounded, size: 18),
+                        SizedBox(width: 8),
+                        Text('Presentaciones'),
+                      ]),
+                    ),
                     PopupMenuItem(
                       value: 'toggle',
                       child: Text(product.status == 'ACTIVE'
