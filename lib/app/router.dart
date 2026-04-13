@@ -35,6 +35,7 @@ import 'package:app_diceprojects_admin/features/warehouse/presentation/screens/w
 import 'package:app_diceprojects_admin/features/core_masters/presentation/screens/sectors_screen.dart';
 import 'package:app_diceprojects_admin/features/roles/presentation/screens/role_detail_screen.dart';
 import 'package:app_diceprojects_admin/features/roles/presentation/screens/roles_list_screen.dart';
+import 'package:app_diceprojects_admin/features/permissions/presentation/screens/permissions_screen.dart';
 import 'package:app_diceprojects_admin/features/users/presentation/screens/user_detail_screen.dart';
 import 'package:app_diceprojects_admin/features/users/presentation/screens/user_form_screen.dart';
 import 'package:app_diceprojects_admin/features/users/presentation/screens/users_list_screen.dart';
@@ -132,6 +133,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/iam/invitations',
             builder: (_, __) => const InvitationsScreen(),
+          ),
+          GoRoute(
+            path: '/iam/permissions',
+            builder: (_, __) => const PermissionsListScreen(),
           ),
           // Authorization
           GoRoute(

@@ -138,6 +138,9 @@ class AppDrawer extends ConsumerWidget {
                 if (perms.canAccessRoute('/iam/invitations'))
                   _navItem(context, '/iam/invitations',
                       Icons.mail_rounded, 'Invitaciones'),
+                if (perms.canAccessRoute('/iam/permissions'))
+                  _navItem(context, '/iam/permissions',
+                      Icons.shield_rounded, 'Permisos'),
 
                 // ── Logs ───────────────────────────────────────
                 if (perms.canAccessRoute('/logs/audit') ||

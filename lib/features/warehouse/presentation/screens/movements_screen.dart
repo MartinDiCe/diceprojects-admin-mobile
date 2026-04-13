@@ -8,6 +8,20 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+String _fmtDate(String? raw) {
+  if (raw == null || raw.isEmpty) return '';
+  try {
+    final dt = DateTime.parse(raw).toLocal();
+    final d = dt.day.toString().padLeft(2, '0');
+    final mo = dt.month.toString().padLeft(2, '0');
+    final h = dt.hour.toString().padLeft(2, '0');
+    final mi = dt.minute.toString().padLeft(2, '0');
+    return '$d/$mo/${dt.year} $h:$mi';
+  } catch (_) {
+    return raw.split('T').first;
+  }
+}
+
 // ────────────────────────────── Model ──────────────────────────────
 
 class MovementDto {
@@ -218,7 +232,7 @@ class MovementsScreen extends ConsumerWidget {
                                         style: TextStyle(
                                             fontSize: 12, color: textMuted)),
                                   if (m.createdAt != null)
-                                    Text(m.createdAt!.split('T').first,
+                                    Text(_fmtDate(m.createdAt),
                                         style: TextStyle(
                                             fontSize: 11, color: textMuted)),
                                 ],
