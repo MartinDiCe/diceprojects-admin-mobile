@@ -140,14 +140,17 @@ class _ProductImportScreenState extends ConsumerState<ProductImportScreen> {
     if (template == null) return;
     setState(() => _downloadingSample = true);
     try {
-      final resp = await _dio.get(
+      final resp = await _dio.get<String>(
         '/v1/job-templates/${template.templateCode}/sample',
-        options: Options(responseType: ResponseType.bytes),
+        options: Options(
+          responseType: ResponseType.plain,
+          headers: {'Accept': 'text/csv, text/plain, */*'},
+        ),
       );
-      final bytes = resp.data as List<int>;
+      final csvContent = resp.data ?? '';
       final dir  = Directory.systemTemp;
       final file = File('${dir.path}/${template.templateCode}_sample.csv');
-      await file.writeAsBytes(bytes, flush: true);
+      await file.writeAsString(csvContent, flush: true);
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'text/csv')],
         subject: 'Plantilla de ejemplo: ${template.displayName}',

@@ -1,3 +1,4 @@
+import 'package:app_diceprojects_admin/core/ui/widgets/create_fab.dart';
 import 'package:app_diceprojects_admin/core/http/dio_client.dart';
 import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
 import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
@@ -402,12 +403,10 @@ class _StockOverviewScreenState extends ConsumerState<StockOverviewScreen> {
     return AppPageScaffold(
       title: 'Stock',
       floatingActionButton: state.selectedWarehouseId != null
-          ? FloatingActionButton.extended(
+          ? CreateFab(
+              label: 'Ajuste Entrada',
+              icon: Icons.add_rounded,
               onPressed: () => _showAdjustInDialog(context, state.selectedWarehouseId!),
-              backgroundColor: AppColors.accent,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add),
-              label: const Text('Ajuste Entrada', style: TextStyle(fontWeight: FontWeight.w700)),
             )
           : null,
       body: Column(

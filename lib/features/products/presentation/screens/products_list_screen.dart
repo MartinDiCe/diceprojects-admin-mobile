@@ -82,11 +82,16 @@ final productsListNotifierProvider =
   (ref) => ProductsListNotifier(ref.watch(dioProvider)),
 );
 
-class ProductsListScreen extends ConsumerWidget {
+class ProductsListScreen extends ConsumerStatefulWidget {
   const ProductsListScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProductsListScreen> createState() => _ProductsListScreenState();
+}
+
+class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(productsListNotifierProvider);
     final notifier = ref.read(productsListNotifierProvider.notifier);
 
@@ -95,7 +100,10 @@ class ProductsListScreen extends ConsumerWidget {
       searchHint: 'Buscar producto…',
       onSearch: notifier.setSearch,
       floatingActionButton: CreateFab(
-        onPressed: () => context.push('/products/new'),
+        onPressed: () async {
+          await context.push('/products/new');
+          notifier.reload();
+        },
         label: 'Nuevo producto',
       ),
       body: _buildBody(context, state, notifier),

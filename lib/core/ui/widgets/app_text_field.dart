@@ -15,6 +15,7 @@ class AppTextField extends StatelessWidget {
   final bool readOnly;
   final String? initialValue;
   final VoidCallback? onTap;
+  final String? helperText;
 
   const AppTextField({
     super.key,
@@ -31,6 +32,7 @@ class AppTextField extends StatelessWidget {
     this.readOnly = false,
     this.initialValue,
     this.onTap,
+    this.helperText,
   });
 
   @override
@@ -49,6 +51,8 @@ class AppTextField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
+        helperText: helperText,
+        helperMaxLines: 3,
         prefixIcon: prefixIcon,
         suffixIcon: suffixIcon,
         // Focus shadow ring

@@ -4,6 +4,7 @@ import 'package:app_diceprojects_admin/features/audit/presentation/screens/audit
 import 'package:app_diceprojects_admin/features/auth/presentation/controllers/auth_notifier.dart';
 import 'package:app_diceprojects_admin/features/auth/presentation/screens/login_screen.dart';
 import 'package:app_diceprojects_admin/features/auth/presentation/screens/splash_screen.dart';
+import 'package:app_diceprojects_admin/features/auth/presentation/screens/user_profile_screen.dart';
 import 'package:app_diceprojects_admin/features/core_masters/presentation/screens/currencies_screen.dart';
 import 'package:app_diceprojects_admin/features/core_masters/presentation/screens/feature_toggles_screen.dart';
 import 'package:app_diceprojects_admin/features/core_masters/presentation/screens/parameters_screen.dart';
@@ -123,6 +124,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/dashboard',
             builder: (_, __) => const DashboardScreen(),
+          ),
+          GoRoute(
+            path: '/profile',
+            builder: (_, __) => const UserProfileScreen(),
           ),
           // IAM
           GoRoute(
