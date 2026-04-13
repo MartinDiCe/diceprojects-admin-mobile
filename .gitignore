@@ -1,0 +1,43 @@
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+*.iml
+
+# Android
+android/local.properties
+android/.gradle/
+android/key.properties
+android/app/google-services.json
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/flutter_export_environment.sh
+
+# IDE
+.idea/
+.vscode/
+*.suo
+*.user
+
+# Env
+.env
+*.env
+
+# Coverage
+coverage/
+
+# Logs y debugging (nunca commitear — pueden contener credenciales)
+logs/
+*.log
+
+# Scripts UAT (pueden contener tokens)
+tools/uat/run-uat.ps1
+
+# Documentos de producto/plan (info interna, no van en repo público)
+.plan.md
+.product.md
+.context/
