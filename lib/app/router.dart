@@ -22,11 +22,18 @@ import 'package:app_diceprojects_admin/features/organization/presentation/screen
 import 'package:app_diceprojects_admin/features/people/presentation/screens/people_list_screen.dart';
 import 'package:app_diceprojects_admin/features/people/presentation/screens/person_form_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/brands_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/presentation_types_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/price_types_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/product_form_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/product_import_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/product_statuses_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/product_types_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/products_list_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/publication_channels_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/stock_statuses_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/stock_strategies_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/storage_conditions_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/unit_of_measure_screen.dart';
 import 'package:app_diceprojects_admin/features/sellers/presentation/screens/seller_form_screen.dart';
 import 'package:app_diceprojects_admin/features/sellers/presentation/screens/sellers_list_screen.dart';
 import 'package:app_diceprojects_admin/features/warehouse/presentation/screens/movements_screen.dart';
@@ -227,6 +234,34 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/products/import',
             builder: (_, __) => const ProductImportScreen(),
+          ),
+          GoRoute(
+            path: '/products/price-types',
+            builder: (_, __) => const PriceTypesScreen(),
+          ),
+          GoRoute(
+            path: '/products/stock-statuses',
+            builder: (_, __) => const StockStatusesScreen(),
+          ),
+          GoRoute(
+            path: '/products/product-statuses',
+            builder: (_, __) => const ProductStatusesScreen(),
+          ),
+          GoRoute(
+            path: '/products/publication-channels',
+            builder: (_, __) => const PublicationChannelsScreen(),
+          ),
+          GoRoute(
+            path: '/products/stock-strategies',
+            builder: (_, __) => const StockStrategiesScreen(),
+          ),
+          GoRoute(
+            path: '/products/presentation-types',
+            builder: (_, __) => const PresentationTypesScreen(),
+          ),
+          GoRoute(
+            path: '/products/unit-of-measure',
+            builder: (_, __) => const UnitOfMeasureScreen(),
           ),
           // Sellers
           GoRoute(

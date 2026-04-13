@@ -30,12 +30,12 @@ class ParameterDto {
   });
 
   factory ParameterDto.fromJson(Map<String, dynamic> json) => ParameterDto(
-        id: json['id']?.toString() ?? '',
-        key: json['key'] ?? json['name'] ?? '',
-        value: json['value']?.toString() ?? '',
-        description: json['description'],
-        type: json['type'],
-        status: json['status'],
+        id: json['parameterId']?.toString() ?? json['id']?.toString() ?? '',
+        key: json['parameterName']?.toString() ?? json['key']?.toString() ?? json['name']?.toString() ?? '',
+        value: json['parameterValue']?.toString() ?? json['value']?.toString() ?? '',
+        description: json['parameterDescription']?.toString() ?? json['description']?.toString(),
+        type: json['parameterCategory']?.toString() ?? json['type']?.toString(),
+        status: json['active'] != null ? (json['active'] == true ? 'ACTIVO' : 'INACTIVO') : json['status']?.toString(),
       );
 }
 

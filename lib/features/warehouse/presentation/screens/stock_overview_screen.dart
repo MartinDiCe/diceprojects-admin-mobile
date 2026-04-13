@@ -121,8 +121,8 @@ class _StockOverviewNotifier extends StateNotifier<_StockOverviewState> {
     state = state.copyWith(
         selectedWarehouseId: warehouseId, loadingStock: true, clearError: true);
     try {
-      final resp = await _dio.get('/v1/stock',
-          queryParameters: {'warehouseId': warehouseId, 'size': 100});
+      final resp = await _dio.get('/v1/stock/list',
+          queryParameters: {'warehouseId': warehouseId});
       final raw = resp.data;
       List<dynamic> list;
       if (raw is List) {
