@@ -97,6 +97,35 @@ final invitationsNotifierProvider = StateNotifierProvider.autoDispose<
   (ref) => InvitationsNotifier(ref.watch(dioProvider)),
 );
 
+// ─── Mapa roleId → nombre legible ────────────────────────────────────────────
+// Carga /v1/roles una sola vez y construye {id: description}.
+// Si falla, retorna mapa vacío y el tile muestra el código raw.
+final _rolesNameMapProvider =
+    FutureProvider.autoDispose<Map<String, String>>((ref) async {
+  final dio = ref.watch(dioProvider);
+  try {
+    final resp = await dio.get('/v1/roles', queryParameters: {'size': 200});
+    final raw = resp.data;
+    List<dynamic> list;
+    if (raw is List) {
+      list = raw;
+    } else if (raw is Map) {
+      list = (raw['items'] ?? raw['content'] ?? const <dynamic>[]) as List<dynamic>;
+    } else {
+      list = const <dynamic>[];
+    }
+    final map = <String, String>{};
+    for (final r in list) {
+      final id = (r['id'])?.toString() ?? '';
+      final name = (r['description'] ?? r['name'] ?? r['code'] ?? '').toString();
+      if (id.isNotEmpty) map[id] = name;
+    }
+    return map;
+  } catch (_) {
+    return {};
+  }
+});
+
 class InvitationsScreen extends ConsumerWidget {
   const InvitationsScreen({super.key});
 
@@ -104,17 +133,21 @@ class InvitationsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(invitationsNotifierProvider);
     final notifier = ref.read(invitationsNotifierProvider.notifier);
+    final rolesAsync = ref.watch(_rolesNameMapProvider);
+    final rolesMap = rolesAsync.valueOrNull ?? {};
 
     return AppPageScaffold(
       title: 'Invitaciones',
       searchHint: 'Buscar por email…',
       onSearch: notifier.setSearch,
-      body: _buildBody(state, notifier),
+      body: _buildBody(state, notifier, rolesMap),
     );
   }
 
   Widget _buildBody(
-      ListState<InvitationDto> state, InvitationsNotifier notifier) {
+      ListState<InvitationDto> state,
+      InvitationsNotifier notifier,
+      Map<String, String> rolesMap) {
     if (state.isLoading) return const LoadingState();
     if (state.error != null && state.items.isEmpty) {
       return ErrorState(
@@ -144,6 +177,12 @@ class InvitationsScreen extends ConsumerWidget {
                 child: LoadingState());
           }
           final inv = state.items[i];
+          // Resolver nombre del rol: si inv.role es un UUID, buscarlo en el mapa;
+          // si ya es un código legible (o si el mapa no lo tiene), mostrarlo tal cual.
+          final roleDisplay = inv.role != null
+              ? (rolesMap[inv.role!] ?? _formatRoleCode(inv.role!))
+              : 'Sin rol asignado';
+
           return Container(
             decoration: BoxDecoration(
               color: AppColors.surface,
@@ -187,7 +226,7 @@ class InvitationsScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            inv.role ?? 'Sin rol asignado',
+                            roleDisplay,
                             style: TextStyle(
                                 color: AppColors.textSecondary,
                                 fontSize: 12),
@@ -204,5 +243,20 @@ class InvitationsScreen extends ConsumerWidget {
         },
       ),
     );
+  }
+
+  /// Formatea un código de rol legible si no se encuentra en el mapa.
+  /// Ej: "PRODUCTS_ADMIN" → "Products Admin"
+  String _formatRoleCode(String raw) {
+    if (raw.length > 20 && raw.contains('-')) {
+      // Es probablemente un UUID → no se pudo resolver
+      return 'Sin rol';
+    }
+    return raw
+        .split('_')
+        .map((w) => w.isEmpty
+            ? ''
+            : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
+        .join(' ');
   }
 }
