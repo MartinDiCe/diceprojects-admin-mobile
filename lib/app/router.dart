@@ -23,6 +23,7 @@ import 'package:app_diceprojects_admin/features/people/presentation/screens/peop
 import 'package:app_diceprojects_admin/features/people/presentation/screens/person_form_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/brands_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/product_form_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/product_import_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/product_types_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/products_list_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/storage_conditions_screen.dart';
@@ -222,6 +223,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/products/storage-conditions',
             builder: (_, __) => const StorageConditionsScreen(),
+          ),
+          GoRoute(
+            path: '/products/import',
+            builder: (_, __) => const ProductImportScreen(),
           ),
           // Sellers
           GoRoute(

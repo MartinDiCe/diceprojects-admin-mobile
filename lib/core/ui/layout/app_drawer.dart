@@ -190,6 +190,9 @@ class AppDrawer extends ConsumerWidget {
                 if (perms.canAccessRoute('/products/storage-conditions'))
                   _navItem(context, '/products/storage-conditions',
                       Icons.thermostat_rounded, 'Condiciones'),
+                if (perms.canAccessRoute('/products/import'))
+                  _navItem(context, '/products/import',
+                      Icons.upload_file_rounded, 'Importar'),
 
                 // ── Depósitos ────────────────────────────────────
                 const _SectionHeader(label: 'Depósitos'),
