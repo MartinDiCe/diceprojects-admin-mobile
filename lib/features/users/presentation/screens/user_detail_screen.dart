@@ -181,7 +181,6 @@ class _InfoCard extends StatelessWidget {
                     .titleSmall
                     ?.copyWith(fontWeight: FontWeight.w700)),
             const Divider(height: 24),
-            _InfoRow(label: 'ID', value: user.id),
             if (user.tenantName != null)
               _InfoRow(label: 'Empresa', value: user.tenantName!),
             if (user.createdAt != null)
