@@ -163,6 +163,9 @@ class AppDrawer extends ConsumerWidget {
                 if (perms.canAccessRoute('/admin/branches'))
                   _navItem(context, '/admin/branches',
                       Icons.store_rounded, 'Sucursales'),
+                if (perms.canAccessRoute('/organization/sellers'))
+                  _navItem(context, '/organization/sellers',
+                      Icons.store_mall_directory_rounded, 'Vendedores'),
 
                 // ── Personas ────────────────────────────────────
                 const _SectionHeader(label: 'Personas'),
@@ -175,6 +178,27 @@ class AppDrawer extends ConsumerWidget {
                 if (perms.canAccessRoute('/products'))
                   _navItem(context, '/products',
                       Icons.inventory_2_rounded, 'Catálogo', primary: true),
+                if (perms.canAccessRoute('/products/types'))
+                  _navItem(context, '/products/types',
+                      Icons.category_rounded, 'Tipos'),
+                if (perms.canAccessRoute('/products/brands'))
+                  _navItem(context, '/products/brands',
+                      Icons.branding_watermark_rounded, 'Marcas'),
+                if (perms.canAccessRoute('/products/storage-conditions'))
+                  _navItem(context, '/products/storage-conditions',
+                      Icons.thermostat_rounded, 'Condiciones'),
+
+                // ── Depósitos ────────────────────────────────────
+                const _SectionHeader(label: 'Depósitos'),
+                if (perms.canAccessRoute('/warehouse'))
+                  _navItem(context, '/warehouse',
+                      Icons.warehouse_rounded, 'Depósitos', primary: true),
+                if (perms.canAccessRoute('/warehouse/types'))
+                  _navItem(context, '/warehouse/types',
+                      Icons.category_rounded, 'Tipos'),
+                if (perms.canAccessRoute('/warehouse/stock'))
+                  _navItem(context, '/warehouse/stock',
+                      Icons.inventory_2_rounded, 'Stock'),
 
                 // ── Marketing ────────────────────────────────────
                 const _SectionHeader(label: 'Marketing'),
@@ -210,6 +234,7 @@ class AppDrawer extends ConsumerWidget {
                     perms.canAccessRoute('/core/languages') ||
                     perms.canAccessRoute('/core/geo/countries') ||
                     perms.canAccessRoute('/core/toggles') ||
+                    perms.canAccessRoute('/core/sectors') ||
                     perms.canAccessRoute('/core/parameters')) ...[
                   const _SectionHeader(label: 'Maestros'),
                   if (perms.canAccessRoute('/core/currencies'))
@@ -227,6 +252,9 @@ class AppDrawer extends ConsumerWidget {
                   if (perms.canAccessRoute('/core/parameters'))
                     _navItem(context, '/core/parameters',
                         Icons.settings_rounded, 'Parámetros'),
+                  if (perms.canAccessRoute('/core/sectors'))
+                    _navItem(context, '/core/sectors',
+                        Icons.grid_view_rounded, 'Sectores'),
                 ],
               ],
             ),

@@ -21,8 +21,18 @@ import 'package:app_diceprojects_admin/features/organization/presentation/screen
 import 'package:app_diceprojects_admin/features/organization/presentation/screens/tenants_list_screen.dart';
 import 'package:app_diceprojects_admin/features/people/presentation/screens/people_list_screen.dart';
 import 'package:app_diceprojects_admin/features/people/presentation/screens/person_form_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/brands_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/product_form_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/product_types_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/products_list_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/storage_conditions_screen.dart';
+import 'package:app_diceprojects_admin/features/sellers/presentation/screens/seller_form_screen.dart';
+import 'package:app_diceprojects_admin/features/sellers/presentation/screens/sellers_list_screen.dart';
+import 'package:app_diceprojects_admin/features/warehouse/presentation/screens/movements_screen.dart';
+import 'package:app_diceprojects_admin/features/warehouse/presentation/screens/stock_overview_screen.dart';
+import 'package:app_diceprojects_admin/features/warehouse/presentation/screens/warehouse_types_screen.dart';
+import 'package:app_diceprojects_admin/features/warehouse/presentation/screens/warehouses_list_screen.dart';
+import 'package:app_diceprojects_admin/features/core_masters/presentation/screens/sectors_screen.dart';
 import 'package:app_diceprojects_admin/features/roles/presentation/screens/role_detail_screen.dart';
 import 'package:app_diceprojects_admin/features/roles/presentation/screens/roles_list_screen.dart';
 import 'package:app_diceprojects_admin/features/users/presentation/screens/user_detail_screen.dart';
@@ -195,6 +205,55 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/products/:id/edit',
             builder: (_, state) =>
                 ProductFormScreen(productId: state.pathParameters['id']),
+          ),
+          GoRoute(
+            path: '/products/types',
+            builder: (_, __) => const ProductTypesScreen(),
+          ),
+          GoRoute(
+            path: '/products/brands',
+            builder: (_, __) => const BrandsScreen(),
+          ),
+          GoRoute(
+            path: '/products/storage-conditions',
+            builder: (_, __) => const StorageConditionsScreen(),
+          ),
+          // Sellers
+          GoRoute(
+            path: '/organization/sellers',
+            builder: (_, __) => const SellersListScreen(),
+          ),
+          GoRoute(
+            path: '/organization/sellers/new',
+            builder: (_, __) => const SellerFormScreen(sellerId: null),
+          ),
+          GoRoute(
+            path: '/organization/sellers/:id/edit',
+            builder: (_, state) =>
+                SellerFormScreen(sellerId: state.pathParameters['id']),
+          ),
+          // Warehouse
+          GoRoute(
+            path: '/warehouse',
+            builder: (_, __) => const WarehousesListScreen(),
+          ),
+          GoRoute(
+            path: '/warehouse/types',
+            builder: (_, __) => const WarehouseTypesScreen(),
+          ),
+          GoRoute(
+            path: '/warehouse/stock',
+            builder: (_, __) => const StockOverviewScreen(),
+          ),
+          GoRoute(
+            path: '/warehouse/:warehouseId/movements',
+            builder: (_, state) => MovementsScreen(
+                warehouseId: state.pathParameters['warehouseId']!),
+          ),
+          // Sectors
+          GoRoute(
+            path: '/core/sectors',
+            builder: (_, __) => const SectorsScreen(),
           ),
           // Marketing
           GoRoute(
