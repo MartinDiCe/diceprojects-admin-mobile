@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:app_diceprojects_admin/core/http/dio_client.dart';
 import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
@@ -8,6 +9,7 @@ import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Models
@@ -96,6 +98,7 @@ class _ProductImportScreenState extends ConsumerState<ProductImportScreen> {
   _JobTemplate? _selectedTemplate;
   bool _templatesLoading = true;
   String? _templatesError;
+  bool _downloadingSample = false;
 
   // Tenants (admin global only)
   List<_TenantOption> _tenants = [];
@@ -129,6 +132,36 @@ class _ProductImportScreenState extends ConsumerState<ProductImportScreen> {
   }
 
   Dio get _dio => ref.read(dioProvider);
+
+  // ── Sample download ────────────────────────────────────────────────────────
+
+  Future<void> _downloadSample() async {
+    final template = _selectedTemplate;
+    if (template == null) return;
+    setState(() => _downloadingSample = true);
+    try {
+      final resp = await _dio.get(
+        '/v1/job-templates/${template.templateCode}/sample',
+        options: Options(responseType: ResponseType.bytes),
+      );
+      final bytes = resp.data as List<int>;
+      final dir  = Directory.systemTemp;
+      final file = File('${dir.path}/${template.templateCode}_sample.csv');
+      await file.writeAsBytes(bytes, flush: true);
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'text/csv')],
+        subject: 'Plantilla de ejemplo: ${template.displayName}',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al descargar muestra: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _downloadingSample = false);
+    }
+  }
 
   // ── Data loading ───────────────────────────────────────────────────────────
 
@@ -437,6 +470,22 @@ class _ProductImportScreenState extends ConsumerState<ProductImportScreen> {
                         ),
                       ),
                     ),
+
+                    // ── Download sample button ────────────────────────────
+                    if (_selectedTemplate != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: TextButton.icon(
+                          onPressed: _downloadingSample ? null : _downloadSample,
+                          icon: _downloadingSample
+                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                              : Icon(Icons.download_rounded, size: 16, color: AppColors.accent),
+                          label: Text(
+                            'Descargar archivo de ejemplo',
+                            style: TextStyle(fontSize: 13, color: AppColors.accent),
+                          ),
+                        ),
+                      ),
 
                     // ── Tenant selector (admin global) ────────────────────
                     if (auth.isAdminGlobal) ...[
