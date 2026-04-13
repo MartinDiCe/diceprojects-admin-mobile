@@ -89,7 +89,7 @@ final _uomListProvider =
   return list
       .map((e) => _CatOption(
             code: e['code']?.toString() ?? '',
-            name: '${e["name"] ?? ""} (${e["code"] ?? ""})',
+            name: e['name']?.toString() ?? e['code']?.toString() ?? '',
           ))
       .where((o) => o.code.isNotEmpty)
       .toList();
@@ -435,6 +435,37 @@ class _PresentationFormSheetState
     super.dispose();
   }
 
+  // ── UX helper: toggle row with always-visible label ─────────────────────
+  Widget _buildToggle(
+    String label,
+    bool value,
+    ValueChanged<bool> onChanged, {
+    Color? activeColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF334155),
+              ),
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeColor: activeColor ?? AppColors.accent,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _save(
       List<_CatOption> presTypes, List<_CatOption> uomList) async {
     if (!_formKey.currentState!.validate()) return;
@@ -544,7 +575,9 @@ class _PresentationFormSheetState
               Text(
                 _isEdit ? 'Editar presentación' : 'Nueva presentación',
                 style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w700),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A)),
               ),
               const SizedBox(height: 16),
               if (_error != null) ...[
@@ -669,40 +702,49 @@ class _PresentationFormSheetState
               ),
               const SizedBox(height: 12),
               // isDefault toggle
-              SwitchListTile(
-                title: const Text('Presentación predeterminada',
-                    style: TextStyle(fontSize: 14)),
-                value: _isDefault,
-                onChanged: (v) => setState(() => _isDefault = v),
-                contentPadding: EdgeInsets.zero,
+              _buildToggle(
+                'Presentación predeterminada',
+                _isDefault,
+                (v) => setState(() => _isDefault = v),
                 activeColor: AppColors.accent,
               ),
-              const Divider(height: 8),
-              // Operational flags
-              const Text('Permisos operativos',
-                  style: TextStyle(fontSize: 12, color: Colors.grey)),
-              SwitchListTile(
-                title: const Text('Permite venta',
-                    style: TextStyle(fontSize: 14)),
-                value: _allowsSale,
-                onChanged: (v) => setState(() => _allowsSale = v),
-                contentPadding: EdgeInsets.zero,
+              const Divider(height: 24, thickness: 1),
+              // Operational flags section header
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.tune_rounded,
+                        size: 14, color: Colors.grey.shade500),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Permisos operativos',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _buildToggle(
+                'Permite venta',
+                _allowsSale,
+                (v) => setState(() => _allowsSale = v),
                 activeColor: Colors.green,
               ),
-              SwitchListTile(
-                title: const Text('Permite compra',
-                    style: TextStyle(fontSize: 14)),
-                value: _allowsPurchase,
-                onChanged: (v) => setState(() => _allowsPurchase = v),
-                contentPadding: EdgeInsets.zero,
+              _buildToggle(
+                'Permite compra',
+                _allowsPurchase,
+                (v) => setState(() => _allowsPurchase = v),
                 activeColor: Colors.green,
               ),
-              SwitchListTile(
-                title: const Text('Permite stock',
-                    style: TextStyle(fontSize: 14)),
-                value: _allowsStock,
-                onChanged: (v) => setState(() => _allowsStock = v),
-                contentPadding: EdgeInsets.zero,
+              _buildToggle(
+                'Permite stock',
+                _allowsStock,
+                (v) => setState(() => _allowsStock = v),
                 activeColor: Colors.green,
               ),
               const SizedBox(height: 8),
