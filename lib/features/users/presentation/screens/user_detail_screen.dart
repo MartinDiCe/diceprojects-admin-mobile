@@ -223,6 +223,16 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
+String _formatRoleCode(String code) {
+  // If it looks like a UUID, just show a dash
+  if (code.length > 20 && code.contains('-')) return '—';
+  return code
+      .split('_')
+      .where((w) => w.isNotEmpty)
+      .map((w) => '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
+      .join(' ');
+}
+
 class _RolesCard extends StatelessWidget {
   final List<String> roles;
   const _RolesCard({required this.roles});
@@ -247,7 +257,7 @@ class _RolesCard extends StatelessWidget {
               children: roles
                   .map((r) => Chip(
                         label: Text(
-                          r,
+                          _formatRoleCode(r),
                           style: const TextStyle(fontSize: 12),
                           overflow: TextOverflow.ellipsis,
                         ),

@@ -10,6 +10,33 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+final _uuidRx = RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    caseSensitive: false);
+
+String _fmtDate(String? raw) {
+  if (raw == null || raw.isEmpty) return '';
+  try {
+    final dt = DateTime.parse(raw).toLocal();
+    final d = dt.day.toString().padLeft(2, '0');
+    final mo = dt.month.toString().padLeft(2, '0');
+    final h = dt.hour.toString().padLeft(2, '0');
+    final mi = dt.minute.toString().padLeft(2, '0');
+    return '$d/$mo/${dt.year} $h:$mi';
+  } catch (_) {
+    return raw.length > 16 ? raw.substring(0, 16) : raw;
+  }
+}
+
+/// Truncate UUID to a short readable suffix like #…f3a2 or return as-is.
+String _fmtEntityId(String? id) {
+  if (id == null) return '';
+  if (_uuidRx.hasMatch(id)) return '#…${id.substring(id.length - 6)}';
+  return '#$id';
+}
+
 class AuditLogDto {
   final String id;
   final String action;
@@ -40,8 +67,8 @@ class AuditLogDto {
       // entity comes from metadata or fallback
       entity: (meta['entity'] ?? json['entity'] ?? meta['resourceType'] ?? '').toString(),
       entityId: (meta['entityId'] ?? meta['resourceId'] ?? json['entityId'])?.toString(),
-      // userId is the closest to username in this backend shape
-      username: (json['userId'] ?? json['username'])?.toString(),
+      // Prefer human-readable username; userId is fallback
+      username: (json['username'] ?? json['userId'])?.toString(),
       ip: (meta['ip'] ?? json['ip'])?.toString(),
       createdAt: json['createdAt']?.toString(),
       // Serialise full metadata map as readable detail string
@@ -170,7 +197,7 @@ class AuditListScreen extends ConsumerWidget {
                           child: Text(
                             [
                               log.entity,
-                              if (log.entityId != null) '#${log.entityId}',
+                              if (log.entityId != null) _fmtEntityId(log.entityId),
                             ].join(' '),
                             style: const TextStyle(
                               fontWeight: FontWeight.w600,
@@ -201,7 +228,7 @@ class AuditListScreen extends ConsumerWidget {
                         ),
                         if (log.createdAt != null)
                           Text(
-                            log.createdAt!,
+                            _fmtDate(log.createdAt),
                             style: TextStyle(
                               fontSize: 11,
                               color: AppColors.textSecondary,

@@ -11,6 +11,20 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+String _fmtDate(String? raw) {
+  if (raw == null || raw.isEmpty) return '';
+  try {
+    final dt = DateTime.parse(raw).toLocal();
+    final d = dt.day.toString().padLeft(2, '0');
+    final mo = dt.month.toString().padLeft(2, '0');
+    final h = dt.hour.toString().padLeft(2, '0');
+    final mi = dt.minute.toString().padLeft(2, '0');
+    return '$d/$mo/${dt.year} $h:$mi';
+  } catch (_) {
+    return raw.length > 16 ? raw.substring(0, 16) : raw;
+  }
+}
+
 class NotifLogDto {
   final String id;
   final String channel;
@@ -179,7 +193,7 @@ class NotifLogsScreen extends ConsumerWidget {
                               overflow: TextOverflow.ellipsis,
                             ),
                           Text(
-                            '${log.channel}${log.sentAt != null ? ' · ${log.sentAt}' : ''}',
+                            '${log.channel}${log.sentAt != null ? ' · ${_fmtDate(log.sentAt)}' : ''}',
                             style: TextStyle(
                                 fontSize: 11,
                                 color: AppColors.textSecondary),

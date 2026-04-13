@@ -149,6 +149,15 @@ class UsersListScreen extends ConsumerWidget {
   }
 }
 
+String _fmtRole(String code) {
+  if (code.length > 20 && code.contains('-')) return '—';
+  return code
+      .split('_')
+      .where((w) => w.isNotEmpty)
+      .map((w) => '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
+      .join(' ');
+}
+
 class _UserTile extends StatelessWidget {
   final UserDto user;
   final UsersListNotifier notifier;
@@ -287,6 +296,29 @@ class _UserTile extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      if (user.roles.isNotEmpty) ...
+                        [
+                          const SizedBox(height: 4),
+                          Wrap(
+                            spacing: 4,
+                            runSpacing: 2,
+                            children: user.roles.take(3).map((r) => Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.accent.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                _fmtRole(r),
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    color: AppColors.accent,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                            )).toList(),
+                          ),
+                        ],
                     ],
                   ),
                 ),

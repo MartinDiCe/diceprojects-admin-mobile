@@ -10,6 +10,30 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+final _uuidRegex = RegExp(
+    r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',
+    caseSensitive: false);
+
+/// Replaces full UUIDs in a path with a short placeholder so paths are readable.
+String _cleanPath(String path) => path.replaceAll(_uuidRegex, '{id}');
+
+/// Formats ISO datetime to readable local format: 13/04/2025 10:30
+String _fmtDate(String? raw) {
+  if (raw == null || raw.isEmpty) return '';
+  try {
+    final dt = DateTime.parse(raw).toLocal();
+    final d = dt.day.toString().padLeft(2, '0');
+    final mo = dt.month.toString().padLeft(2, '0');
+    final h = dt.hour.toString().padLeft(2, '0');
+    final mi = dt.minute.toString().padLeft(2, '0');
+    return '$d/$mo/${dt.year} $h:$mi';
+  } catch (_) {
+    return raw.length > 16 ? raw.substring(0, 16) : raw;
+  }
+}
+
 class ApiTraceDto {
   final int apiTraceId;
   final String serviceName;
@@ -198,9 +222,11 @@ class ApiTracesScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    trace.requestOrigin.isNotEmpty
-                        ? trace.requestOrigin
-                        : '${trace.serviceName}${trace.sourceService.isNotEmpty ? ' ← ${trace.sourceService}' : ''}',
+                    _cleanPath(
+                      trace.requestOrigin.isNotEmpty
+                          ? trace.requestOrigin
+                          : '${trace.serviceName}${trace.sourceService.isNotEmpty ? ' ← ${trace.sourceService}' : ''}',
+                    ),
                     style: const TextStyle(
                         fontSize: 13, fontWeight: FontWeight.w500),
                     maxLines: 1,
@@ -219,7 +245,7 @@ class ApiTracesScreen extends ConsumerWidget {
                         ),
                       const Spacer(),
                       if (trace.createdDate != null)
-                        Text(trace.createdDate!,
+                        Text(_fmtDate(trace.createdDate),
                             style: TextStyle(
                                 fontSize: 11,
                                 color: AppColors.textSecondary)),
