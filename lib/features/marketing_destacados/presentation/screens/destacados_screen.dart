@@ -32,7 +32,9 @@ class DestacadoDto {
         id: json['id']?.toString() ?? '',
       // Backend contract uses /v1/featured-products
       // Fields: id, productId, channel, priority, startsAt, endsAt, active, label
-      title: (json['label'] ?? json['title'] ?? json['productId'] ?? '').toString(),
+      title: (json['label'] ?? json['title'] ?? '').toString().isNotEmpty
+          ? (json['label'] ?? json['title']).toString()
+          : 'Sin etiqueta',
       description: (json['channel'] ?? json['description'])?.toString(),
       status: (json['active'] == true || json['status'] == 'ACTIVE') ? 'ACTIVE' : 'INACTIVE',
       order: (json['priority'] as num?)?.toInt() ?? (json['order'] as num?)?.toInt(),
