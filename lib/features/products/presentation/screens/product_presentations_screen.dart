@@ -273,7 +273,7 @@ class _PresentationCard extends StatelessWidget {
                   ),
                 ),
                 if (item.isDefault)
-                  _Chip('Default', Colors.green.shade700,
+                  _Chip('Principal', Colors.green.shade700,
                       Colors.green.shade50),
                 if (!item.active)
                   _Chip('Inactiva', Colors.grey.shade600, Colors.grey.shade100),
