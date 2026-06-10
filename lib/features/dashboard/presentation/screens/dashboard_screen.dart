@@ -184,6 +184,52 @@ class MarketingProductMetric {
   });
 }
 
+class ProductDashboardDetails {
+  final int products;
+  final int activeProducts;
+  final int draftProducts;
+  final int featuredProducts;
+
+  const ProductDashboardDetails({
+    required this.products,
+    required this.activeProducts,
+    required this.draftProducts,
+    required this.featuredProducts,
+  });
+}
+
+class SalesDashboardDetails {
+  final int quotes;
+  final int draft;
+  final int sent;
+  final int won;
+  final double amount;
+  final List<RecentQuote> recentQuotes;
+
+  const SalesDashboardDetails({
+    required this.quotes,
+    required this.draft,
+    required this.sent,
+    required this.won,
+    required this.amount,
+    required this.recentQuotes,
+  });
+}
+
+class WarehouseDashboardDetails {
+  final int warehouses;
+  final int activeWarehouses;
+  final int stockRows;
+  final int movements;
+
+  const WarehouseDashboardDetails({
+    required this.warehouses,
+    required this.activeWarehouses,
+    required this.stockRows,
+    required this.movements,
+  });
+}
+
 class RecentQuote {
   final String number;
   final String customer;
@@ -281,6 +327,93 @@ final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) as
   );
 });
 
+final productDashboardDetailsProvider =
+    FutureProvider.autoDispose.family<ProductDashboardDetails, DashboardPeriod>((ref, period) async {
+  final dio = ref.watch(dioProvider);
+  final summary = await _getMap(
+    dio,
+    '/v1/products/reporting/summary',
+    extra: {'period': _periodCode(period)},
+  );
+
+  if (summary.isEmpty) {
+    final products = await _getPage(dio, '/v1/products', size: 500);
+    return ProductDashboardDetails(
+      products: products.total,
+      activeProducts: products.items.where((item) => _status(item) == 'ACTIVE').length,
+      draftProducts: products.items.where((item) => _status(item) == 'DRAFT').length,
+      featuredProducts: products.items.where((item) => _boolAny(item, ['featured', 'isFeatured'])).length,
+    );
+  }
+
+  return ProductDashboardDetails(
+    products: _intAny(summary, ['products', 'totalProducts', 'total']),
+    activeProducts: _intAny(summary, ['activeProducts', 'active']),
+    draftProducts: _intAny(summary, ['draftProducts', 'drafts', 'draft']),
+    featuredProducts: _intAny(summary, ['featuredProducts', 'featured']),
+  );
+});
+
+final salesDashboardDetailsProvider =
+    FutureProvider.autoDispose.family<SalesDashboardDetails, DashboardPeriod>((ref, period) async {
+  final dio = ref.watch(dioProvider);
+  final quotes = await _getPage(
+    dio,
+    '/v1/quotes',
+    size: 500,
+    extra: _quotePeriodParams(period),
+  );
+  final quoteItems = quotes.items;
+  final recentQuotes = quoteItems.map((item) => RecentQuote(
+    number: _stringAny(item, ['quoteNumber', 'number'], fallback: 'Cotizacion'),
+    customer: _customerName(item),
+    status: _status(item, fallback: 'DRAFT'),
+    amount: _doubleAny(item, ['totalAmount', 'total']),
+    createdAt: _dateAny(item, ['createdDate', 'createdAt']),
+  )).toList();
+
+  final draft = recentQuotes.where((quote) => quote.status == 'DRAFT').length;
+  final sent = recentQuotes.where((quote) => quote.status == 'SENT').length;
+  final won = recentQuotes.where((quote) => quote.status == 'WON').length;
+
+  return SalesDashboardDetails(
+    quotes: quotes.total > recentQuotes.length ? quotes.total : recentQuotes.length,
+    draft: draft,
+    sent: sent,
+    won: won,
+    amount: recentQuotes.fold<double>(0, (sum, quote) => sum + quote.amount),
+    recentQuotes: recentQuotes.take(8).toList(),
+  );
+});
+
+final warehouseDashboardDetailsProvider =
+    FutureProvider.autoDispose.family<WarehouseDashboardDetails, DashboardPeriod>((ref, period) async {
+  final dio = ref.watch(dioProvider);
+  final summary = await _getMap(
+    dio,
+    '/v1/warehouse/reporting/summary',
+    extra: {'period': _periodCode(period)},
+  );
+
+  if (summary.isEmpty) {
+    final warehouses = await _getPage(dio, '/v1/warehouses', size: 200);
+    final stock = await _getPage(dio, '/v1/warehouse/stock', size: 200);
+    return WarehouseDashboardDetails(
+      warehouses: warehouses.total,
+      activeWarehouses: warehouses.items.where((item) => _boolAny(item, ['active', 'enabled'])).length,
+      stockRows: stock.total,
+      movements: 0,
+    );
+  }
+
+  return WarehouseDashboardDetails(
+    warehouses: _intAny(summary, ['warehouses']),
+    activeWarehouses: _intAny(summary, ['activeWarehouses']),
+    stockRows: _intAny(summary, ['stockItems', 'stockRows']),
+    movements: _intAny(summary, ['movements']),
+  );
+});
+
 final marketingDashboardDetailsProvider =
     FutureProvider.autoDispose.family<MarketingDashboardDetails, DashboardPeriod>((ref, period) async {
   final dio = ref.watch(dioProvider);
@@ -290,15 +423,20 @@ final marketingDashboardDetailsProvider =
   final topProducts = await _getList(dio, '/v1/campaigns/reporting/products/top', extra: {'period': periodCode, 'limit': 3});
   final actions = await _getList(dio, '/v1/campaigns/reporting/actions/top', extra: {'period': periodCode, 'limit': 16});
   final funnel = await _getMap(dio, '/v1/marketing/funnels/evaluate', extra: {'period': periodCode});
+  final actionEvents = actions.fold<int>(0, (sum, item) => sum + _intAny(item, ['count', 'total']));
+  final productViews = topProducts.fold<int>(0, (sum, item) => sum + _intAny(item, ['productViews', 'views']));
+  final productLikes = topProducts.fold<int>(0, (sum, item) => sum + _intAny(item, ['likes']));
+  final productQuotes = topProducts.fold<int>(0, (sum, item) => sum + _intAny(item, ['quoteRequests']));
+  final productFeaturedViews = topProducts.fold<int>(0, (sum, item) => sum + _intAny(item, ['featuredViews', 'impressions']));
 
   return MarketingDashboardDetails(
-    events: _intAny(summary, ['events']),
-    productViews: _intAny(summary, ['productViews']),
-    productLikes: _intAny(summary, ['productLikes']),
-    featuredViews: _intAny(summary, ['featuredViews']),
+    events: _firstPositive([_intAny(summary, ['events']), actionEvents]),
+    productViews: _firstPositive([_intAny(summary, ['productViews']), productViews]),
+    productLikes: _firstPositive([_intAny(summary, ['productLikes']), productLikes]),
+    featuredViews: _firstPositive([_intAny(summary, ['featuredViews']), productFeaturedViews]),
     featuredClicks: _intAny(summary, ['featuredClicks']),
     whatsappClicks: _intAny(summary, ['whatsappClicks']),
-    quoteRequests: _intAny(summary, ['quoteRequests']),
+    quoteRequests: _firstPositive([_intAny(summary, ['quoteRequests']), productQuotes]),
     conversions: _intAny(summary, ['conversions']),
     leads: _intAny(summary, ['leads']),
     funnel: _marketingFunnelMetrics(funnel, actions, summary),
@@ -537,6 +675,13 @@ int _intAny(Map<String, dynamic> item, List<String> keys) {
     if (parsed != null) return parsed;
   }
   return 0;
+}
+
+int _firstPositive(List<int> values) {
+  for (final value in values) {
+    if (value > 0) return value;
+  }
+  return values.isEmpty ? 0 : values.first;
 }
 
 double _doubleAny(Map<String, dynamic> item, List<String> keys) {
@@ -901,7 +1046,8 @@ class _ProductsDashboardContent extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final period = ref.watch(dashboardPeriodProvider(DashboardScope.products));
-    return Column(
+    final details = ref.watch(productDashboardDetailsProvider(period));
+    Widget buildContent(ProductDashboardDetails metrics) => Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _DashboardIntro(
@@ -919,22 +1065,38 @@ class _ProductsDashboardContent extends ConsumerWidget {
         ),
         const SizedBox(height: 14),
         _KpiGrid(cards: [
-          _KpiData('Productos', _n(data.products), 'Total cargado · ${_periodLabel(period)}', Icons.inventory_2_rounded, const Color(0xFF0EA5E9)),
-          _KpiData('Activos', _n(data.activeProducts), 'Disponibles para operar', Icons.check_circle_rounded, const Color(0xFF00A676)),
-          _KpiData('Borradores', _n(data.draftProducts), 'Pendientes de publicar', Icons.edit_note_rounded, const Color(0xFFF59E0B)),
-          _KpiData('Destacados', _n(data.featuredProducts), 'Visibles como destacados', Icons.sell_rounded, const Color(0xFF7C3AED)),
+          _KpiData('Productos', _n(metrics.products), 'Total cargado · ${_periodLabel(period)}', Icons.inventory_2_rounded, const Color(0xFF0EA5E9)),
+          _KpiData('Activos', _n(metrics.activeProducts), 'Disponibles para operar', Icons.check_circle_rounded, const Color(0xFF00A676)),
+          _KpiData('Borradores', _n(metrics.draftProducts), 'Pendientes de publicar', Icons.edit_note_rounded, const Color(0xFFF59E0B)),
+          _KpiData('Destacados', _n(metrics.featuredProducts), 'Visibles como destacados', Icons.sell_rounded, const Color(0xFF7C3AED)),
         ]),
         const SizedBox(height: 16),
         _InsightPanel(
           title: 'Calidad de ficha',
           subtitle: 'Estado general de carga del catálogo.',
           rows: [
-            _InsightRow('Activos', data.activeProducts, math.max(1, data.products), const Color(0xFF00A676)),
-            _InsightRow('Borradores', data.draftProducts, math.max(1, data.products), const Color(0xFFF59E0B)),
-            _InsightRow('Destacados', data.featuredProducts, math.max(1, data.products), const Color(0xFF7C3AED)),
+            _InsightRow('Activos', metrics.activeProducts, math.max(1, metrics.products), const Color(0xFF00A676)),
+            _InsightRow('Borradores', metrics.draftProducts, math.max(1, metrics.products), const Color(0xFFF59E0B)),
+            _InsightRow('Destacados', metrics.featuredProducts, math.max(1, metrics.products), const Color(0xFF7C3AED)),
           ],
         ),
       ],
+    );
+
+    return details.when(
+      data: buildContent,
+      loading: () => buildContent(ProductDashboardDetails(
+        products: data.products,
+        activeProducts: data.activeProducts,
+        draftProducts: data.draftProducts,
+        featuredProducts: data.featuredProducts,
+      )),
+      error: (_, __) => buildContent(ProductDashboardDetails(
+        products: data.products,
+        activeProducts: data.activeProducts,
+        draftProducts: data.draftProducts,
+        featuredProducts: data.featuredProducts,
+      )),
     );
   }
 }
@@ -1022,7 +1184,8 @@ class _WarehouseDashboardContent extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final period = ref.watch(dashboardPeriodProvider(DashboardScope.warehouse));
-    return Column(
+    final details = ref.watch(warehouseDashboardDetailsProvider(period));
+    Widget buildContent(WarehouseDashboardDetails metrics) => Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _DashboardIntro(
@@ -1040,8 +1203,8 @@ class _WarehouseDashboardContent extends ConsumerWidget {
         ),
         const SizedBox(height: 14),
         _KpiGrid(cards: [
-          _KpiData('Depósitos', _n(data.warehouses), 'Configurados · ${_periodLabel(period)}', Icons.warehouse_rounded, const Color(0xFF6554F0)),
-          _KpiData('Stock', _n(data.stockRows), 'Filas de stock', Icons.inventory_rounded, const Color(0xFF00A676)),
+          _KpiData('Depósitos', _n(metrics.warehouses), 'Configurados · ${_periodLabel(period)}', Icons.warehouse_rounded, const Color(0xFF6554F0)),
+          _KpiData('Stock', _n(metrics.stockRows), 'Filas de stock', Icons.inventory_rounded, const Color(0xFF00A676)),
           _KpiData('Productos', _n(data.products), 'Catálogo base', Icons.inventory_2_rounded, const Color(0xFF0EA5E9)),
           _KpiData('Sellers', _n(data.sellers), 'Operación asociada', Icons.storefront_rounded, const Color(0xFF0891B2)),
         ]),
@@ -1050,12 +1213,29 @@ class _WarehouseDashboardContent extends ConsumerWidget {
           title: 'Salud operativa',
           subtitle: 'Base de control para cobertura y movimientos.',
           rows: [
-            _InsightRow('Stock registrado', data.stockRows, math.max(1, data.products), const Color(0xFF00A676)),
-            _InsightRow('Depósitos activos', data.warehouses, math.max(1, data.warehouses), const Color(0xFF6554F0)),
+            _InsightRow('Stock registrado', metrics.stockRows, math.max(1, data.products), const Color(0xFF00A676)),
+            _InsightRow('Depósitos activos', metrics.activeWarehouses, math.max(1, metrics.warehouses), const Color(0xFF6554F0)),
+            _InsightRow('Movimientos', metrics.movements, math.max(1, metrics.movements), const Color(0xFFF59E0B)),
             _InsightRow('Sellers', data.sellers, math.max(1, data.sellers), const Color(0xFF0891B2)),
           ],
         ),
       ],
+    );
+
+    return details.when(
+      data: buildContent,
+      loading: () => buildContent(WarehouseDashboardDetails(
+        warehouses: data.warehouses,
+        activeWarehouses: data.warehouses,
+        stockRows: data.stockRows,
+        movements: 0,
+      )),
+      error: (_, __) => buildContent(WarehouseDashboardDetails(
+        warehouses: data.warehouses,
+        activeWarehouses: data.warehouses,
+        stockRows: data.stockRows,
+        movements: 0,
+      )),
     );
   }
 }
@@ -1068,15 +1248,10 @@ class _SalesDashboardContent extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final period = ref.watch(dashboardPeriodProvider(DashboardScope.sales));
-    final quotes = _quotesForPeriod(data.recentQuotes, period);
-    final quoteTotal = quotes.length;
-    final draft = quotes.where((quote) => quote.status == 'DRAFT').length;
-    final sent = quotes.where((quote) => quote.status == 'SENT').length;
-    final won = quotes.where((quote) => quote.status == 'WON').length;
-    final pending = draft + sent;
-    final amount = quotes.fold<double>(0, (sum, quote) => sum + quote.amount);
-
-    return Column(
+    final details = ref.watch(salesDashboardDetailsProvider(period));
+    Widget buildContent(SalesDashboardDetails metrics) {
+      final pending = metrics.draft + metrics.sent;
+      return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _DashboardIntro(
@@ -1094,24 +1269,51 @@ class _SalesDashboardContent extends ConsumerWidget {
         ),
         const SizedBox(height: 14),
         _KpiGrid(cards: [
-          _KpiData('Cotizaciones', _n(quoteTotal), _periodLabel(period), Icons.receipt_long_rounded, const Color(0xFF0EA5E9)),
+          _KpiData('Cotizaciones', _n(metrics.quotes), _periodLabel(period), Icons.receipt_long_rounded, const Color(0xFF0EA5E9)),
           _KpiData('Pendientes', _n(pending), 'Borrador + enviada', Icons.notifications_active_rounded, const Color(0xFFF59E0B)),
-          _KpiData('Ganadas', _n(won), 'Cerradas positivas', Icons.shopping_cart_checkout_rounded, const Color(0xFF00A676)),
-          _KpiData('Monto', _money(amount), 'Visible del período', Icons.payments_rounded, const Color(0xFF0F172A)),
+          _KpiData('Ganadas', _n(metrics.won), 'Cerradas positivas', Icons.shopping_cart_checkout_rounded, const Color(0xFF00A676)),
+          _KpiData('Monto', _money(metrics.amount), 'Visible del período', Icons.payments_rounded, const Color(0xFF0F172A)),
         ]),
         const SizedBox(height: 16),
         _InsightPanel(
           title: 'Pipeline por estado',
           subtitle: 'Solicitudes y avance comercial del período.',
           rows: [
-            _InsightRow('Borrador', draft, math.max(1, quoteTotal), const Color(0xFF94A3B8)),
-            _InsightRow('Enviadas', sent, math.max(1, quoteTotal), const Color(0xFF0EA5E9)),
-            _InsightRow('Ganadas', won, math.max(1, quoteTotal), const Color(0xFF00A676)),
+            _InsightRow('Borrador', metrics.draft, math.max(1, metrics.quotes), const Color(0xFF94A3B8)),
+            _InsightRow('Enviadas', metrics.sent, math.max(1, metrics.quotes), const Color(0xFF0EA5E9)),
+            _InsightRow('Ganadas', metrics.won, math.max(1, metrics.quotes), const Color(0xFF00A676)),
           ],
         ),
         const SizedBox(height: 16),
-        _RecentQuotePanel(quotes: quotes),
+        _RecentQuotePanel(quotes: metrics.recentQuotes),
       ],
+    );
+    }
+
+    return details.when(
+      data: buildContent,
+      loading: () {
+        final quotes = _quotesForPeriod(data.recentQuotes, period);
+        return buildContent(SalesDashboardDetails(
+          quotes: quotes.length,
+          draft: quotes.where((quote) => quote.status == 'DRAFT').length,
+          sent: quotes.where((quote) => quote.status == 'SENT').length,
+          won: quotes.where((quote) => quote.status == 'WON').length,
+          amount: quotes.fold<double>(0, (sum, quote) => sum + quote.amount),
+          recentQuotes: quotes,
+        ));
+      },
+      error: (_, __) {
+        final quotes = _quotesForPeriod(data.recentQuotes, period);
+        return buildContent(SalesDashboardDetails(
+          quotes: quotes.length,
+          draft: quotes.where((quote) => quote.status == 'DRAFT').length,
+          sent: quotes.where((quote) => quote.status == 'SENT').length,
+          won: quotes.where((quote) => quote.status == 'WON').length,
+          amount: quotes.fold<double>(0, (sum, quote) => sum + quote.amount),
+          recentQuotes: quotes,
+        ));
+      },
     );
   }
 }
@@ -2118,6 +2320,41 @@ String _periodCode(DashboardPeriod period) {
     case DashboardPeriod.all:
       return 'all';
   }
+}
+
+Map<String, dynamic> _quotePeriodParams(DashboardPeriod period) {
+  if (period == DashboardPeriod.all) return const {};
+  final now = DateTime.now();
+  final end = DateTime(now.year, now.month, now.day, 23, 59, 59);
+  late final DateTime startDate;
+  switch (period) {
+    case DashboardPeriod.today:
+      startDate = DateTime(now.year, now.month, now.day);
+      break;
+    case DashboardPeriod.threeDays:
+      startDate = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 2));
+      break;
+    case DashboardPeriod.sevenDays:
+      startDate = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 6));
+      break;
+    case DashboardPeriod.all:
+      startDate = DateTime.fromMillisecondsSinceEpoch(0);
+      break;
+  }
+  return {
+    'createdFrom': _payloadDateTime(startDate),
+    'createdTo': _payloadDateTime(end),
+  };
+}
+
+String _payloadDateTime(DateTime value) {
+  final y = value.year.toString().padLeft(4, '0');
+  final m = value.month.toString().padLeft(2, '0');
+  final d = value.day.toString().padLeft(2, '0');
+  final h = value.hour.toString().padLeft(2, '0');
+  final min = value.minute.toString().padLeft(2, '0');
+  final s = value.second.toString().padLeft(2, '0');
+  return '$y-$m-${d}T$h:$min:$s';
 }
 
 String _periodLabel(DashboardPeriod period) {

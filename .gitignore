@@ -1,6 +1,7 @@
 # Miscellaneous
 *.class
 *.log
+logs/
 *.pyc
 *.swp
 .DS_Store
@@ -27,6 +28,7 @@ migrate_working_dir/
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
+.dart-tool/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
@@ -47,3 +49,5 @@ app.*.map.json
 # Firebase client config copied manually at repo root; Android uses android/app/google-services.json
 /google-services.json
 /android/app/google-services.json
+/android/key.properties
+/android/app/upload-keystore.jks
