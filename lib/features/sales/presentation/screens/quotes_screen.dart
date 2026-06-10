@@ -851,7 +851,7 @@ class _LockedLinkPanel extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.lock_outline_rounded, color: AppColors.textMuted),
+          Icon(Icons.lock_outline_rounded, color: AppColors.textMuted),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
