@@ -7,6 +7,7 @@ import 'package:app_diceprojects_admin/core/ui/widgets/empty_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/status_badge.dart';
+import 'package:app_diceprojects_admin/features/permissions/permissions_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -74,12 +75,18 @@ class LeadsListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(leadsListNotifierProvider);
     final notifier = ref.read(leadsListNotifierProvider.notifier);
+    final perms = ref.watch(permissionsProvider);
+    final canUpdate = perms.hasAnyPermission([
+      'Marketing.Leads.Edit',
+      'Marketing.Leads.Update',
+      'Marketing.Admin',
+    ]);
 
     return AppPageScaffold(
       title: 'Leads',
       searchHint: 'Buscar lead…',
       onSearch: notifier.setSearch,
-      body: _buildBody(context, state, notifier),
+      body: _buildBody(context, state, notifier, canUpdate),
     );
   }
 
@@ -87,6 +94,7 @@ class LeadsListScreen extends ConsumerWidget {
     BuildContext ctx,
     ListState<LeadDto> state,
     LeadsListNotifier notifier,
+    bool canUpdate,
   ) {
     if (state.isLoading) return const LoadingState();
     if (state.error != null && state.items.isEmpty) {
@@ -181,17 +189,18 @@ class LeadsListScreen extends ConsumerWidget {
                       ),
                       StatusBadge(status: lead.status),
                       const SizedBox(width: 4),
-                      PopupMenuButton<String>(
-                        onSelected: (v) =>
-                            notifier.updateStatus(lead.id, v),
-                        itemBuilder: (_) => _statuses
-                            .where((s) => s != lead.status)
-                            .map((s) => PopupMenuItem(
-                                  value: s,
-                                  child: Text(s),
-                                ))
-                            .toList(),
-                      ),
+                      if (canUpdate)
+                        PopupMenuButton<String>(
+                          onSelected: (v) =>
+                              notifier.updateStatus(lead.id, v),
+                          itemBuilder: (_) => _statuses
+                              .where((s) => s != lead.status)
+                              .map((s) => PopupMenuItem(
+                                    value: s,
+                                    child: Text(_leadStatusLabel(s)),
+                                  ))
+                              .toList(),
+                        ),
                     ],
                   ),
                 ),
@@ -201,5 +210,22 @@ class LeadsListScreen extends ConsumerWidget {
         },
       ),
     );
+  }
+}
+
+String _leadStatusLabel(String status) {
+  switch (status) {
+    case 'NEW':
+      return 'Nuevo';
+    case 'CONTACTED':
+      return 'Contactado';
+    case 'QUALIFIED':
+      return 'Calificado';
+    case 'CONVERTED':
+      return 'Convertido';
+    case 'LOST':
+      return 'Perdido';
+    default:
+      return status;
   }
 }

@@ -8,6 +8,7 @@ import 'package:app_diceprojects_admin/core/ui/widgets/empty_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/status_badge.dart';
+import 'package:app_diceprojects_admin/features/permissions/permissions_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -82,38 +83,50 @@ final productsListNotifierProvider =
   (ref) => ProductsListNotifier(ref.watch(dioProvider)),
 );
 
-class ProductsListScreen extends ConsumerStatefulWidget {
+class ProductsListScreen extends ConsumerWidget {
   const ProductsListScreen({super.key});
 
   @override
-  ConsumerState<ProductsListScreen> createState() => _ProductsListScreenState();
-}
-
-class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(productsListNotifierProvider);
     final notifier = ref.read(productsListNotifierProvider.notifier);
+    final perms = ref.watch(permissionsProvider);
+    final canCreate = perms.hasAnyPermission([
+      'Products.Articles.Create',
+      'Producto.CrearProducto',
+      'Products.Admin',
+    ]);
+    final canEdit = perms.hasAnyPermission([
+      'Products.Articles.Edit',
+      'Producto.EditarProducto',
+      'Products.Admin',
+    ]);
+    final canDelete = perms.hasAnyPermission([
+      'Products.Articles.Delete',
+      'Producto.EliminarProducto',
+      'Products.Admin',
+    ]);
 
     return AppPageScaffold(
       title: 'Productos',
       searchHint: 'Buscar producto…',
       onSearch: notifier.setSearch,
-      floatingActionButton: CreateFab(
-        onPressed: () async {
-          await context.push('/products/new');
-          notifier.reload();
-        },
-        label: 'Nuevo producto',
-      ),
-      body: _buildBody(context, state, notifier),
+      floatingActionButton: canCreate
+          ? CreateFab(
+              onPressed: () => context.push('/products/new'),
+              label: 'Nuevo producto',
+            )
+          : null,
+      body: _buildBody(context, state, notifier, canEdit, canDelete),
     );
   }
 
   Widget _buildBody(
       BuildContext context,
       ListState<ProductDto> state,
-      ProductsListNotifier notifier) {
+      ProductsListNotifier notifier,
+      bool canEdit,
+      bool canDelete) {
     if (state.isLoading) return const LoadingState();
     if (state.error != null && state.items.isEmpty) {
       return ErrorState(
@@ -149,6 +162,8 @@ class _ProductsListScreenState extends ConsumerState<ProductsListScreen> {
               product: product,
               onToggle: () => notifier.toggleActive(product.id),
               onDelete: () => notifier.delete(product.id),
+              canEdit: canEdit,
+              canDelete: canDelete,
             );
           },
         ),
@@ -161,11 +176,15 @@ class _ProductTile extends StatelessWidget {
   final ProductDto product;
   final VoidCallback onToggle;
   final VoidCallback onDelete;
+  final bool canEdit;
+  final bool canDelete;
 
   const _ProductTile({
     required this.product,
     required this.onToggle,
     required this.onDelete,
+    required this.canEdit,
+    required this.canDelete,
   });
 
   Future<void> _confirmDelete(BuildContext context) async {
@@ -233,7 +252,7 @@ class _ProductTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           splashColor: AppColors.accentLight,
           highlightColor: AppColors.accentLight,
-          onTap: () => context.push('/products/${product.id}/edit'),
+          onTap: canEdit ? () => context.push('/products/${product.id}/edit') : null,
           child: Padding(
             padding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -286,38 +305,28 @@ class _ProductTile extends StatelessWidget {
                 Icon(Icons.chevron_right_rounded,
                   color: AppColors.textMuted, size: 16),
                 const SizedBox(width: 2),
-                PopupMenuButton<String>(
-                  onSelected: (v) {
-                    if (v == 'presentations') {
-                      context.push(
-                        '/products/${product.id}/presentations?name=${Uri.encodeComponent(product.name)}',
-                      );
-                    }
-                    if (v == 'toggle') _confirmToggle(context);
-                    if (v == 'delete') _confirmDelete(context);
-                  },
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(
-                      value: 'presentations',
-                      child: Row(children: [
-                        Icon(Icons.view_module_rounded, size: 18),
-                        SizedBox(width: 8),
-                        Text('Presentaciones'),
-                      ]),
-                    ),
-                    PopupMenuItem(
-                      value: 'toggle',
-                      child: Text(product.status == 'ACTIVE'
-                          ? 'Desactivar'
-                          : 'Activar'),
-                    ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Text('Eliminar',
-                          style: TextStyle(color: Colors.red)),
-                    ),
-                  ],
-                ),
+                if (canEdit || canDelete)
+                  PopupMenuButton<String>(
+                    onSelected: (v) {
+                      if (v == 'toggle') _confirmToggle(context);
+                      if (v == 'delete') _confirmDelete(context);
+                    },
+                    itemBuilder: (_) => [
+                      if (canEdit)
+                        PopupMenuItem(
+                          value: 'toggle',
+                          child: Text(product.status == 'ACTIVE'
+                              ? 'Desactivar'
+                              : 'Activar'),
+                        ),
+                      if (canDelete)
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Text('Eliminar',
+                              style: TextStyle(color: Colors.red)),
+                        ),
+                    ],
+                  ),
               ],
             ),
           ),

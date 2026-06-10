@@ -1,64 +1,63 @@
 import 'package:app_diceprojects_admin/core/errors/error_handler.dart';
 import 'package:app_diceprojects_admin/core/http/dio_client.dart';
-import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
 import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/app_button.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/app_text_field.dart';
-import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
+import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
+import 'package:app_diceprojects_admin/core/utils/pagination.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-// ─── DTOs para dropdowns ──────────────────────────────────────────────────────
-
-class _TenantOption {
+class _TenantLookupDto {
   final String id;
   final String name;
-  const _TenantOption({required this.id, required this.name});
-  factory _TenantOption.fromJson(Map<String, dynamic> j) => _TenantOption(
-        id: (j['tenantId'] ?? j['id'])?.toString() ?? '',
-        name: (j['name'] ?? j['companyName'] ?? j['tenantId'])?.toString() ?? '',
+
+  const _TenantLookupDto({required this.id, required this.name});
+
+  factory _TenantLookupDto.fromJson(Map<String, dynamic> json) => _TenantLookupDto(
+        id: (json['id'])?.toString() ?? '',
+        name: (json['name'])?.toString() ?? '',
       );
 }
 
-class _RoleOption {
+class _RoleLookupDto {
   final String id;
-  final String name;
   final String code;
-  const _RoleOption({required this.id, required this.name, required this.code});
-  factory _RoleOption.fromJson(Map<String, dynamic> j) => _RoleOption(
-        id: (j['roleId'] ?? j['id'])?.toString() ?? '',
-        name: (j['name'] ?? j['code'])?.toString() ?? '',
-        code: (j['code'])?.toString() ?? '',
+  final String name;
+
+  const _RoleLookupDto({required this.id, required this.code, required this.name});
+
+  factory _RoleLookupDto.fromJson(Map<String, dynamic> json) => _RoleLookupDto(
+        id: (json['id'])?.toString() ?? '',
+        code: (json['code'])?.toString() ?? '',
+        name: (json['description'] ?? json['name'] ?? json['code'] ?? '').toString(),
       );
 }
 
-// ─── Providers para listas de selección ──────────────────────────────────────
+final _tenantsLookupProvider = FutureProvider.autoDispose<List<_TenantLookupDto>>(
+  (ref) async {
+    final dio = ref.watch(dioProvider);
+    final resp = await dio.get(
+      '/v1/tenants',
+      queryParameters: const {
+        'page': 0,
+        'size': 200,
+        'pageSize': 200,
+      },
+    );
+    return PaginatedResponse.fromJson(resp.data, _TenantLookupDto.fromJson).items;
+  },
+);
 
-final _tenantsForFormProvider =
-    FutureProvider.autoDispose<List<_TenantOption>>((ref) async {
-  final dio = ref.watch(dioProvider);
-  final resp = await dio.get('/v1/tenants');
-  final raw = resp.data;
-  final list = raw is List ? raw : (raw['content'] as List? ?? []);
-  return list
-      .map((e) => _TenantOption.fromJson(e as Map<String, dynamic>))
-      .where((t) => t.id.isNotEmpty)
-      .toList();
-});
-
-final _rolesForFormProvider =
-    FutureProvider.autoDispose<List<_RoleOption>>((ref) async {
-  final dio = ref.watch(dioProvider);
-  final resp = await dio.get('/v1/roles');
-  final raw = resp.data;
-  final list = raw is List ? raw : (raw['content'] as List? ?? []);
-  return list
-      .map((e) => _RoleOption.fromJson(e as Map<String, dynamic>))
-      .where((r) => r.id.isNotEmpty)
-      .toList();
-});
+final _rolesLookupProvider = FutureProvider.autoDispose<List<_RoleLookupDto>>(
+  (ref) async {
+    final dio = ref.watch(dioProvider);
+    final resp = await dio.get('/v1/roles');
+    return PaginatedResponse.fromJson(resp.data, _RoleLookupDto.fromJson).items;
+  },
+);
 
 // ─── State & Notifier ────────────────────────────────────────────────────────
 
@@ -154,11 +153,11 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(userFormNotifierProvider);
-    final tenantsAsync = ref.watch(_tenantsForFormProvider);
-    final rolesAsync = ref.watch(_rolesForFormProvider);
+    final tenantsAsync = ref.watch(_tenantsLookupProvider);
+    final rolesAsync = ref.watch(_rolesLookupProvider);
 
     return AppPageScaffold(
-      title: 'Invitar usuario',
+      title: 'Invitar Usuario',
       body: Form(
         key: _formKey,
         child: SingleChildScrollView(
@@ -167,14 +166,7 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (state.error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(
-                    state.error!,
-                    style: const TextStyle(color: AppColors.error),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
+                ErrorState(message: state.error!, onRetry: null),
               AppTextField(
                 label: 'Email *',
                 controller: _emailCtrl,
@@ -197,78 +189,75 @@ class _UserFormScreenState extends ConsumerState<UserFormScreen> {
                 controller: _lastNameCtrl,
               ),
               const SizedBox(height: 12),
-              // ── Dropdown de Empresa ──────────────────────────────────────
               tenantsAsync.when(
                 loading: () => const SizedBox(
                   height: 56,
-                  child: Center(child: LoadingState()),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Cargando empresas…'),
+                  ),
                 ),
                 error: (_, __) => const SizedBox.shrink(),
-                data: (tenants) => DropdownButtonFormField<String>(
-                  key: ValueKey(_selectedTenantId),
-                  decoration: InputDecoration(
-                    labelText: 'Empresa (opcional)',
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 14),
-                  ),
-                  initialValue: _selectedTenantId,
-                  isExpanded: true,
-                  items: [
-                    const DropdownMenuItem<String>(
-                      value: null,
-                      child: Text('Sin empresa asignada'),
+                data: (tenants) {
+                  if (tenants.isEmpty) return const SizedBox.shrink();
+                  return DropdownButtonFormField<String>(
+                    key: ValueKey(_selectedTenantId ?? 'none'),
+                    initialValue: _selectedTenantId,
+                    decoration: const InputDecoration(
+                      labelText: 'Empresa (opcional)',
                     ),
-                    ...tenants.map((t) => DropdownMenuItem<String>(
-                          value: t.id,
-                          child: Text(
-                            t.name,
-                            overflow: TextOverflow.ellipsis,
+                    items: tenants
+                        .map(
+                          (t) => DropdownMenuItem(
+                            value: t.id,
+                            child: Text(
+                              t.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        )),
-                  ],
-                  onChanged: (v) => setState(() => _selectedTenantId = v),
-                ),
+                        )
+                        .toList(),
+                    onChanged: (v) => setState(() => _selectedTenantId = v),
+                  );
+                },
               ),
               const SizedBox(height: 12),
-              // ── Dropdown de Rol ──────────────────────────────────────────
               rolesAsync.when(
                 loading: () => const SizedBox(
                   height: 56,
-                  child: Center(child: LoadingState()),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Cargando roles…'),
+                  ),
                 ),
                 error: (_, __) => const SizedBox.shrink(),
-                data: (roles) => DropdownButtonFormField<String>(
-                  key: ValueKey(_selectedRoleId),
-                  decoration: InputDecoration(
-                    labelText: 'Rol (opcional)',
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 14),
-                  ),
-                  initialValue: _selectedRoleId,
-                  isExpanded: true,
-                  items: [
-                    const DropdownMenuItem<String>(
-                      value: null,
-                      child: Text('Sin rol asignado'),
+                data: (roles) {
+                  if (roles.isEmpty) return const SizedBox.shrink();
+                  return DropdownButtonFormField<String>(
+                    key: ValueKey(_selectedRoleId ?? 'none'),
+                    initialValue: _selectedRoleId,
+                    decoration: const InputDecoration(
+                      labelText: 'Rol *',
                     ),
-                    ...roles.map((r) => DropdownMenuItem<String>(
-                          value: r.id,
-                          child: Text(
-                            r.name.isNotEmpty ? r.name : r.code,
-                            overflow: TextOverflow.ellipsis,
+                    validator: (v) => (v == null || v.isEmpty) ? 'Requerido' : null,
+                    items: roles
+                        .map(
+                          (r) => DropdownMenuItem(
+                            value: r.id,
+                            child: Text(
+                              r.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        )),
-                  ],
-                  onChanged: (v) => setState(() => _selectedRoleId = v),
-                ),
+                        )
+                        .toList(),
+                    onChanged: (v) => setState(() => _selectedRoleId = v),
+                  );
+                },
               ),
               const SizedBox(height: 24),
               AppButton(
-                label: 'Enviar invitación',
+                label: 'Invitar Usuario',
                 isLoading: state.isSaving,
                 onPressed: _save,
                 fullWidth: true,

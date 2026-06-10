@@ -1,15 +1,16 @@
 import 'package:app_diceprojects_admin/core/http/dio_client.dart';
-import 'package:app_diceprojects_admin/core/utils/list_state.dart';
-import 'package:app_diceprojects_admin/core/utils/pagination.dart';
 import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
 import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/empty_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/status_badge.dart';
+import 'package:app_diceprojects_admin/core/utils/list_state.dart';
+import 'package:app_diceprojects_admin/core/utils/pagination.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 // ────────────────────────────── Model ──────────────────────────────
 
@@ -18,7 +19,7 @@ class WarehouseDto {
   final String? companyId;
   final String? sellerId;
   final String name;
-  final String code;
+  final String? code;
   final String? description;
   final String? address;
   final bool active;
@@ -29,7 +30,7 @@ class WarehouseDto {
     this.companyId,
     this.sellerId,
     required this.name,
-    required this.code,
+    this.code,
     this.description,
     this.address,
     required this.active,
@@ -37,22 +38,25 @@ class WarehouseDto {
   });
 
   factory WarehouseDto.fromJson(Map<String, dynamic> json) => WarehouseDto(
-        warehouseId: json['warehouseId']?.toString() ?? json['id']?.toString() ?? '',
-        companyId: json['companyId']?.toString(),
+        warehouseId: (json['warehouseId'] ?? json['id'])?.toString() ?? '',
+        companyId: (json['companyId'] ?? json['tenantId'])?.toString(),
         sellerId: json['sellerId']?.toString(),
         name: json['name']?.toString() ?? '',
-        code: json['code']?.toString() ?? '',
+        code: json['code']?.toString(),
         description: json['description']?.toString(),
         address: json['address']?.toString(),
         active: json['active'] == true,
         warehouseTypeCode: json['warehouseTypeCode']?.toString(),
       );
+
+  String get statusCode => active ? 'ACTIVE' : 'INACTIVE';
 }
 
 // ────────────────────────────── Notifier ──────────────────────────────
 
 class WarehousesListNotifier extends ListNotifier<WarehouseDto> {
   final Dio _dio;
+
   WarehousesListNotifier(this._dio) : super();
 
   @override
@@ -65,8 +69,8 @@ class WarehousesListNotifier extends ListNotifier<WarehouseDto> {
   }
 }
 
-final warehousesListNotifierProvider =
-    StateNotifierProvider.autoDispose<WarehousesListNotifier, ListState<WarehouseDto>>(
+final warehousesListNotifierProvider = StateNotifierProvider.autoDispose<
+    WarehousesListNotifier, ListState<WarehouseDto>>(
   (ref) => WarehousesListNotifier(ref.watch(dioProvider)),
 );
 
@@ -89,7 +93,7 @@ class WarehousesListScreen extends ConsumerWidget {
   }
 
   Widget _buildBody(
-    BuildContext ctx,
+    BuildContext context,
     ListState<WarehouseDto> state,
     WarehousesListNotifier notifier,
   ) {
@@ -103,85 +107,129 @@ class WarehousesListScreen extends ConsumerWidget {
     }
     if (state.items.isEmpty) {
       return const EmptyState(
-        icon: Icons.warehouse_rounded,
+        icon: Icons.warehouse_outlined,
         title: 'Sin depósitos',
-        message: 'No hay depósitos que coincidan.',
+        message: 'No hay depósitos que coincidan con la búsqueda.',
       );
     }
-    return NotificationListener<ScrollNotification>(
-      onNotification: (n) {
-        if (n is ScrollEndNotification &&
-            n.metrics.extentAfter < 200 &&
-            state.hasMore &&
-            !state.isLoadingMore) {
-          notifier.loadMore();
-        }
-        return false;
-      },
-      child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-        itemCount: state.items.length + (state.isLoadingMore ? 1 : 0),
-        itemBuilder: (ctx, i) {
-          if (i == state.items.length) {
-            return const Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(child: CircularProgressIndicator()),
-            );
-          }
-          final wh = state.items[i];
-          return _WarehouseCard(warehouse: wh);
-        },
+
+    return RefreshIndicator(
+      onRefresh: () async => notifier.reload(),
+      child: NotificationListener<ScrollNotification>(
+        onNotification: notifier.onScrollNotification,
+        child: ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: state.items.length + (state.isLoadingMore ? 1 : 0),
+          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          itemBuilder: (ctx, i) {
+            if (i == state.items.length) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: LoadingState(),
+              );
+            }
+            final w = state.items[i];
+            return _WarehouseTile(warehouse: w);
+          },
+        ),
       ),
     );
   }
 }
 
-class _WarehouseCard extends StatelessWidget {
+class _WarehouseTile extends StatelessWidget {
   final WarehouseDto warehouse;
-  const _WarehouseCard({required this.warehouse});
+
+  const _WarehouseTile({required this.warehouse});
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardBg = isDark ? AppColors.surface : Colors.white;
-    final textMuted = isDark ? AppColors.sidebarTextMuted : AppColors.textSecondary;
+    final subtitleParts = <String>[];
+    if ((warehouse.code ?? '').trim().isNotEmpty) subtitleParts.add(warehouse.code!.trim());
+    if ((warehouse.warehouseTypeCode ?? '').trim().isNotEmpty) {
+      subtitleParts.add(warehouse.warehouseTypeCode!.trim());
+    }
+    if ((warehouse.address ?? '').trim().isNotEmpty) subtitleParts.add(warehouse.address!.trim());
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark
-              ? AppColors.white.withValues(alpha: 0.08)
-              : AppColors.border.withValues(alpha: 0.50),
-        ),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: CircleAvatar(
-          backgroundColor: isDark ? AppColors.accentDark : AppColors.accentLight,
-          child: Icon(
-            Icons.warehouse_rounded,
-            color: isDark ? AppColors.white : AppColors.accent,
-            size: 20,
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0D000000),
+            blurRadius: 16,
+            offset: Offset(0, 4),
           ),
-        ),
-        title: Text(warehouse.name,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(warehouse.code, style: TextStyle(fontSize: 12, color: textMuted)),
-            if (warehouse.warehouseTypeCode != null)
-              Text(warehouse.warehouseTypeCode!,
-                  style: TextStyle(fontSize: 12, color: textMuted)),
-            if (warehouse.address != null)
-              Text(warehouse.address!,
-                  style: TextStyle(fontSize: 12, color: textMuted)),
-            const SizedBox(height: 4),
-            StatusBadge(status: warehouse.active ? 'ACTIVE' : 'INACTIVE'),
-          ],
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.accentLight,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.warehouse_rounded,
+                  color: AppColors.accent,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      warehouse.name,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: AppColors.ink,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (subtitleParts.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitleParts.join(' · '),
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              StatusBadge(status: warehouse.statusCode),
+              const SizedBox(width: 2),
+              PopupMenuButton<String>(
+                onSelected: (v) {
+                  if (v == 'movements') {
+                    context.push('/warehouse/${warehouse.warehouseId}/movements');
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'movements',
+                    child: Text('Ver movimientos'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

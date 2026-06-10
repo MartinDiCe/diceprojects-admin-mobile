@@ -11,6 +11,54 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+bool _looksLikeId(String value) {
+  final v = value.trim();
+  if (v.isEmpty) return false;
+  final uuidLike = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+  if (uuidLike.hasMatch(v)) return true;
+  if (RegExp(r'^\d{3,}$').hasMatch(v)) return true;
+  return false;
+}
+
+class _RoleLookupDto {
+  final String id;
+  final String code;
+  final String name;
+
+  const _RoleLookupDto({required this.id, required this.code, required this.name});
+
+  factory _RoleLookupDto.fromJson(Map<String, dynamic> json) => _RoleLookupDto(
+        id: (json['id'])?.toString() ?? '',
+        code: (json['code'])?.toString() ?? '',
+        name: (json['description'] ?? json['name'] ?? json['code'] ?? '').toString(),
+      );
+}
+
+final _rolesLookupProvider = FutureProvider.autoDispose<Map<String, String>>(
+  (ref) async {
+    final dio = ref.watch(dioProvider);
+    final resp = await dio.get('/v1/roles');
+    final page = PaginatedResponse.fromJson(resp.data, _RoleLookupDto.fromJson);
+    final out = <String, String>{};
+    for (final r in page.items) {
+      if (r.id.isNotEmpty) out[r.id] = r.name;
+      if (r.code.isNotEmpty) out[r.code] = r.name;
+    }
+    return out;
+  },
+);
+
+String _resolveRoleLabel(String? raw, Map<String, String>? lookup) {
+  if (raw == null || raw.trim().isEmpty) return 'Sin rol asignado';
+  final value = raw.trim();
+  final resolved = lookup != null ? lookup[value] : null;
+  if (resolved != null && resolved.trim().isNotEmpty) return resolved;
+  if (_looksLikeId(value)) return 'Rol asignado';
+  return value;
+}
+
 class InvitationDto {
   final String id;
   final String email;
@@ -97,35 +145,6 @@ final invitationsNotifierProvider = StateNotifierProvider.autoDispose<
   (ref) => InvitationsNotifier(ref.watch(dioProvider)),
 );
 
-// ─── Mapa roleId → nombre legible ────────────────────────────────────────────
-// Carga /v1/roles una sola vez y construye {id: description}.
-// Si falla, retorna mapa vacío y el tile muestra el código raw.
-final _rolesNameMapProvider =
-    FutureProvider.autoDispose<Map<String, String>>((ref) async {
-  final dio = ref.watch(dioProvider);
-  try {
-    final resp = await dio.get('/v1/roles', queryParameters: {'size': 200});
-    final raw = resp.data;
-    List<dynamic> list;
-    if (raw is List) {
-      list = raw;
-    } else if (raw is Map) {
-      list = (raw['items'] ?? raw['content'] ?? const <dynamic>[]) as List<dynamic>;
-    } else {
-      list = const <dynamic>[];
-    }
-    final map = <String, String>{};
-    for (final r in list) {
-      final id = (r['id'])?.toString() ?? '';
-      final name = (r['description'] ?? r['name'] ?? r['code'] ?? '').toString();
-      if (id.isNotEmpty) map[id] = name;
-    }
-    return map;
-  } catch (_) {
-    return {};
-  }
-});
-
 class InvitationsScreen extends ConsumerWidget {
   const InvitationsScreen({super.key});
 
@@ -133,21 +152,19 @@ class InvitationsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(invitationsNotifierProvider);
     final notifier = ref.read(invitationsNotifierProvider.notifier);
-    final rolesAsync = ref.watch(_rolesNameMapProvider);
-    final rolesMap = rolesAsync.valueOrNull ?? {};
+    final rolesLookupAsync = ref.watch(_rolesLookupProvider);
+    final rolesLookup = rolesLookupAsync.maybeWhen(data: (d) => d, orElse: () => null);
 
     return AppPageScaffold(
       title: 'Invitaciones',
       searchHint: 'Buscar por email…',
       onSearch: notifier.setSearch,
-      body: _buildBody(state, notifier, rolesMap),
+      body: _buildBody(state, notifier, rolesLookup),
     );
   }
 
   Widget _buildBody(
-      ListState<InvitationDto> state,
-      InvitationsNotifier notifier,
-      Map<String, String> rolesMap) {
+      ListState<InvitationDto> state, InvitationsNotifier notifier, Map<String, String>? rolesLookup) {
     if (state.isLoading) return const LoadingState();
     if (state.error != null && state.items.isEmpty) {
       return ErrorState(
@@ -177,12 +194,6 @@ class InvitationsScreen extends ConsumerWidget {
                 child: LoadingState());
           }
           final inv = state.items[i];
-          // Resolver nombre del rol: si inv.role es un UUID, buscarlo en el mapa;
-          // si ya es un código legible (o si el mapa no lo tiene), mostrarlo tal cual.
-          final roleDisplay = inv.role != null
-              ? (rolesMap[inv.role!] ?? _formatRoleCode(inv.role!))
-              : 'Sin rol asignado';
-
           return Container(
             decoration: BoxDecoration(
               color: AppColors.surface,
@@ -226,7 +237,7 @@ class InvitationsScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            roleDisplay,
+                            _resolveRoleLabel(inv.role, rolesLookup),
                             style: TextStyle(
                                 color: AppColors.textSecondary,
                                 fontSize: 12),
@@ -243,20 +254,5 @@ class InvitationsScreen extends ConsumerWidget {
         },
       ),
     );
-  }
-
-  /// Formatea un código de rol legible si no se encuentra en el mapa.
-  /// Ej: "PRODUCTS_ADMIN" → "Products Admin"
-  String _formatRoleCode(String raw) {
-    if (raw.length > 20 && raw.contains('-')) {
-      // Es probablemente un UUID → no se pudo resolver
-      return 'Sin rol';
-    }
-    return raw
-        .split('_')
-        .map((w) => w.isEmpty
-            ? ''
-            : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
-        .join(' ');
   }
 }

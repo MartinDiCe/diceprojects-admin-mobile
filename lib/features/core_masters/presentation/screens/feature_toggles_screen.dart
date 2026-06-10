@@ -26,8 +26,8 @@ class FeatureToggleDto {
   factory FeatureToggleDto.fromJson(Map<String, dynamic> json) =>
       FeatureToggleDto(
         id: json['id']?.toString() ?? '',
-        key: json['featureName']?.toString() ?? json['key']?.toString() ?? json['name']?.toString() ?? '',
-        description: json['description']?.toString(),
+        key: json['key'] ?? json['name'] ?? '',
+        description: json['description'],
         enabled: json['enabled'] == true || json['value'] == true,
       );
 }
@@ -45,12 +45,8 @@ class FeatureTogglesNotifier extends ListNotifier<FeatureToggleDto> {
     return PaginatedResponse.fromJson(resp.data, FeatureToggleDto.fromJson);
   }
 
-  Future<void> toggle(String id, {required bool currentEnabled, required String featureName, String? description}) async {
-    await _dio.put('/v1/feature-toggles/$id', data: {
-      'enabled': !currentEnabled,
-      'featureName': featureName,
-      if (description != null) 'description': description,
-    });
+  Future<void> toggle(String id) async {
+    await _dio.patch('/v1/feature-toggles/$id/toggle');
     reload();
   }
 }
@@ -152,12 +148,7 @@ class FeatureTogglesScreen extends ConsumerWidget {
                             color: AppColors.textSecondary, fontSize: 12))
                     : null,
                 value: ft.enabled,
-                onChanged: (_) => notifier.toggle(
-                  ft.id,
-                  currentEnabled: ft.enabled,
-                  featureName: ft.key,
-                  description: ft.description,
-                ),
+                onChanged: (_) => notifier.toggle(ft.id),
               ),
             ),
           );

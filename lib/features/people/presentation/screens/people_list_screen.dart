@@ -8,6 +8,7 @@ import 'package:app_diceprojects_admin/core/ui/widgets/empty_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/status_badge.dart';
+import 'package:app_diceprojects_admin/features/permissions/permissions_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -72,21 +73,26 @@ class PeopleListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(peopleListNotifierProvider);
     final notifier = ref.read(peopleListNotifierProvider.notifier);
+    final perms = ref.watch(permissionsProvider);
+    final canCreate = perms.hasAnyPermission(['People.Create', 'People.Admin']);
+    final canEdit = perms.hasAnyPermission(['People.Edit', 'People.Admin']);
 
     return AppPageScaffold(
       title: 'Personal',
       searchHint: 'Buscar persona…',
       onSearch: notifier.setSearch,
-      floatingActionButton: CreateFab(
-        onPressed: () => context.push('/people/new'),
-        label: 'Nueva persona',
-      ),
-      body: _buildBody(context, state, notifier),
+      floatingActionButton: canCreate
+          ? CreateFab(
+              onPressed: () => context.push('/people/new'),
+              label: 'Nueva persona',
+            )
+          : null,
+      body: _buildBody(context, state, notifier, canEdit),
     );
   }
 
   Widget _buildBody(BuildContext ctx, ListState<PersonDto> state,
-      PeopleListNotifier notifier) {
+      PeopleListNotifier notifier, bool canEdit) {
     if (state.isLoading) return const LoadingState();
     if (state.error != null && state.items.isEmpty) {
       return ErrorState(
@@ -133,7 +139,7 @@ class PeopleListScreen extends ConsumerWidget {
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
                 splashColor: AppColors.accentLight,
-                onTap: () => ctx.push('/people/${person.id}/edit'),
+                onTap: canEdit ? () => ctx.push('/people/${person.id}/edit') : null,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 12),

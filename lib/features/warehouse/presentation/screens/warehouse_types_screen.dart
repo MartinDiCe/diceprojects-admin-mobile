@@ -1,12 +1,12 @@
 import 'package:app_diceprojects_admin/core/http/dio_client.dart';
-import 'package:app_diceprojects_admin/core/utils/list_state.dart';
-import 'package:app_diceprojects_admin/core/utils/pagination.dart';
 import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
 import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/empty_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/status_badge.dart';
+import 'package:app_diceprojects_admin/core/utils/list_state.dart';
+import 'package:app_diceprojects_admin/core/utils/pagination.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,18 +26,22 @@ class WarehouseTypeDto {
     required this.active,
   });
 
-  factory WarehouseTypeDto.fromJson(Map<String, dynamic> json) => WarehouseTypeDto(
+  factory WarehouseTypeDto.fromJson(Map<String, dynamic> json) =>
+      WarehouseTypeDto(
         code: json['code']?.toString() ?? '',
         name: json['name']?.toString() ?? '',
         description: json['description']?.toString(),
         active: json['active'] == true,
       );
+
+  String get statusCode => active ? 'ACTIVE' : 'INACTIVE';
 }
 
 // ────────────────────────────── Notifier ──────────────────────────────
 
 class WarehouseTypesNotifier extends ListNotifier<WarehouseTypeDto> {
   final Dio _dio;
+
   WarehouseTypesNotifier(this._dio) : super();
 
   @override
@@ -50,8 +54,8 @@ class WarehouseTypesNotifier extends ListNotifier<WarehouseTypeDto> {
   }
 }
 
-final warehouseTypesNotifierProvider =
-    StateNotifierProvider.autoDispose<WarehouseTypesNotifier, ListState<WarehouseTypeDto>>(
+final warehouseTypesNotifierProvider = StateNotifierProvider.autoDispose<
+    WarehouseTypesNotifier, ListState<WarehouseTypeDto>>(
   (ref) => WarehouseTypesNotifier(ref.watch(dioProvider)),
 );
 
@@ -66,15 +70,14 @@ class WarehouseTypesScreen extends ConsumerWidget {
     final notifier = ref.read(warehouseTypesNotifierProvider.notifier);
 
     return AppPageScaffold(
-      title: 'Tipos de depósito',
+      title: 'Tipos de Depósito',
       searchHint: 'Buscar tipo…',
       onSearch: notifier.setSearch,
-      body: _buildBody(context, state, notifier),
+      body: _buildBody(state, notifier),
     );
   }
 
   Widget _buildBody(
-    BuildContext ctx,
     ListState<WarehouseTypeDto> state,
     WarehouseTypesNotifier notifier,
   ) {
@@ -88,58 +91,100 @@ class WarehouseTypesScreen extends ConsumerWidget {
     }
     if (state.items.isEmpty) {
       return const EmptyState(
-        icon: Icons.category_rounded,
+        icon: Icons.category_outlined,
         title: 'Sin tipos',
-        message: 'No hay tipos de depósito registrados.',
+        message: 'No hay tipos de depósito disponibles.',
       );
     }
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-      itemCount: state.items.length,
-      itemBuilder: (ctx, i) {
-        final t = state.items[i];
-        final isDark = Theme.of(ctx).brightness == Brightness.dark;
-        final cardBg = isDark ? AppColors.surface : Colors.white;
-        final textMuted = isDark ? AppColors.sidebarTextMuted : AppColors.textSecondary;
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isDark
-                  ? AppColors.white.withValues(alpha: 0.08)
-                  : AppColors.border.withValues(alpha: 0.50),
-            ),
-          ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            leading: CircleAvatar(
-              backgroundColor: isDark ? AppColors.accentDark : AppColors.accentLight,
-              child: Text(
-                t.code.isNotEmpty ? t.code[0] : 'T',
-                style: TextStyle(
-                  color: isDark ? AppColors.white : AppColors.accent,
-                  fontWeight: FontWeight.w700,
+
+    return RefreshIndicator(
+      onRefresh: () async => notifier.reload(),
+      child: NotificationListener<ScrollNotification>(
+        onNotification: notifier.onScrollNotification,
+        child: ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: state.items.length + (state.isLoadingMore ? 1 : 0),
+          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          itemBuilder: (ctx, i) {
+            if (i == state.items.length) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: LoadingState(),
+              );
+            }
+            final t = state.items[i];
+            return Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x0D000000),
+                    blurRadius: 16,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: AppColors.accentLight,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.category_rounded,
+                          color: AppColors.accent,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              t.name,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                                color: AppColors.ink,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              [t.code, t.description]
+                                  .where((v) => (v ?? '').trim().isNotEmpty)
+                                  .join(' · '),
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      StatusBadge(status: t.statusCode),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            title: Text(t.name,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(t.code, style: TextStyle(fontSize: 12, color: textMuted)),
-                if (t.description != null)
-                  Text(t.description!,
-                      style: TextStyle(fontSize: 12, color: textMuted)),
-                const SizedBox(height: 4),
-                  StatusBadge(status: t.active ? 'ACTIVE' : 'INACTIVE'),
-              ],
-            ),
-          ),
-        );
-      },
+            );
+          },
+        ),
+      ),
     );
   }
 }

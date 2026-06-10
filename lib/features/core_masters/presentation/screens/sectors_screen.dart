@@ -1,12 +1,12 @@
 import 'package:app_diceprojects_admin/core/http/dio_client.dart';
-import 'package:app_diceprojects_admin/core/utils/list_state.dart';
-import 'package:app_diceprojects_admin/core/utils/pagination.dart';
 import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
 import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/empty_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/status_badge.dart';
+import 'package:app_diceprojects_admin/core/utils/list_state.dart';
+import 'package:app_diceprojects_admin/core/utils/pagination.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,18 +29,21 @@ class SectorDto {
   });
 
   factory SectorDto.fromJson(Map<String, dynamic> json) => SectorDto(
-        sectorId: json['sectorId']?.toString() ?? json['id']?.toString() ?? '',
+        sectorId: (json['sectorId'] ?? json['id'])?.toString() ?? '',
         code: json['code']?.toString() ?? '',
         name: json['name']?.toString() ?? '',
         description: json['description']?.toString(),
         active: json['active'] == true,
       );
+
+  String get statusCode => active ? 'ACTIVE' : 'INACTIVE';
 }
 
 // ────────────────────────────── Notifier ──────────────────────────────
 
 class SectorsNotifier extends ListNotifier<SectorDto> {
   final Dio _dio;
+
   SectorsNotifier(this._dio) : super();
 
   @override
@@ -72,12 +75,11 @@ class SectorsScreen extends ConsumerWidget {
       title: 'Sectores',
       searchHint: 'Buscar sector…',
       onSearch: notifier.setSearch,
-      body: _buildBody(context, state, notifier),
+      body: _buildBody(state, notifier),
     );
   }
 
   Widget _buildBody(
-    BuildContext ctx,
     ListState<SectorDto> state,
     SectorsNotifier notifier,
   ) {
@@ -91,78 +93,99 @@ class SectorsScreen extends ConsumerWidget {
     }
     if (state.items.isEmpty) {
       return const EmptyState(
-        icon: Icons.grid_view_rounded,
+        icon: Icons.grid_view_outlined,
         title: 'Sin sectores',
-        message: 'No hay sectores registrados.',
+        message: 'No hay sectores que coincidan con la búsqueda.',
       );
     }
-    return NotificationListener<ScrollNotification>(
-      onNotification: (n) {
-        if (n is ScrollEndNotification &&
-            n.metrics.extentAfter < 200 &&
-            state.hasMore &&
-            !state.isLoadingMore) {
-          notifier.loadMore();
-        }
-        return false;
-      },
-      child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-        itemCount: state.items.length + (state.isLoadingMore ? 1 : 0),
-        itemBuilder: (ctx, i) {
-          if (i == state.items.length) {
-            return const Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(child: CircularProgressIndicator()),
-            );
-          }
-          final s = state.items[i];
-          final isDark = Theme.of(ctx).brightness == Brightness.dark;
-          final cardBg = isDark ? AppColors.surface : Colors.white;
-          final textMuted = isDark ? AppColors.sidebarTextMuted : AppColors.textSecondary;
-          return Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            decoration: BoxDecoration(
-              color: cardBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isDark
-                    ? AppColors.white.withValues(alpha: 0.08)
-                    : AppColors.border.withValues(alpha: 0.50),
+
+    return RefreshIndicator(
+      onRefresh: () async => notifier.reload(),
+      child: NotificationListener<ScrollNotification>(
+        onNotification: notifier.onScrollNotification,
+        child: ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: state.items.length + (state.isLoadingMore ? 1 : 0),
+          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          itemBuilder: (ctx, i) {
+            if (i == state.items.length) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: LoadingState(),
+              );
+            }
+            final s = state.items[i];
+            return Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x0D000000),
+                    blurRadius: 16,
+                    offset: Offset(0, 4),
+                  ),
+                ],
               ),
-            ),
-            child: ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              leading: CircleAvatar(
-                backgroundColor:
-                    isDark ? AppColors.accentDark : AppColors.accentLight,
-                child: Text(
-                  s.code.isNotEmpty ? s.code[0] : 'S',
-                  style: TextStyle(
-                    color: isDark ? AppColors.white : AppColors.accent,
-                    fontWeight: FontWeight.w700,
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: AppColors.accentLight,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.grid_view_rounded,
+                          color: AppColors.accent,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              s.name,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                                color: AppColors.ink,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              [s.code, s.description]
+                                  .where((v) => (v ?? '').trim().isNotEmpty)
+                                  .join(' · '),
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      StatusBadge(status: s.statusCode),
+                    ],
                   ),
                 ),
               ),
-              title: Text(s.name,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 14)),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(s.code,
-                      style: TextStyle(fontSize: 12, color: textMuted)),
-                  if (s.description != null)
-                    Text(s.description!,
-                        style: TextStyle(fontSize: 12, color: textMuted)),
-                  const SizedBox(height: 4),
-                  StatusBadge(status: s.active ? 'ACTIVE' : 'INACTIVE'),
-                ],
-              ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

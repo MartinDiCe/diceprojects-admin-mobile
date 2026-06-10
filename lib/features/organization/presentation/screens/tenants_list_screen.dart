@@ -9,6 +9,7 @@ import 'package:app_diceprojects_admin/core/ui/widgets/empty_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/status_badge.dart';
+import 'package:app_diceprojects_admin/features/permissions/permissions_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -90,21 +91,36 @@ class TenantsListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(tenantsListNotifierProvider);
     final notifier = ref.read(tenantsListNotifierProvider.notifier);
+    final perms = ref.watch(permissionsProvider);
+    final canCreate = perms.hasAnyPermission([
+      'Organization.Tenants.Create',
+      'Organization.Admin',
+    ]);
+    final canEdit = perms.hasAnyPermission([
+      'Organization.Tenants.Edit',
+      'Organization.Admin',
+    ]);
+    final canDelete = perms.hasAnyPermission([
+      'Organization.Tenants.Delete',
+      'Organization.Admin',
+    ]);
 
     return AppPageScaffold(
       title: 'Empresas',
       searchHint: 'Buscar empresa…',
       onSearch: notifier.setSearch,
-      floatingActionButton: CreateFab(
-        onPressed: () => context.push('/admin/tenants/new'),
-        label: 'Nueva empresa',
-      ),
-      body: _buildBody(context, state, notifier),
+      floatingActionButton: canCreate
+          ? CreateFab(
+              onPressed: () => context.push('/admin/tenants/new'),
+              label: 'Nueva empresa',
+            )
+          : null,
+      body: _buildBody(context, state, notifier, canEdit, canDelete),
     );
   }
 
   Widget _buildBody(BuildContext ctx, ListState<TenantDto> state,
-      TenantsListNotifier notifier) {
+      TenantsListNotifier notifier, bool canEdit, bool canDelete) {
     if (state.isLoading) return const LoadingState();
     if (state.error != null && state.items.isEmpty) {
       return ErrorState(
@@ -137,6 +153,8 @@ class TenantsListScreen extends ConsumerWidget {
           return _TenantTile(
             tenant: tenant,
             notifier: notifier,
+            canEdit: canEdit,
+            canDelete: canDelete,
           );
         },
       ),
@@ -147,7 +165,14 @@ class TenantsListScreen extends ConsumerWidget {
 class _TenantTile extends StatelessWidget {
   final TenantDto tenant;
   final TenantsListNotifier notifier;
-  const _TenantTile({required this.tenant, required this.notifier});
+  final bool canEdit;
+  final bool canDelete;
+  const _TenantTile({
+    required this.tenant,
+    required this.notifier,
+    required this.canEdit,
+    required this.canDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -167,7 +192,9 @@ class _TenantTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           splashColor: AppColors.accentLight,
           highlightColor: AppColors.accentLight,
-          onTap: () => context.push('/admin/tenants/${tenant.id}/edit'),
+          onTap: canEdit
+              ? () => context.push('/admin/tenants/${tenant.id}/edit')
+              : null,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
@@ -222,11 +249,12 @@ class _TenantTile extends StatelessWidget {
                     if (v == 'restore') notifier.restore(tenant.id);
                   },
                   itemBuilder: (_) => [
-                    const PopupMenuItem(value: 'edit', child: Text('Editar')),
+                    if (canEdit)
+                      const PopupMenuItem(value: 'edit', child: Text('Editar')),
                     const PopupMenuItem(value: 'branches', child: Text('Ver Sucursales')),
-                    if (tenant.status == 'INACTIVE')
+                    if (canDelete && tenant.status == 'INACTIVE')
                       const PopupMenuItem(value: 'restore', child: Text('Restaurar')),
-                    if (tenant.status != 'INACTIVE')
+                    if (canDelete && tenant.status != 'INACTIVE')
                       const PopupMenuItem(
                           value: 'delete',
                           child: Text('Eliminar',

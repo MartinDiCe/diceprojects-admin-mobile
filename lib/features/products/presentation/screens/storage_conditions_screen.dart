@@ -1,12 +1,12 @@
 import 'package:app_diceprojects_admin/core/http/dio_client.dart';
-import 'package:app_diceprojects_admin/core/utils/list_state.dart';
-import 'package:app_diceprojects_admin/core/utils/pagination.dart';
 import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
 import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/empty_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/status_badge.dart';
+import 'package:app_diceprojects_admin/core/utils/list_state.dart';
+import 'package:app_diceprojects_admin/core/utils/pagination.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,7 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ────────────────────────────── Model ──────────────────────────────
 
 class StorageConditionDto {
-  final String id;
+  final String conditionId;
   final String code;
   final String name;
   final String? description;
@@ -22,7 +22,7 @@ class StorageConditionDto {
   final bool isGlobal;
 
   const StorageConditionDto({
-    required this.id,
+    required this.conditionId,
     required this.code,
     required this.name,
     this.description,
@@ -32,27 +32,33 @@ class StorageConditionDto {
 
   factory StorageConditionDto.fromJson(Map<String, dynamic> json) =>
       StorageConditionDto(
-        id: json['conditionId']?.toString() ?? json['id']?.toString() ?? '',
+        conditionId: (json['conditionId'] ?? json['id'])?.toString() ?? '',
         code: json['code']?.toString() ?? '',
         name: json['name']?.toString() ?? '',
         description: json['description']?.toString(),
         active: json['active'] == true,
-        isGlobal: json['companyId'] == null || json['isGlobal'] == true,
+        isGlobal: json['isGlobal'] == true,
       );
+
+  String get statusCode => active ? 'ACTIVE' : 'INACTIVE';
 }
 
 // ────────────────────────────── Notifier ──────────────────────────────
 
 class StorageConditionsNotifier extends ListNotifier<StorageConditionDto> {
   final Dio _dio;
+
   StorageConditionsNotifier(this._dio) : super();
 
   @override
-  Future<PaginatedResponse<StorageConditionDto>> fetchPage(
-      PageParams params) async {
+  Future<PaginatedResponse<StorageConditionDto>> fetchPage(PageParams params) async {
+    final query = params.toQueryParams();
+    query['size'] = 50;
+    query['pageSize'] = 50;
+
     final resp = await _dio.get(
       '/v1/storage-conditions',
-      queryParameters: {...params.toQueryParams(), 'size': 50},
+      queryParameters: query,
     );
     return PaginatedResponse.fromJson(resp.data, StorageConditionDto.fromJson);
   }
@@ -74,88 +80,132 @@ class StorageConditionsScreen extends ConsumerWidget {
     final notifier = ref.read(storageConditionsNotifierProvider.notifier);
 
     return AppPageScaffold(
-      title: 'Condiciones de almacenamiento',
+      title: 'Condiciones',
       searchHint: 'Buscar condición…',
       onSearch: notifier.setSearch,
-      body: _buildBody(context, state, notifier),
+      body: _buildBody(state, notifier),
     );
   }
 
-  Widget _buildBody(BuildContext ctx, ListState<StorageConditionDto> state,
-      StorageConditionsNotifier notifier) {
+  Widget _buildBody(
+    ListState<StorageConditionDto> state,
+    StorageConditionsNotifier notifier,
+  ) {
     if (state.isLoading) return const LoadingState();
     if (state.error != null && state.items.isEmpty) {
       return ErrorState(
-          title: 'Error al cargar condiciones',
-          message: state.error!,
-          onRetry: notifier.reload);
+        title: 'No pudimos cargar las condiciones',
+        message: state.error!,
+        onRetry: notifier.reload,
+      );
     }
     if (state.items.isEmpty) {
       return const EmptyState(
-          icon: Icons.thermostat_rounded,
-          title: 'Sin condiciones',
-          message: 'No hay condiciones de almacenamiento registradas.');
+        icon: Icons.thermostat_outlined,
+        title: 'Sin condiciones',
+        message: 'No hay condiciones que coincidan con la búsqueda.',
+      );
     }
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-      itemCount: state.items.length,
-      itemBuilder: (ctx, i) => _ConditionCard(item: state.items[i]),
-    );
-  }
-}
 
-class _ConditionCard extends StatelessWidget {
-  final StorageConditionDto item;
-  const _ConditionCard({required this.item});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardBg = isDark ? AppColors.surface : Colors.white;
-    final textMuted = isDark ? AppColors.sidebarTextMuted : AppColors.textSecondary;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark
-              ? AppColors.white.withValues(alpha: 0.08)
-              : AppColors.border.withValues(alpha: 0.50),
-        ),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: CircleAvatar(
-          backgroundColor: isDark ? AppColors.accentDark : AppColors.accentLight,
-          child: Icon(Icons.thermostat_rounded,
-              color: isDark ? AppColors.white : AppColors.accent, size: 18),
-        ),
-        title: Row(children: [
-          Flexible(
-            child: Text(item.name,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-          ),
-          if (item.isGlobal) ...[
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20)),
-              child: const Text('Global',
-                  style: TextStyle(
-                      fontSize: 10, color: Colors.blue, fontWeight: FontWeight.w600)),
+    return RefreshIndicator(
+      onRefresh: () async => notifier.reload(),
+      child: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: state.items.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (ctx, i) {
+          final c = state.items[i];
+          return Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0D000000),
+                  blurRadius: 16,
+                  offset: Offset(0, 4),
+                ),
+              ],
             ),
-          ]
-        ]),
-        subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(item.code, style: TextStyle(fontSize: 12, color: textMuted)),
-          if (item.description != null)
-            Text(item.description!, style: TextStyle(fontSize: 12, color: textMuted)),
-          const SizedBox(height: 4),
-          StatusBadge(status: item.active ? 'ACTIVE' : 'INACTIVE'),
-        ]),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: AppColors.accentLight,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.thermostat_rounded,
+                        color: AppColors.accent,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  c.name,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                    color: AppColors.ink,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (c.isGlobal)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.accentLight,
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: const Text(
+                                    'Global',
+                                    style: TextStyle(
+                                      color: AppColors.accent,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            [c.code, c.description]
+                                .where((v) => (v ?? '').trim().isNotEmpty)
+                                .join(' · '),
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    StatusBadge(status: c.statusCode),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

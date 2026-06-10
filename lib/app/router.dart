@@ -4,7 +4,6 @@ import 'package:app_diceprojects_admin/features/audit/presentation/screens/audit
 import 'package:app_diceprojects_admin/features/auth/presentation/controllers/auth_notifier.dart';
 import 'package:app_diceprojects_admin/features/auth/presentation/screens/login_screen.dart';
 import 'package:app_diceprojects_admin/features/auth/presentation/screens/splash_screen.dart';
-import 'package:app_diceprojects_admin/features/auth/presentation/screens/user_profile_screen.dart';
 import 'package:app_diceprojects_admin/features/core_masters/presentation/screens/currencies_screen.dart';
 import 'package:app_diceprojects_admin/features/core_masters/presentation/screens/feature_toggles_screen.dart';
 import 'package:app_diceprojects_admin/features/core_masters/presentation/screens/parameters_screen.dart';
@@ -22,33 +21,26 @@ import 'package:app_diceprojects_admin/features/organization/presentation/screen
 import 'package:app_diceprojects_admin/features/organization/presentation/screens/tenants_list_screen.dart';
 import 'package:app_diceprojects_admin/features/people/presentation/screens/people_list_screen.dart';
 import 'package:app_diceprojects_admin/features/people/presentation/screens/person_form_screen.dart';
-import 'package:app_diceprojects_admin/features/products/presentation/screens/brands_screen.dart';
-import 'package:app_diceprojects_admin/features/products/presentation/screens/presentation_types_screen.dart';
-import 'package:app_diceprojects_admin/features/products/presentation/screens/product_presentations_screen.dart';
-import 'package:app_diceprojects_admin/features/products/presentation/screens/price_types_screen.dart';
-import 'package:app_diceprojects_admin/features/products/presentation/screens/product_form_screen.dart';
-import 'package:app_diceprojects_admin/features/products/presentation/screens/product_import_screen.dart';
-import 'package:app_diceprojects_admin/features/products/presentation/screens/product_statuses_screen.dart';
-import 'package:app_diceprojects_admin/features/products/presentation/screens/product_types_screen.dart';
-import 'package:app_diceprojects_admin/features/products/presentation/screens/products_list_screen.dart';
-import 'package:app_diceprojects_admin/features/products/presentation/screens/publication_channels_screen.dart';
-import 'package:app_diceprojects_admin/features/products/presentation/screens/stock_statuses_screen.dart';
-import 'package:app_diceprojects_admin/features/products/presentation/screens/stock_strategies_screen.dart';
-import 'package:app_diceprojects_admin/features/products/presentation/screens/storage_conditions_screen.dart';
-import 'package:app_diceprojects_admin/features/products/presentation/screens/unit_of_measure_screen.dart';
+import 'package:app_diceprojects_admin/features/permissions/permissions_provider.dart';
 import 'package:app_diceprojects_admin/features/sellers/presentation/screens/seller_form_screen.dart';
 import 'package:app_diceprojects_admin/features/sellers/presentation/screens/sellers_list_screen.dart';
 import 'package:app_diceprojects_admin/features/warehouse/presentation/screens/movements_screen.dart';
 import 'package:app_diceprojects_admin/features/warehouse/presentation/screens/stock_overview_screen.dart';
 import 'package:app_diceprojects_admin/features/warehouse/presentation/screens/warehouse_types_screen.dart';
 import 'package:app_diceprojects_admin/features/warehouse/presentation/screens/warehouses_list_screen.dart';
-import 'package:app_diceprojects_admin/features/core_masters/presentation/screens/sectors_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/product_form_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/product_import_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/brands_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/product_types_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/products_list_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/storage_conditions_screen.dart';
 import 'package:app_diceprojects_admin/features/roles/presentation/screens/role_detail_screen.dart';
 import 'package:app_diceprojects_admin/features/roles/presentation/screens/roles_list_screen.dart';
-import 'package:app_diceprojects_admin/features/permissions/presentation/screens/permissions_screen.dart';
+import 'package:app_diceprojects_admin/features/sales/presentation/screens/quotes_screen.dart';
 import 'package:app_diceprojects_admin/features/users/presentation/screens/user_detail_screen.dart';
 import 'package:app_diceprojects_admin/features/users/presentation/screens/user_form_screen.dart';
 import 'package:app_diceprojects_admin/features/users/presentation/screens/users_list_screen.dart';
+import 'package:app_diceprojects_admin/features/core_masters/presentation/screens/sectors_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -104,6 +96,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         return '/dashboard';
       }
 
+      if (loc != '/403') {
+        final permissions = ref.read(permissionsProvider);
+        if (!permissions.canAccessRoute(loc)) return '/403';
+      }
+
       return null;
     },
     routes: [
@@ -126,10 +123,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/dashboard',
             builder: (_, __) => const DashboardScreen(),
           ),
-          GoRoute(
-            path: '/profile',
-            builder: (_, __) => const UserProfileScreen(),
-          ),
           // IAM
           GoRoute(
             path: '/iam/users',
@@ -147,10 +140,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/iam/invitations',
             builder: (_, __) => const InvitationsScreen(),
-          ),
-          GoRoute(
-            path: '/iam/permissions',
-            builder: (_, __) => const PermissionsListScreen(),
           ),
           // Authorization
           GoRoute(
@@ -196,6 +185,20 @@ final routerProvider = Provider<GoRouter>((ref) {
               tenantId: state.uri.queryParameters['tenantId'],
             ),
           ),
+          GoRoute(
+            path: '/organization/sellers',
+            builder: (_, __) => const SellersListScreen(),
+          ),
+          GoRoute(
+            path: '/organization/sellers/new',
+            builder: (_, __) => const SellerFormScreen(sellerId: null),
+          ),
+          GoRoute(
+            path: '/organization/sellers/:id/edit',
+            builder: (_, state) => SellerFormScreen(
+              sellerId: state.pathParameters['id'],
+            ),
+          ),
           // People
           GoRoute(
             path: '/people',
@@ -217,20 +220,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (_, __) => const ProductsListScreen(),
           ),
           GoRoute(
-            path: '/products/new',
-            builder: (_, __) => const ProductFormScreen(),
-          ),
-          GoRoute(
-            path: '/products/:id/edit',
-            builder: (_, state) =>
-                ProductFormScreen(productId: state.pathParameters['id']),
-          ),
-          GoRoute(
-            path: '/products/:id/presentations',
-            builder: (_, state) => ProductPresentationsScreen(
-              productId: state.pathParameters['id']!,
-              productName: state.uri.queryParameters['name'],
-            ),
+            path: '/products/import',
+            builder: (_, __) => const ProductImportScreen(),
           ),
           GoRoute(
             path: '/products/types',
@@ -245,73 +236,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (_, __) => const StorageConditionsScreen(),
           ),
           GoRoute(
-            path: '/products/import',
-            builder: (_, __) => const ProductImportScreen(),
+            path: '/products/new',
+            builder: (_, __) => const ProductFormScreen(),
           ),
           GoRoute(
-            path: '/products/price-types',
-            builder: (_, __) => const PriceTypesScreen(),
-          ),
-          GoRoute(
-            path: '/products/stock-statuses',
-            builder: (_, __) => const StockStatusesScreen(),
-          ),
-          GoRoute(
-            path: '/products/product-statuses',
-            builder: (_, __) => const ProductStatusesScreen(),
-          ),
-          GoRoute(
-            path: '/products/publication-channels',
-            builder: (_, __) => const PublicationChannelsScreen(),
-          ),
-          GoRoute(
-            path: '/products/stock-strategies',
-            builder: (_, __) => const StockStrategiesScreen(),
-          ),
-          GoRoute(
-            path: '/products/presentation-types',
-            builder: (_, __) => const PresentationTypesScreen(),
-          ),
-          GoRoute(
-            path: '/products/unit-of-measure',
-            builder: (_, __) => const UnitOfMeasureScreen(),
-          ),
-          // Sellers
-          GoRoute(
-            path: '/organization/sellers',
-            builder: (_, __) => const SellersListScreen(),
-          ),
-          GoRoute(
-            path: '/organization/sellers/new',
-            builder: (_, __) => const SellerFormScreen(sellerId: null),
-          ),
-          GoRoute(
-            path: '/organization/sellers/:id/edit',
+            path: '/products/:id/edit',
             builder: (_, state) =>
-                SellerFormScreen(sellerId: state.pathParameters['id']),
-          ),
-          // Warehouse
-          GoRoute(
-            path: '/warehouse',
-            builder: (_, __) => const WarehousesListScreen(),
-          ),
-          GoRoute(
-            path: '/warehouse/types',
-            builder: (_, __) => const WarehouseTypesScreen(),
-          ),
-          GoRoute(
-            path: '/warehouse/stock',
-            builder: (_, __) => const StockOverviewScreen(),
-          ),
-          GoRoute(
-            path: '/warehouse/:warehouseId/movements',
-            builder: (_, state) => MovementsScreen(
-                warehouseId: state.pathParameters['warehouseId']!),
-          ),
-          // Sectors
-          GoRoute(
-            path: '/core/sectors',
-            builder: (_, __) => const SectorsScreen(),
+                ProductFormScreen(productId: state.pathParameters['id']),
           ),
           // Marketing
           GoRoute(
@@ -321,6 +252,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/marketing/destacados',
             builder: (_, __) => const DestacadosScreen(),
+          ),
+          // Sales
+          GoRoute(
+            path: '/sales/quotes',
+            builder: (_, __) => const QuotesScreen(),
           ),
           // Notifications
           GoRoute(
@@ -343,6 +279,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/core/currencies',
             builder: (_, __) => const CurrenciesScreen(),
+          ),
+          GoRoute(
+            path: '/core/sectors',
+            builder: (_, __) => const SectorsScreen(),
           ),
           GoRoute(
             path: '/core/languages',
@@ -371,6 +311,26 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/core/parameters',
             builder: (_, __) => const ParametersScreen(),
+          ),
+
+          // Warehouse
+          GoRoute(
+            path: '/warehouse',
+            builder: (_, __) => const WarehousesListScreen(),
+          ),
+          GoRoute(
+            path: '/warehouse/types',
+            builder: (_, __) => const WarehouseTypesScreen(),
+          ),
+          GoRoute(
+            path: '/warehouse/stock',
+            builder: (_, __) => const StockOverviewScreen(),
+          ),
+          GoRoute(
+            path: '/warehouse/:warehouseId/movements',
+            builder: (_, state) => MovementsScreen(
+              warehouseId: state.pathParameters['warehouseId']!,
+            ),
           ),
         ],
       ),

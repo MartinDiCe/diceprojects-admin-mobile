@@ -155,7 +155,9 @@ class NotifTemplatesScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            t.channel ?? 'Sin canal',
+                            [
+                              if (t.channel != null) t.channel!,
+                            ].join(' · '),
                             style: TextStyle(
                                 color: AppColors.textSecondary,
                                 fontSize: 12),
