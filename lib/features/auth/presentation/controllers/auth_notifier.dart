@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:app_diceprojects_admin/core/config/app_config.dart';
 import 'package:app_diceprojects_admin/core/errors/error_handler.dart';
 import 'package:app_diceprojects_admin/core/http/dio_client.dart';
 import 'package:app_diceprojects_admin/core/storage/secure_storage.dart';
 import 'package:app_diceprojects_admin/core/utils/jwt_decoder.dart';
+import 'package:app_diceprojects_admin/features/notifications/data/mobile_push_registration_service.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -223,6 +226,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       isLoading: false,
       isInitialized: true,
     );
+    unawaited(MobilePushRegistrationService(_dio).registerDevice());
   }
 
   Future<void> logout() async {
