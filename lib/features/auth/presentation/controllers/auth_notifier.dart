@@ -78,7 +78,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true);
     try {
       final token = await _storage.read(AppConfig.tokenKey);
-      if (token == null || JwtDecoder.isExpired(token)) {
+      if (token == null || token.trim().isEmpty) {
         state = state.copyWith(
             isLoading: false,
             isInitialized: true,

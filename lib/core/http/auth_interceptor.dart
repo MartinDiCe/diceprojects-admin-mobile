@@ -1,6 +1,7 @@
+import 'dart:convert';
+
 import 'package:app_diceprojects_admin/core/config/app_config.dart';
 import 'package:app_diceprojects_admin/core/storage/secure_storage.dart';
-import 'package:app_diceprojects_admin/core/utils/jwt_decoder.dart';
 import 'package:dio/dio.dart';
 
 class AuthInterceptor extends Interceptor {
@@ -30,18 +31,10 @@ class AuthInterceptor extends Interceptor {
 
     final token = await _storage.read(AppConfig.tokenKey);
     if (token != null && token.isNotEmpty) {
-      // Avoid sending expired tokens — can cause the gateway/security filters
-      // to reject even public endpoints, and breaks re-login.
-      if (JwtDecoder.isExpired(token)) {
-        await _storage.delete(AppConfig.tokenKey);
-        handler.next(options);
-        return;
-      }
-
       options.headers['Authorization'] = 'Bearer $token';
 
       // Inject tenantId for multi-tenant scope (mirrors web buildParams logic)
-      final claims = JwtDecoder.decode(token);
+      final claims = _decodeJwt(token);
       final tenantId = claims['tenantId']?.toString();
       final isAdminGlobal = tenantId == null || tenantId.trim().isEmpty;
       if (!isAdminGlobal && tenantId.trim().isNotEmpty) {
@@ -49,5 +42,18 @@ class AuthInterceptor extends Interceptor {
       }
     }
     handler.next(options);
+  }
+}
+
+Map<String, dynamic> _decodeJwt(String token) {
+  try {
+    final parts = token.split('.');
+    if (parts.length < 2) return const {};
+    final normalized = base64Url.normalize(parts[1]);
+    final decoded = utf8.decode(base64Url.decode(normalized));
+    final json = jsonDecode(decoded);
+    return json is Map ? Map<String, dynamic>.from(json) : const {};
+  } catch (_) {
+    return const {};
   }
 }
