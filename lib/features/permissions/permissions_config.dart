@@ -1,5 +1,29 @@
 /// Mapa de rutas a permisos requeridos (al menos uno debe estar presente)
 const Map<String, List<String>> permissionGates = {
+  '/dashboard/products': [
+    'Products.Dashboard.View',
+    'Products.Articles.View',
+    'Products.Articles.List',
+    'Products.Admin',
+  ],
+  '/dashboard/sales': [
+    'Sales.Dashboard.View',
+    'Sales.Quotes.View',
+    'Sales.Quotes.List',
+    'Sales.Admin',
+  ],
+  '/dashboard/marketing': [
+    'Marketing.Dashboard.View',
+    'Marketing.Campaigns.View',
+    'Marketing.Leads.View',
+    'Marketing.Admin',
+  ],
+  '/dashboard/warehouse': [
+    'Warehouse.Dashboard.View',
+    'Warehouse.Stock.View',
+    'Warehouse.Stock.List',
+    'Warehouse.Admin',
+  ],
   '/iam/users/new': ['IAM.Users.Create', 'IAM.Invitations.Send', 'IAM.Users.Admin'],
   '/iam/users': ['IAM.Users.List', 'IAM.Users.View', 'IAM.Users.Admin'],
   '/iam/invitations': ['IAM.Invitations.List', 'IAM.Invitations.Send'],
