@@ -33,6 +33,7 @@ import 'package:app_diceprojects_admin/features/warehouse/presentation/screens/w
 import 'package:app_diceprojects_admin/features/warehouse/presentation/screens/warehouses_list_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/product_form_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/product_import_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/product_presentations_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/brands_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/product_types_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/products_list_screen.dart';
@@ -270,6 +271,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/products/:id/edit',
             builder: (_, state) =>
                 ProductFormScreen(productId: state.pathParameters['id']),
+          ),
+          GoRoute(
+            path: '/products/:id/presentations',
+            builder: (_, state) => ProductPresentationsScreen(
+              productId: state.pathParameters['id']!,
+              productName: state.uri.queryParameters['name'],
+            ),
           ),
           // Marketing
           GoRoute(

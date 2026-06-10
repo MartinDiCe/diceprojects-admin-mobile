@@ -36,9 +36,22 @@ class AuthInterceptor extends Interceptor {
       // Inject tenantId for multi-tenant scope (mirrors web buildParams logic)
       final claims = _decodeJwt(token);
       final tenantId = claims['tenantId']?.toString();
+      final sellerId = claims['sellerId']?.toString();
+      final sellerIds = claims['sellerIds'];
       final isAdminGlobal = tenantId == null || tenantId.trim().isEmpty;
       if (!isAdminGlobal && tenantId.trim().isNotEmpty) {
         options.queryParameters['tenantId'] = tenantId;
+        options.headers['X-Tenant-Id'] = tenantId;
+      }
+      if (sellerId != null && sellerId.trim().isNotEmpty) {
+        options.queryParameters.putIfAbsent('sellerId', () => sellerId.trim());
+        options.headers['X-Seller-Id'] = sellerId.trim();
+      } else if (sellerIds is List && sellerIds.isNotEmpty) {
+        final csv = sellerIds.map((id) => id.toString().trim()).where((id) => id.isNotEmpty).join(',');
+        if (csv.isNotEmpty) {
+          options.queryParameters.putIfAbsent('sellerIds', () => csv);
+          options.headers['X-Seller-Ids'] = csv;
+        }
       }
     }
     handler.next(options);

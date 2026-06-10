@@ -21,8 +21,8 @@ class _TenantLookupDto {
   const _TenantLookupDto({required this.id, required this.name});
 
   factory _TenantLookupDto.fromJson(Map<String, dynamic> json) => _TenantLookupDto(
-        id: (json['id'])?.toString() ?? '',
-        name: (json['name'])?.toString() ?? '',
+        id: (json['tenantId'] ?? json['companyId'] ?? json['id'])?.toString() ?? '',
+        name: (json['name'] ?? json['tenantName'] ?? json['companyName'] ?? json['code'] ?? 'Empresa').toString(),
       );
 }
 
@@ -35,7 +35,7 @@ class _SellerLookupDto {
 
   factory _SellerLookupDto.fromJson(Map<String, dynamic> json) => _SellerLookupDto(
         id: (json['sellerId'] ?? json['id'])?.toString() ?? '',
-        name: (json['name'] ?? json['sellerCode'] ?? 'Seller').toString(),
+        name: (json['name'] ?? json['sellerName'] ?? json['businessName'] ?? json['sellerCode'] ?? 'Seller').toString(),
         tenantId: (json['tenantId'] ?? json['companyId'])?.toString(),
       );
 }
@@ -60,7 +60,12 @@ final _sellersLookupProvider = FutureProvider.autoDispose
   final dio = ref.watch(dioProvider);
   final resp = await dio.get(
     '/v1/sellers',
-    queryParameters: const {'page': 0, 'size': 200, 'pageSize': 200},
+    queryParameters: {
+      'page': 0,
+      'size': 200,
+      'pageSize': 200,
+      if (tenantId != null && tenantId.trim().isNotEmpty) 'tenantId': tenantId.trim(),
+    },
   );
   final items = PaginatedResponse.fromJson(resp.data, _SellerLookupDto.fromJson).items;
   final scope = tenantId?.trim();
@@ -131,12 +136,7 @@ class ProductFormNotifier extends StateNotifier<_ProductFormState> {
           'category': data['category']?.toString(),
           'tags': (data['tags'] as List<dynamic>?)?.map((e) => e.toString()).join(', '),
           'uses': (data['uses'] as List<dynamic>?)?.map((e) => e.toString()).join(', '),
-          'netWeight': data['netWeight']?.toString(),
-          'grossWeight': data['grossWeight']?.toString(),
-          'volume': data['volume']?.toString(),
-          'height': data['height']?.toString(),
-          'width': data['width']?.toString(),
-          'length': data['length']?.toString(),
+          'discountPercent': data['discountPercent']?.toString(),
         },
       );
     } catch (e) {
@@ -160,12 +160,7 @@ class ProductFormNotifier extends StateNotifier<_ProductFormState> {
     String? stockStatusCode,
     String? tags,
     String? uses,
-    String? netWeight,
-    String? grossWeight,
-    String? volume,
-    String? height,
-    String? width,
-    String? length,
+    String? discountPercent,
     required bool featured,
   }) async {
     state = state.copyWith(isSaving: true, error: null);
@@ -189,18 +184,8 @@ class ProductFormNotifier extends StateNotifier<_ProductFormState> {
         if (uses != null && uses.isNotEmpty) 'uses': _splitCsv(uses),
         if (basePrice != null && basePrice.isNotEmpty)
           'basePrice': double.tryParse(basePrice),
-        if (netWeight != null && netWeight.isNotEmpty)
-          'netWeight': double.tryParse(netWeight),
-        if (grossWeight != null && grossWeight.isNotEmpty)
-          'grossWeight': double.tryParse(grossWeight),
-        if (volume != null && volume.isNotEmpty)
-          'volume': double.tryParse(volume),
-        if (height != null && height.isNotEmpty)
-          'height': double.tryParse(height),
-        if (width != null && width.isNotEmpty)
-          'width': double.tryParse(width),
-        if (length != null && length.isNotEmpty)
-          'length': double.tryParse(length),
+        if (discountPercent != null && discountPercent.isNotEmpty)
+          'discountPercent': double.tryParse(discountPercent),
       };
       if (productId == null) {
         final resp = await _dio.post('/v1/products', data: body);
@@ -271,16 +256,11 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   late final TextEditingController _skuCtrl;
   late final TextEditingController _priceTypeCtrl;
   late final TextEditingController _basePriceCtrl;
+  late final TextEditingController _discountPercentCtrl;
   late final TextEditingController _currencyCtrl;
   late final TextEditingController _stockStatusCtrl;
   late final TextEditingController _tagsCtrl;
   late final TextEditingController _usesCtrl;
-  late final TextEditingController _netWeightCtrl;
-  late final TextEditingController _grossWeightCtrl;
-  late final TextEditingController _volumeCtrl;
-  late final TextEditingController _heightCtrl;
-  late final TextEditingController _widthCtrl;
-  late final TextEditingController _lengthCtrl;
   late final TextEditingController _descriptionCtrl;
   late final TextEditingController _categoryCtrl;
 
@@ -299,22 +279,23 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     _skuCtrl = TextEditingController();
     _priceTypeCtrl = TextEditingController(text: 'FIXED');
     _basePriceCtrl = TextEditingController();
+    _discountPercentCtrl = TextEditingController();
     _currencyCtrl = TextEditingController(text: 'ARS');
     _stockStatusCtrl = TextEditingController();
     _tagsCtrl = TextEditingController();
     _usesCtrl = TextEditingController();
-    _netWeightCtrl = TextEditingController();
-    _grossWeightCtrl = TextEditingController();
-    _volumeCtrl = TextEditingController();
-    _heightCtrl = TextEditingController();
-    _widthCtrl = TextEditingController();
-    _lengthCtrl = TextEditingController();
     _descriptionCtrl = TextEditingController();
     _categoryCtrl = TextEditingController();
 
     final auth = ref.read(authNotifierProvider);
     if (!auth.isAdminGlobal && auth.tenantId != null && auth.tenantId!.trim().isNotEmpty) {
       _selectedCompanyId = auth.tenantId;
+    }
+    if (!auth.isAdminGlobal) {
+      final scopedSeller = auth.sellerId ?? (auth.sellerIds.length == 1 ? auth.sellerIds.first : null);
+      if (scopedSeller != null && scopedSeller.trim().isNotEmpty) {
+        _selectedSellerId = scopedSeller.trim();
+      }
     }
 
     ref.listen<_ProductFormState>(
@@ -329,16 +310,11 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         _skuCtrl.text = next.fields['sku'] ?? '';
         _priceTypeCtrl.text = next.fields['priceTypeCode'] ?? 'FIXED';
         _basePriceCtrl.text = next.fields['basePrice'] ?? '';
+        _discountPercentCtrl.text = next.fields['discountPercent'] ?? '';
         _currencyCtrl.text = next.fields['currencyCode'] ?? 'ARS';
         _stockStatusCtrl.text = next.fields['stockStatusCode'] ?? '';
         _tagsCtrl.text = next.fields['tags'] ?? '';
         _usesCtrl.text = next.fields['uses'] ?? '';
-        _netWeightCtrl.text = next.fields['netWeight'] ?? '';
-        _grossWeightCtrl.text = next.fields['grossWeight'] ?? '';
-        _volumeCtrl.text = next.fields['volume'] ?? '';
-        _heightCtrl.text = next.fields['height'] ?? '';
-        _widthCtrl.text = next.fields['width'] ?? '';
-        _lengthCtrl.text = next.fields['length'] ?? '';
         _descriptionCtrl.text = next.fields['description'] ?? '';
         _categoryCtrl.text = next.fields['category'] ?? '';
         _statusCode = next.fields['statusCode'] ?? 'DRAFT';
@@ -362,9 +338,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   void dispose() {
     for (final c in [
       _nameCtrl, _slugCtrl, _skuCtrl,
-      _priceTypeCtrl, _basePriceCtrl, _currencyCtrl, _stockStatusCtrl,
-      _tagsCtrl, _usesCtrl, _netWeightCtrl, _grossWeightCtrl, _volumeCtrl,
-      _heightCtrl, _widthCtrl, _lengthCtrl, _descriptionCtrl, _categoryCtrl,
+      _priceTypeCtrl, _basePriceCtrl, _discountPercentCtrl, _currencyCtrl, _stockStatusCtrl,
+      _tagsCtrl, _usesCtrl, _descriptionCtrl, _categoryCtrl,
     ]) {
       c.dispose();
     }
@@ -407,15 +382,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       description: _descriptionCtrl.text.trim(),
       category: _categoryCtrl.text.trim(),
       basePrice: _basePriceCtrl.text.trim(),
+      discountPercent: _discountPercentCtrl.text.trim(),
       stockStatusCode: _stockStatusCtrl.text.trim().toUpperCase(),
       tags: _tagsCtrl.text.trim(),
       uses: _usesCtrl.text.trim(),
-      netWeight: _netWeightCtrl.text.trim(),
-      grossWeight: _grossWeightCtrl.text.trim(),
-      volume: _volumeCtrl.text.trim(),
-      height: _heightCtrl.text.trim(),
-      width: _widthCtrl.text.trim(),
-      length: _lengthCtrl.text.trim(),
       featured: _featured,
     );
     if (savedProductId == null) return;
@@ -457,6 +427,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     final tenantsAsync = auth.isAdminGlobal ? ref.watch(_tenantsLookupProvider) : null;
     final companyForSellers = auth.isAdminGlobal ? _selectedCompanyId : auth.tenantId;
     final sellersAsync = ref.watch(_sellersLookupProvider(companyForSellers));
+    final lockSeller = !auth.isAdminGlobal && auth.sellerScope == 'SINGLE';
 
     return AppPageScaffold(
       title: isEdit ? 'Editar producto' : 'Nuevo producto',
@@ -519,7 +490,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                                   ),
                                 )
                                 .toList(),
-                            onChanged: (v) => setState(() => _selectedCompanyId = v),
+                            onChanged: (v) => setState(() {
+                              _selectedCompanyId = v;
+                              _selectedSellerId = null;
+                            }),
                           );
                         },
                       ),
@@ -535,11 +509,25 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                       ),
                       error: (_, __) => const SizedBox.shrink(),
                       data: (sellers) {
-                        if (sellers.isEmpty) return const SizedBox.shrink();
-                        if (_selectedSellerId == null && sellers.length == 1) {
+                        final allowedSellerIds = {
+                          if (auth.sellerId != null && auth.sellerId!.trim().isNotEmpty) auth.sellerId!.trim(),
+                          ...auth.sellerIds.map((id) => id.trim()).where((id) => id.isNotEmpty),
+                        };
+                        final visibleSellers = auth.isAdminGlobal || allowedSellerIds.isEmpty
+                            ? sellers
+                            : sellers.where((seller) => allowedSellerIds.contains(seller.id)).toList();
+                        if (visibleSellers.isEmpty) return const SizedBox.shrink();
+                        if (_selectedSellerId != null &&
+                            !visibleSellers.any((seller) => seller.id == _selectedSellerId)) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) setState(() => _selectedSellerId = null);
+                          });
+                        }
+                        if (_selectedSellerId == null &&
+                            (visibleSellers.length == 1 || lockSeller)) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (mounted && _selectedSellerId == null) {
-                              setState(() => _selectedSellerId = sellers.first.id);
+                              setState(() => _selectedSellerId = visibleSellers.first.id);
                             }
                           });
                         }
@@ -548,13 +536,13 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                           initialValue: _selectedSellerId,
                           decoration: const InputDecoration(labelText: 'Seller *'),
                           validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
-                          items: sellers
+                          items: visibleSellers
                               .map((s) => DropdownMenuItem(
                                     value: s.id,
                                     child: Text(s.name, overflow: TextOverflow.ellipsis),
                                   ))
                               .toList(),
-                          onChanged: (v) => setState(() => _selectedSellerId = v),
+                          onChanged: lockSeller ? null : (v) => setState(() => _selectedSellerId = v),
                         );
                       },
                     ),
@@ -599,6 +587,19 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                     ),
                     const SizedBox(height: 12),
                     AppTextField(
+                      label: '% descuento',
+                      controller: _discountPercentCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return null;
+                        final parsed = double.tryParse(v.trim());
+                        if (parsed == null) return 'Ingresá un número válido';
+                        if (parsed < 0 || parsed > 100) return 'Debe estar entre 0 y 100';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    AppTextField(
                       label: 'Moneda',
                       controller: _currencyCtrl,
                     ),
@@ -633,19 +634,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                       onChanged: (value) => setState(() => _featured = value),
                     ),
                     const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        _SizedNumberField(label: 'Peso neto', controller: _netWeightCtrl),
-                        _SizedNumberField(label: 'Peso bruto', controller: _grossWeightCtrl),
-                        _SizedNumberField(label: 'Volumen', controller: _volumeCtrl),
-                        _SizedNumberField(label: 'Alto', controller: _heightCtrl),
-                        _SizedNumberField(label: 'Ancho', controller: _widthCtrl),
-                        _SizedNumberField(label: 'Largo', controller: _lengthCtrl),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
                     AppTextField(
                       label: 'Descripción',
                       controller: _descriptionCtrl,
@@ -681,29 +669,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                 ),
               ),
             ),
-    );
-  }
-}
-
-class _SizedNumberField extends StatelessWidget {
-  final String label;
-  final TextEditingController controller;
-
-  const _SizedNumberField({required this.label, required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: MediaQuery.sizeOf(context).width >= 620 ? 170 : double.infinity,
-      child: AppTextField(
-        label: label,
-        controller: controller,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        validator: (v) {
-          if (v == null || v.trim().isEmpty) return null;
-          return double.tryParse(v.trim()) == null ? 'Número inválido' : null;
-        },
-      ),
     );
   }
 }

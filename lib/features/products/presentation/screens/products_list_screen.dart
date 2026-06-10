@@ -20,6 +20,7 @@ class ProductDto {
   final String? sku;
   final String? category;
   final double? price;
+  final double? discountPercent;
   final String status;
   final String? imageUrl;
 
@@ -29,6 +30,7 @@ class ProductDto {
     this.sku,
     this.category,
     this.price,
+    this.discountPercent,
     required this.status,
     this.imageUrl,
   });
@@ -41,6 +43,7 @@ class ProductDto {
         category: json['category']?.toString(),
         // API returns 'basePrice' as BigDecimal — may arrive as num or String
         price: _parseDouble(json['basePrice'] ?? json['price']),
+        discountPercent: _parseDouble(json['discountPercent'] ?? json['discount']),
         // API returns 'statusCode', fallback to 'status'
         status: (json['statusCode'] ?? json['status'] ?? 'ACTIVE').toString(),
         imageUrl: json['imageUrl']?.toString(),
@@ -167,6 +170,12 @@ class ProductsListScreen extends ConsumerWidget {
                 await ctx.push('/products/${product.id}/edit');
                 notifier.reload();
               },
+              onPresentations: () async {
+                await ctx.push(
+                  '/products/${product.id}/presentations?name=${Uri.encodeComponent(product.name)}',
+                );
+                notifier.reload();
+              },
               onToggle: () => notifier.toggleActive(product.id),
               onDelete: () => notifier.delete(product.id),
               canEdit: canEdit,
@@ -182,6 +191,7 @@ class ProductsListScreen extends ConsumerWidget {
 class _ProductTile extends StatelessWidget {
   final ProductDto product;
   final Future<void> Function() onEdit;
+  final Future<void> Function() onPresentations;
   final VoidCallback onToggle;
   final VoidCallback onDelete;
   final bool canEdit;
@@ -190,6 +200,7 @@ class _ProductTile extends StatelessWidget {
   const _ProductTile({
     required this.product,
     required this.onEdit,
+    required this.onPresentations,
     required this.onToggle,
     required this.onDelete,
     required this.canEdit,
@@ -245,6 +256,14 @@ class _ProductTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasDiscount =
+        product.price != null && product.discountPercent != null && product.discountPercent! > 0;
+    final discountRate = hasDiscount
+        ? (product.discountPercent!.clamp(0, 100) as num).toDouble()
+        : 0.0;
+    final finalPrice = hasDiscount
+        ? product.price! * (1 - (discountRate / 100))
+        : product.price;
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -295,16 +314,44 @@ class _ProductTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        [
-                          if (product.sku != null) product.sku!,
-                          if (product.price != null)
-                            '\$${product.price!.toStringAsFixed(2)}',
-                        ].join(' · '),
-                        style: TextStyle(
-                            color: AppColors.textSecondary, fontSize: 12),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Wrap(
+                        spacing: 6,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          if (product.sku != null)
+                            Text(
+                              product.sku!,
+                              style: TextStyle(
+                                  color: AppColors.textSecondary, fontSize: 12),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          if (finalPrice != null)
+                            Text(
+                              '\$${finalPrice.toStringAsFixed(2)}',
+                              style: TextStyle(
+                                color: AppColors.ink,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          if (hasDiscount)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFE4E6),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                '-${product.discountPercent!.toStringAsFixed(product.discountPercent! % 1 == 0 ? 0 : 1)}%',
+                                style: const TextStyle(
+                                  color: Color(0xFFE11D48),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ],
                   ),
@@ -321,13 +368,19 @@ class _ProductTile extends StatelessWidget {
                 else
                   Icon(Icons.chevron_right_rounded,
                     color: AppColors.textMuted, size: 16),
-                if (canDelete)
+                if (canEdit || canDelete)
                   PopupMenuButton<String>(
                     onSelected: (v) {
+                      if (v == 'presentations') onPresentations();
                       if (v == 'toggle') _confirmToggle(context);
                       if (v == 'delete') _confirmDelete(context);
                     },
                     itemBuilder: (_) => [
+                      if (canEdit)
+                        const PopupMenuItem(
+                          value: 'presentations',
+                          child: Text('Presentaciones'),
+                        ),
                       if (canEdit)
                         PopupMenuItem(
                           value: 'toggle',

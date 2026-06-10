@@ -35,4 +35,19 @@ class JwtDecoder {
 
     static String? getTenantId(String token) =>
       decode(token)['tenantId']?.toString();
+
+  static String? getSellerId(String token) =>
+      decode(token)['sellerId']?.toString();
+
+  static String getSellerScope(String token) =>
+      decode(token)['sellerScope']?.toString().toUpperCase() ?? 'NONE';
+
+  static List<String> getSellerIds(String token) {
+    final payload = decode(token);
+    final ids = payload['sellerIds'];
+    if (ids is List) return ids.map((id) => id.toString()).where((id) => id.trim().isNotEmpty).toList();
+    final sellerId = payload['sellerId']?.toString();
+    if (sellerId != null && sellerId.trim().isNotEmpty) return [sellerId];
+    return [];
+  }
 }

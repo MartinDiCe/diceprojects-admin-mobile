@@ -17,6 +17,9 @@ class AuthState {
   final String? username;
   final List<String> roles;
   final String? tenantId;
+  final String? sellerId;
+  final String sellerScope;
+  final List<String> sellerIds;
   final bool isAdminGlobal;
   final Set<String> permissions;
   final bool isLoading;
@@ -28,6 +31,9 @@ class AuthState {
     this.username,
     this.roles = const [],
     this.tenantId,
+    this.sellerId,
+    this.sellerScope = 'NONE',
+    this.sellerIds = const [],
     this.isAdminGlobal = false,
     this.permissions = const {},
     this.isLoading = false,
@@ -43,6 +49,9 @@ class AuthState {
     String? username,
     List<String>? roles,
     String? tenantId,
+    String? sellerId,
+    String? sellerScope,
+    List<String>? sellerIds,
     bool? isAdminGlobal,
     Set<String>? permissions,
     bool? isLoading,
@@ -56,6 +65,9 @@ class AuthState {
       username: clearToken ? null : (username ?? this.username),
       roles: clearToken ? const [] : (roles ?? this.roles),
       tenantId: clearToken ? null : (tenantId ?? this.tenantId),
+      sellerId: clearToken ? null : (sellerId ?? this.sellerId),
+      sellerScope: clearToken ? 'NONE' : (sellerScope ?? this.sellerScope),
+      sellerIds: clearToken ? const [] : (sellerIds ?? this.sellerIds),
       isAdminGlobal:
           clearToken ? false : (isAdminGlobal ?? this.isAdminGlobal),
       permissions:
@@ -167,6 +179,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final username = JwtDecoder.getUsername(token);
     final roles = JwtDecoder.getRoles(token);
     final tenantId = JwtDecoder.getTenantId(token);
+    final sellerId = JwtDecoder.getSellerId(token);
+    final sellerScope = JwtDecoder.getSellerScope(token);
+    final sellerIds = JwtDecoder.getSellerIds(token);
     final isAdminGlobal = tenantId == null || tenantId.trim().isEmpty;
 
     // Prefer effective permissions for current principal.
@@ -221,6 +236,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       username: username,
       roles: roles,
       tenantId: tenantId,
+      sellerId: sellerId,
+      sellerScope: sellerScope,
+      sellerIds: sellerIds,
       isAdminGlobal: isAdminGlobal,
       permissions: allPermissions,
       isLoading: false,

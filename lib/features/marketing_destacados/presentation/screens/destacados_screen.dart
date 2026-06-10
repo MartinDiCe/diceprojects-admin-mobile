@@ -17,6 +17,8 @@ class DestacadoDto {
   final String? description;
   final String status;
   final int? order;
+  final int views;
+  final int likes;
   final String? imageUrl;
 
   const DestacadoDto({
@@ -25,6 +27,8 @@ class DestacadoDto {
     this.description,
     required this.status,
     this.order,
+    this.views = 0,
+    this.likes = 0,
     this.imageUrl,
   });
 
@@ -34,8 +38,20 @@ class DestacadoDto {
         description: (json['sku'] ?? json['channel'] ?? json['description'])?.toString(),
         status: (json['statusCode'] ?? json['status'] ?? 'ACTIVE').toString(),
         order: (json['priority'] as num?)?.toInt() ?? (json['order'] as num?)?.toInt(),
+        views: _intAny(json, ['views', 'viewCount', 'productViews', 'impressions']),
+        likes: _intAny(json, ['likes', 'likeCount', 'productLikes']),
         imageUrl: json['imageUrl']?.toString(),
       );
+}
+
+int _intAny(Map<String, dynamic> json, List<String> keys) {
+  for (final key in keys) {
+    final value = json[key];
+    if (value is num) return value.toInt();
+    final parsed = int.tryParse(value?.toString() ?? '');
+    if (parsed != null) return parsed;
+  }
+  return 0;
 }
 
 class DestacadosNotifier extends ListNotifier<DestacadoDto> {
@@ -160,6 +176,15 @@ class DestacadosScreen extends ConsumerWidget {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ],
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              children: [
+                                _MetricChip(icon: Icons.visibility_outlined, value: item.views),
+                                _MetricChip(icon: Icons.favorite_border_rounded, value: item.likes),
+                              ],
+                            ),
                           ],
                         ),
                       ),
@@ -201,4 +226,37 @@ class DestacadosScreen extends ConsumerWidget {
         ),
         child: const Icon(Icons.star_rounded, color: AppColors.accent, size: 22),
       );
+}
+
+class _MetricChip extends StatelessWidget {
+  final IconData icon;
+  final int value;
+
+  const _MetricChip({required this.icon, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: AppColors.accent),
+          const SizedBox(width: 4),
+          Text(
+            '$value',
+            style: TextStyle(
+              color: AppColors.ink,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

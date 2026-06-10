@@ -4,6 +4,19 @@ A new Flutter project.
 
 ## Getting Started
 
+## Firebase local config
+
+Do not commit Firebase config files. For Android builds, place the real
+`google-services.json` locally at:
+
+```text
+android/app/google-services.json
+```
+
+That file is ignored by Git because it contains client API keys. If a key was
+ever pushed, rotate or restrict it in Google Cloud/Firebase before building
+again.
+
 This project is a starting point for a Flutter application.
 
 A few resources to get you started if this is your first Flutter project:
