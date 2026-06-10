@@ -3,11 +3,13 @@ import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/app_button.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/app_text_field.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
+import 'package:app_diceprojects_admin/core/ui/widgets/image_upload_field.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 // ────────────────────────────── Form State ──────────────────────────────
 
@@ -72,7 +74,7 @@ class TenantFormNotifier extends StateNotifier<_TenantFormState> {
     }
   }
 
-  Future<bool> save({
+  Future<String?> save({
     required String code,
     required String name,
     required String? taxId,
@@ -101,16 +103,38 @@ class TenantFormNotifier extends StateNotifier<_TenantFormState> {
         'timezoneId': timezoneId,
       };
       if (tenantId == null) {
-        await _dio.post('/v1/tenants', data: body);
+        final resp = await _dio.post('/v1/tenants', data: body);
+        state = state.copyWith(isSaving: false);
+        final data = resp.data;
+        if (data is Map) return (data['id'] ?? data['tenantId'])?.toString();
+        return null;
       } else {
         await _dio.put('/v1/tenants/$tenantId', data: body);
       }
       state = state.copyWith(isSaving: false);
-      return true;
+      return tenantId;
     } catch (e) {
       state = state.copyWith(isSaving: false, error: e.toString());
-      return false;
+      return null;
     }
+  }
+
+  Future<String?> uploadLogo({
+    required String tenantId,
+    required XFile file,
+  }) async {
+    final form = FormData.fromMap({
+      'file': await MultipartFile.fromFile(file.path, filename: file.name),
+    });
+    final resp = await _dio.post(
+      '/v1/tenants/logo/upload',
+      queryParameters: {'tenantId': tenantId},
+      data: form,
+      options: Options(contentType: 'multipart/form-data'),
+    );
+    final data = resp.data;
+    if (data is Map) return resolveMediaUrl(data['url']?.toString());
+    return null;
   }
 
 }
@@ -143,6 +167,7 @@ class _TenantFormScreenState extends ConsumerState<TenantFormScreen> {
   late final TextEditingController _countryCtrl;
   late final TextEditingController _sectorCtrl;
   late final TextEditingController _timezoneCtrl;
+  XFile? _logoFile;
 
   @override
   void initState() {
@@ -264,6 +289,15 @@ class _TenantFormScreenState extends ConsumerState<TenantFormScreen> {
               maxLines: 3,
             ),
             const SizedBox(height: 12),
+            ImageUploadField(
+              label: 'Logo de empresa',
+              imageUrl: _logoCtrl.text,
+              onChanged: (file) => setState(() {
+                _logoFile = file;
+                if (file == null) _logoCtrl.clear();
+              }),
+            ),
+            const SizedBox(height: 12),
             AppTextField(
               controller: _logoCtrl,
               label: 'Logo URL',
@@ -302,12 +336,13 @@ class _TenantFormScreenState extends ConsumerState<TenantFormScreen> {
               isLoading: state.isSaving,
               onPressed: () async {
                 if (!_formKey.currentState!.validate()) return;
-                final ok = await notifier.save(
+                var logoUrl = _emptyToNull(_logoCtrl.text);
+                final savedTenantId = await notifier.save(
                   code: _codeCtrl.text.trim(),
                   name: _nameCtrl.text.trim(),
                   taxId: _emptyToNull(_taxIdCtrl.text),
                   description: _emptyToNull(_descriptionCtrl.text),
-                  logoUrl: _emptyToNull(_logoCtrl.text),
+                  logoUrl: logoUrl,
                   websiteUrl: _emptyToNull(_websiteCtrl.text),
                   baseCurrencyCode: _emptyToNull(_currencyCtrl.text),
                   languageCode: _emptyToNull(_languageCtrl.text),
@@ -315,7 +350,16 @@ class _TenantFormScreenState extends ConsumerState<TenantFormScreen> {
                   sectorId: _emptyToNull(_sectorCtrl.text),
                   timezoneId: _emptyToNull(_timezoneCtrl.text),
                 );
-                if (!ok || !context.mounted) return;
+                if (savedTenantId == null || !context.mounted) return;
+                if (_logoFile != null) {
+                  final uploadedUrl = await notifier.uploadLogo(
+                    tenantId: savedTenantId,
+                    file: _logoFile!,
+                  );
+                  if (uploadedUrl != null) {
+                    _logoCtrl.text = uploadedUrl;
+                  }
+                }
                 if (context.canPop()) {
                   context.pop();
                 } else {

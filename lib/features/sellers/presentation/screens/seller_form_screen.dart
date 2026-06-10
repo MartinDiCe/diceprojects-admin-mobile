@@ -3,12 +3,14 @@ import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/app_button.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/app_text_field.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
+import 'package:app_diceprojects_admin/core/ui/widgets/image_upload_field.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/features/sellers/presentation/screens/sellers_list_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 // ────────────────────────────── Form State ──────────────────────────────
 
@@ -59,6 +61,7 @@ class SellerFormNotifier extends StateNotifier<_SellerFormState> {
     state = state.copyWith(
       fields: {
         'sellerCode': seller.sellerCode,
+        'tenantId': seller.tenantId,
         'name': seller.name,
         'description': seller.description,
         'email': seller.email,
@@ -142,7 +145,7 @@ class SellerFormNotifier extends StateNotifier<_SellerFormState> {
     }
   }
 
-  Future<bool> save({
+  Future<String?> save({
     required String? sellerCode,
     required String name,
     required String? description,
@@ -180,17 +183,43 @@ class SellerFormNotifier extends StateNotifier<_SellerFormState> {
       };
 
       if (sellerId == null) {
-        await _dio.post('/v1/sellers', data: body);
+        final resp = await _dio.post('/v1/sellers', data: body);
+        state = state.copyWith(isSaving: false);
+        final data = resp.data;
+        if (data is Map) return (data['sellerId'] ?? data['id'])?.toString();
+        return null;
       } else {
         await _dio.put('/v1/sellers/$sellerId', data: body);
       }
 
       state = state.copyWith(isSaving: false);
-      return true;
+      return sellerId;
     } catch (e) {
       state = state.copyWith(isSaving: false, error: e.toString());
-      return false;
+      return null;
     }
+  }
+
+  Future<String?> uploadLogo({
+    required String sellerId,
+    required XFile file,
+    String? tenantId,
+  }) async {
+    final form = FormData.fromMap({
+      'file': await MultipartFile.fromFile(file.path, filename: file.name),
+    });
+    final resp = await _dio.post(
+      '/v1/sellers/logo/upload',
+      queryParameters: {
+        if (tenantId != null && tenantId.trim().isNotEmpty) 'tenantId': tenantId.trim(),
+        'sellerId': sellerId,
+      },
+      data: form,
+      options: Options(contentType: 'multipart/form-data'),
+    );
+    final data = resp.data;
+    if (data is Map) return resolveMediaUrl(data['url']?.toString());
+    return null;
   }
 
 }
@@ -238,6 +267,7 @@ class _SellerFormScreenState extends ConsumerState<SellerFormScreen> {
   late final TextEditingController _postalCodeCtrl;
 
   bool _populated = false;
+  XFile? _logoFile;
 
   @override
   void initState() {
@@ -396,6 +426,15 @@ class _SellerFormScreenState extends ConsumerState<SellerFormScreen> {
               hint: '20-00000000-0',
             ),
             const SizedBox(height: 12),
+            ImageUploadField(
+              label: 'Logo del vendedor',
+              imageUrl: _logoUrlCtrl.text,
+              onChanged: (file) => setState(() {
+                _logoFile = file;
+                if (file == null) _logoUrlCtrl.clear();
+              }),
+            ),
+            const SizedBox(height: 12),
             AppTextField(
               controller: _logoUrlCtrl,
               label: 'Logo URL',
@@ -437,7 +476,8 @@ class _SellerFormScreenState extends ConsumerState<SellerFormScreen> {
               isLoading: state.isSaving,
               onPressed: () async {
                 if (!_formKey.currentState!.validate()) return;
-                final ok = await notifier.save(
+                var logoUrl = _logoUrlCtrl.text.trim().isEmpty ? null : _logoUrlCtrl.text.trim();
+                final savedSellerId = await notifier.save(
                   sellerCode: isCreate ? _sellerCodeCtrl.text.trim() : null,
                   name: _nameCtrl.text.trim(),
                   description: _descriptionCtrl.text.trim().isEmpty
@@ -446,7 +486,7 @@ class _SellerFormScreenState extends ConsumerState<SellerFormScreen> {
                   email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
                   phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
                   taxId: _emptyToNull(_taxIdCtrl.text),
-                  logoUrl: _logoUrlCtrl.text.trim().isEmpty ? null : _logoUrlCtrl.text.trim(),
+                  logoUrl: logoUrl,
                   websiteUrl: _websiteUrlCtrl.text.trim().isEmpty ? null : _websiteUrlCtrl.text.trim(),
                   instagramUrl: _emptyToNull(_instagramUrlCtrl.text),
                   facebookUrl: _emptyToNull(_facebookUrlCtrl.text),
@@ -456,7 +496,17 @@ class _SellerFormScreenState extends ConsumerState<SellerFormScreen> {
                   country: _emptyToNull(_countryCtrl.text),
                   postalCode: _emptyToNull(_postalCodeCtrl.text),
                 );
-                if (!ok || !context.mounted) return;
+                if (savedSellerId == null || !context.mounted) return;
+                if (_logoFile != null) {
+                  final uploadedUrl = await notifier.uploadLogo(
+                    sellerId: savedSellerId,
+                    tenantId: state.fields['tenantId'],
+                    file: _logoFile!,
+                  );
+                  if (uploadedUrl != null) {
+                    _logoUrlCtrl.text = uploadedUrl;
+                  }
+                }
                 if (context.canPop()) {
                   context.pop();
                 } else {

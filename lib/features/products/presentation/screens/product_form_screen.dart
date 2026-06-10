@@ -4,6 +4,7 @@ import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/app_button.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/app_text_field.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
+import 'package:app_diceprojects_admin/core/ui/widgets/image_upload_field.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/core/utils/pagination.dart';
 import 'package:app_diceprojects_admin/features/auth/presentation/controllers/auth_notifier.dart';
@@ -11,6 +12,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 class _TenantLookupDto {
   final String id;
@@ -143,7 +145,7 @@ class ProductFormNotifier extends StateNotifier<_ProductFormState> {
     }
   }
 
-  Future<bool> save({
+  Future<String?> save({
     required String name,
     required String slug,
     required String companyId,
@@ -201,17 +203,43 @@ class ProductFormNotifier extends StateNotifier<_ProductFormState> {
           'length': double.tryParse(length),
       };
       if (productId == null) {
-        await _dio.post('/v1/products', data: body);
+        final resp = await _dio.post('/v1/products', data: body);
+        final data = resp.data;
+        state = state.copyWith(isSaving: false);
+        if (data is Map) {
+          return (data['productId'] ?? data['id'])?.toString();
+        }
+        return null;
       } else {
         await _dio.put('/v1/products/$productId', data: body);
       }
       state = state.copyWith(isSaving: false);
-      return true;
+      return productId;
     } catch (e) {
       state = state.copyWith(
           isSaving: false, error: ErrorHandler.handle(e).message);
-      return false;
+      return null;
     }
+  }
+
+  Future<void> uploadImage({
+    required String productId,
+    required String companyId,
+    required XFile file,
+    required int sortOrder,
+  }) async {
+    final form = FormData.fromMap({
+      'file': await MultipartFile.fromFile(file.path, filename: file.name),
+    });
+    await _dio.post(
+      '/v1/products/$productId/images/upload',
+      queryParameters: {
+        'companyId': companyId,
+        'sortOrder': sortOrder,
+      },
+      data: form,
+      options: Options(contentType: 'multipart/form-data'),
+    );
   }
 
   List<String> _splitCsv(String raw) => raw
@@ -261,6 +289,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   String? _selectedSellerId;
   String _statusCode = 'DRAFT';
   bool _featured = false;
+  final List<XFile?> _imageFiles = List<XFile?>.filled(5, null);
 
   @override
   void initState() {
@@ -366,7 +395,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
 
     final notifier =
         ref.read(productFormNotifierProvider(widget.productId).notifier);
-    final ok = await notifier.save(
+    final savedProductId = await notifier.save(
       name: _nameCtrl.text.trim(),
       slug: _slugCtrl.text.trim(),
       companyId: companyId,
@@ -389,7 +418,35 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       length: _lengthCtrl.text.trim(),
       featured: _featured,
     );
-    if (ok && mounted) context.pop();
+    if (savedProductId == null) return;
+
+    final selectedUploads = _imageFiles
+        .asMap()
+        .entries
+        .where((entry) => entry.value != null)
+        .toList();
+    if (selectedUploads.isNotEmpty) {
+      var failed = 0;
+      for (final entry in selectedUploads) {
+        try {
+          await notifier.uploadImage(
+            productId: savedProductId,
+            companyId: companyId,
+            file: entry.value!,
+            sortOrder: entry.key,
+          );
+        } catch (_) {
+          failed++;
+        }
+      }
+      if (failed > 0 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$failed imagen(es) no se pudieron subir.')),
+        );
+      }
+    }
+
+    if (mounted) context.pop();
   }
 
   @override
@@ -594,6 +651,25 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                       controller: _descriptionCtrl,
                       maxLines: 3,
                     ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Imágenes',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...List.generate(5, (index) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: ImageUploadField(
+                            label: index == 0
+                                ? 'Portada / imagen principal'
+                                : 'Imagen secundaria ${index + 1}',
+                            imageUrl: null,
+                            height: index == 0 ? 180 : 132,
+                            onChanged: (file) => setState(() => _imageFiles[index] = file),
+                          ),
+                        )),
                     const SizedBox(height: 24),
                     AppButton(
                       label: isEdit ? 'Guardar cambios' : 'Crear producto',

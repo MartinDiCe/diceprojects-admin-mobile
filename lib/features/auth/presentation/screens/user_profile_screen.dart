@@ -6,12 +6,14 @@ import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
 import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/app_button.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/app_text_field.dart';
+import 'package:app_diceprojects_admin/core/ui/widgets/image_upload_field.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/features/auth/presentation/controllers/auth_notifier.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 // ─── State ─────────────────────────────────────────────────────────────────
 class _ProfileState {
@@ -25,6 +27,7 @@ class _ProfileState {
   final String email;
   final String phone;
   final String street;
+  final String avatarUrl;
   final bool profileExists;
 
   const _ProfileState({
@@ -38,6 +41,7 @@ class _ProfileState {
     this.email = '',
     this.phone = '',
     this.street = '',
+    this.avatarUrl = '',
     this.profileExists = true,
   });
 
@@ -54,6 +58,7 @@ class _ProfileState {
     String? email,
     String? phone,
     String? street,
+    String? avatarUrl,
     bool? profileExists,
   }) => _ProfileState(
     isLoading: isLoading ?? this.isLoading,
@@ -66,6 +71,7 @@ class _ProfileState {
     email: email ?? this.email,
     phone: phone ?? this.phone,
     street: street ?? this.street,
+    avatarUrl: avatarUrl ?? this.avatarUrl,
     profileExists: profileExists ?? this.profileExists,
   );
 }
@@ -89,6 +95,7 @@ class _ProfileNotifier extends StateNotifier<_ProfileState> {
         email: d['email']?.toString() ?? '',
         phone: d['phone']?.toString() ?? d['phoneNumber']?.toString() ?? '',
         street: d['street']?.toString() ?? '',
+        avatarUrl: d['avatarUrl']?.toString() ?? '',
       );
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) {
@@ -108,6 +115,7 @@ class _ProfileNotifier extends StateNotifier<_ProfileState> {
     required String lastName,
     required String phone,
     required String street,
+    required String avatarUrl,
   }) async {
     state = state.copyWith(isSaving: true, clearError: true, clearSuccess: true);
     try {
@@ -116,6 +124,7 @@ class _ProfileNotifier extends StateNotifier<_ProfileState> {
         'lastName': lastName.trim(),
         if (phone.trim().isNotEmpty) 'phone': phone.trim(),
         if (street.trim().isNotEmpty) 'street': street.trim(),
+        if (avatarUrl.trim().isNotEmpty) 'avatarUrl': avatarUrl.trim(),
       });
       state = state.copyWith(
         isSaving: false,
@@ -124,6 +133,7 @@ class _ProfileNotifier extends StateNotifier<_ProfileState> {
         lastName: lastName.trim(),
         phone: phone.trim(),
         street: street.trim(),
+        avatarUrl: avatarUrl.trim(),
         successMsg: 'Perfil actualizado correctamente',
       );
       return true;
@@ -152,6 +162,20 @@ class _ProfileNotifier extends StateNotifier<_ProfileState> {
       return false;
     }
   }
+
+  Future<String?> uploadAvatar(XFile file) async {
+    final form = FormData.fromMap({
+      'file': await MultipartFile.fromFile(file.path, filename: file.name),
+    });
+    final resp = await _dio.post(
+      '/v1/people/avatar/upload',
+      data: form,
+      options: Options(contentType: 'multipart/form-data'),
+    );
+    final data = resp.data;
+    if (data is Map) return resolveMediaUrl(data['url']?.toString());
+    return null;
+  }
 }
 
 final _profileProvider = StateNotifierProvider.autoDispose<_ProfileNotifier, _ProfileState>(
@@ -169,10 +193,11 @@ class UserProfileScreen extends ConsumerStatefulWidget {
 class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
-  late final TextEditingController _firstName, _lastName, _phone, _address;
+  late final TextEditingController _firstName, _lastName, _phone, _address, _avatar;
   late final TextEditingController _currentPwd, _newPwd, _confirmPwd;
   bool _populated = false;
   bool _showCurrent = false, _showNew = false, _showConfirm = false;
+  XFile? _avatarFile;
 
   @override
   void initState() {
@@ -182,6 +207,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     _lastName = TextEditingController();
     _phone = TextEditingController();
     _address = TextEditingController();
+    _avatar = TextEditingController();
     _currentPwd = TextEditingController();
     _newPwd = TextEditingController();
     _confirmPwd = TextEditingController();
@@ -190,7 +216,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
   @override
   void dispose() {
     _tabs.dispose();
-    for (final c in [_firstName, _lastName, _phone, _address, _currentPwd, _newPwd, _confirmPwd]) c.dispose();
+    for (final c in [_firstName, _lastName, _phone, _address, _avatar, _currentPwd, _newPwd, _confirmPwd]) c.dispose();
     super.dispose();
   }
 
@@ -200,6 +226,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     _lastName.text = s.lastName;
     _phone.text = s.phone;
     _address.text = s.street;
+    _avatar.text = s.avatarUrl;
     _populated = true;
   }
 
@@ -212,6 +239,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     final username = auth.username ?? 'Usuario';
     final initials = username.isNotEmpty ? username[0].toUpperCase() : 'U';
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final resolvedAvatar = resolveMediaUrl(_avatar.text.isNotEmpty ? _avatar.text : s.avatarUrl);
 
     return AppPageScaffold(
       title: 'Mi Perfil',
@@ -227,7 +255,10 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                     CircleAvatar(
                       radius: 44,
                       backgroundColor: AppColors.accentLight,
-                      child: Text(initials, style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: AppColors.accent)),
+                      backgroundImage: resolvedAvatar != null ? NetworkImage(resolvedAvatar) : null,
+                      child: resolvedAvatar == null
+                          ? Text(initials, style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: AppColors.accent))
+                          : null,
                     ),
                     Positioned(
                       bottom: 0, right: 0,
@@ -287,6 +318,16 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                     ListView(
                       padding: const EdgeInsets.fromLTRB(16, 20, 16, 80),
                       children: [
+                        ImageUploadField(
+                          label: 'Foto de perfil',
+                          imageUrl: _avatar.text,
+                          height: 150,
+                          onChanged: (file) => setState(() {
+                            _avatarFile = file;
+                            if (file == null) _avatar.clear();
+                          }),
+                        ),
+                        const SizedBox(height: 14),
                         AppTextField(controller: _firstName, label: 'Nombre *', hint: 'Tu nombre'),
                         const SizedBox(height: 14),
                         AppTextField(controller: _lastName, label: 'Apellido *', hint: 'Tu apellido'),
@@ -310,11 +351,20 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nombre y apellido son obligatorios')));
                               return;
                             }
+                            var avatarUrl = _avatar.text.trim();
+                            if (_avatarFile != null) {
+                              final uploadedUrl = await ref.read(_profileProvider.notifier).uploadAvatar(_avatarFile!);
+                              if (uploadedUrl != null) {
+                                avatarUrl = uploadedUrl;
+                                _avatar.text = uploadedUrl;
+                              }
+                            }
                             await ref.read(_profileProvider.notifier).saveProfile(
                               firstName: _firstName.text,
                               lastName: _lastName.text,
                               phone: _phone.text,
                               street: _address.text,
+                              avatarUrl: avatarUrl,
                             );
                           },
                         ),

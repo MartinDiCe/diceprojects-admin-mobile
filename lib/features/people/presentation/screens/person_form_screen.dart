@@ -3,11 +3,13 @@ import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/app_button.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/app_text_field.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
+import 'package:app_diceprojects_admin/core/ui/widgets/image_upload_field.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 class _PersonFormState {
   final bool isLoading;
@@ -92,6 +94,7 @@ class PersonFormNotifier extends StateNotifier<_PersonFormState> {
     required String? neighborhood,
     required String? addressComplement,
     required String? postalCode,
+    required String? avatarUrl,
   }) async {
     state = state.copyWith(isSaving: true);
     try {
@@ -111,6 +114,7 @@ class PersonFormNotifier extends StateNotifier<_PersonFormState> {
         'neighborhood': neighborhood,
         'addressComplement': addressComplement,
         'postalCode': postalCode,
+        'avatarUrl': avatarUrl,
       };
       if (personId == null) {
         await _dio.post('/v1/people', data: body);
@@ -123,6 +127,23 @@ class PersonFormNotifier extends StateNotifier<_PersonFormState> {
       state = state.copyWith(isSaving: false, error: e.toString());
       return false;
     }
+  }
+
+  Future<String?> uploadAvatar(XFile file) async {
+    final form = FormData.fromMap({
+      'file': await MultipartFile.fromFile(file.path, filename: file.name),
+    });
+    final resp = await _dio.post(
+      '/v1/people/avatar/upload',
+      queryParameters: {
+        if (personId != null) 'personId': personId,
+      },
+      data: form,
+      options: Options(contentType: 'multipart/form-data'),
+    );
+    final data = resp.data;
+    if (data is Map) return resolveMediaUrl(data['url']?.toString());
+    return null;
   }
 
 }
@@ -159,6 +180,7 @@ class _PersonFormScreenState extends ConsumerState<PersonFormScreen> {
   late final TextEditingController _postalCodeCtrl;
   late final TextEditingController _avatarCtrl;
   bool _populated = false;
+  XFile? _avatarFile;
 
   @override
   void initState() {
@@ -326,6 +348,16 @@ class _PersonFormScreenState extends ConsumerState<PersonFormScreen> {
               hint: 'ACTIVE',
             ),
             const SizedBox(height: 12),
+            ImageUploadField(
+              label: 'Foto de perfil',
+              imageUrl: _avatarCtrl.text,
+              height: 150,
+              onChanged: (file) => setState(() {
+                _avatarFile = file;
+                if (file == null) _avatarCtrl.clear();
+              }),
+            ),
+            const SizedBox(height: 12),
             AppTextField(
               controller: _avatarCtrl,
               label: 'Avatar URL',
@@ -356,6 +388,14 @@ class _PersonFormScreenState extends ConsumerState<PersonFormScreen> {
               isLoading: state.isSaving,
               onPressed: () async {
                 if (!_formKey.currentState!.validate()) return;
+                var avatarUrl = _emptyToNull(_avatarCtrl.text);
+                if (_avatarFile != null) {
+                  final uploadedUrl = await notifier.uploadAvatar(_avatarFile!);
+                  if (uploadedUrl != null) {
+                    avatarUrl = uploadedUrl;
+                    _avatarCtrl.text = uploadedUrl;
+                  }
+                }
                 final ok = await notifier.save(
                   firstName: _firstNameCtrl.text.trim(),
                   lastName: _lastNameCtrl.text.trim(),
@@ -378,6 +418,7 @@ class _PersonFormScreenState extends ConsumerState<PersonFormScreen> {
                   neighborhood: _emptyToNull(_neighborhoodCtrl.text),
                   addressComplement: _emptyToNull(_addressComplementCtrl.text),
                   postalCode: _emptyToNull(_postalCodeCtrl.text),
+                  avatarUrl: avatarUrl,
                 );
                 if (!ok || !context.mounted) return;
                 if (context.canPop()) {
