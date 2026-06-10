@@ -142,6 +142,9 @@ class AppDrawer extends ConsumerWidget {
                 // Primary: Dashboard
                 _navItem(context, '/dashboard',
                     Icons.dashboard_rounded, 'Dashboard', primary: true),
+                _navItem(context, '/notifications/center',
+                    Icons.notifications_rounded, 'Notificaciones',
+                    primary: true),
                 if (perms.canAccessRoute('/dashboard/products'))
                   _navItem(context, '/dashboard/products',
                       Icons.inventory_2_rounded, 'Dashboard Productos'),

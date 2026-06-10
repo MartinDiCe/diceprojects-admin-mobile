@@ -126,6 +126,16 @@ const Map<String, List<String>> permissionGates = {
     'Marketing.VerDestacados',
     'Marketing.Admin',
   ],
+  '/notifications/center': [
+    'Notification.Inbox',
+    'Notification.Access',
+    'Notification.Listar',
+    'Notification.Ver',
+    'Notification.Admin',
+    'Sales.Quotes.List',
+    'Sales.Quotes.View',
+    'Sales.Admin',
+  ],
   '/notifications/types': ['Notification.Listar', 'Notification.Admin', 'Notificacion.VerTipos'],
   '/notifications/templates': ['Notification.Listar', 'Notification.Admin', 'Notificacion.VerPlantillas'],
   '/notifications/sender-profiles': [

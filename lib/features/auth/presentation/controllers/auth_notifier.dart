@@ -146,6 +146,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  Future<void> loginWithToken(String token) async {
+    final safeToken = token.trim();
+    if (safeToken.isEmpty) {
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Token de Google inválido.',
+      );
+      return;
+    }
+    state = state.copyWith(isLoading: true, clearError: true);
+    await _storage.write(AppConfig.tokenKey, safeToken);
+    await _buildStateFromToken(safeToken);
+  }
+
   Future<void> _buildStateFromToken(String token) async {
     final username = JwtDecoder.getUsername(token);
     final roles = JwtDecoder.getRoles(token);
@@ -212,7 +226,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
-    await _storage.deleteAll();
+    await _storage.delete(AppConfig.tokenKey);
     state = const AuthState(isInitialized: true);
   }
 }

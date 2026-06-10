@@ -1,7 +1,9 @@
 import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
 import 'package:app_diceprojects_admin/core/ui/layout/app_shell.dart';
+import 'package:app_diceprojects_admin/features/notifications/data/notification_inbox_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 /// Standard page scaffold with flat white AppBar + optional search row in body.
@@ -127,6 +129,42 @@ class _FlatAppBar extends StatelessWidget {
                   letterSpacing: -0.3,
                 ),
               ),
+            ),
+            Consumer(
+              builder: (context, ref, _) {
+                final unread = ref.watch(notificationUnreadCountProvider);
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    IconButton(
+                      tooltip: 'Notificaciones',
+                      icon: const Icon(Icons.notifications_none_rounded),
+                      color: AppColors.ink,
+                      onPressed: () => context.go('/notifications/center'),
+                    ),
+                    if (unread > 0)
+                      Positioned(
+                        right: 6,
+                        top: 6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            unread > 99 ? '99+' : '$unread',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
             if (actions != null) ...actions!,
             const SizedBox(width: 4),

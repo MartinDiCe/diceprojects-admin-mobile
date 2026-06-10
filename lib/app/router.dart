@@ -14,6 +14,7 @@ import 'package:app_diceprojects_admin/features/marketing_coupons/presentation/s
 import 'package:app_diceprojects_admin/features/marketing_destacados/presentation/screens/destacados_screen.dart';
 import 'package:app_diceprojects_admin/features/marketing_leads/presentation/screens/leads_list_screen.dart';
 import 'package:app_diceprojects_admin/features/notifications/presentation/screens/notif_logs_screen.dart';
+import 'package:app_diceprojects_admin/features/notifications/presentation/screens/notification_center_screen.dart';
 import 'package:app_diceprojects_admin/features/notifications/presentation/screens/notif_templates_screen.dart';
 import 'package:app_diceprojects_admin/features/notifications/presentation/screens/notif_types_screen.dart';
 import 'package:app_diceprojects_admin/features/notifications/presentation/screens/notif_variables_screen.dart';
@@ -185,6 +186,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/logs/notifications',
             builder: (_, __) => const NotifLogsScreen(),
+          ),
+          GoRoute(
+            path: '/notifications/center',
+            builder: (_, __) => const NotificationCenterScreen(),
           ),
           // Organization
           GoRoute(

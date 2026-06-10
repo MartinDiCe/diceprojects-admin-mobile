@@ -1,9 +1,15 @@
 import 'package:app_diceprojects_admin/core/ui/widgets/fade_in_slide.dart';
+import 'package:app_diceprojects_admin/core/config/app_config.dart';
+import 'package:app_diceprojects_admin/core/http/dio_client.dart';
 import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
 import 'package:app_diceprojects_admin/app/theme_mode_provider.dart';
 import 'package:app_diceprojects_admin/features/auth/presentation/controllers/auth_notifier.dart';
+import 'package:app_links/app_links.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -18,13 +24,51 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordCtrl = TextEditingController();
   final _passwordFocus = FocusNode();
   bool _obscure = true;
+  bool _rememberLogin = false;
+  bool _biometricAvailable = false;
+  bool _loadingBiometric = false;
+  StreamSubscription<Uri>? _appLinkSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _hydrateSavedLogin();
+    _listenOAuthCallback();
+  }
 
   @override
   void dispose() {
     _usernameCtrl.dispose();
     _passwordCtrl.dispose();
     _passwordFocus.dispose();
+    _appLinkSub?.cancel();
     super.dispose();
+  }
+
+  void _listenOAuthCallback() {
+    final appLinks = AppLinks();
+    appLinks.getInitialLink().then((uri) {
+      if (uri != null) _handleOAuthCallback(uri);
+    }).catchError((_) {});
+    _appLinkSub = appLinks.uriLinkStream.listen(_handleOAuthCallback);
+  }
+
+  Future<void> _handleOAuthCallback(Uri uri) async {
+    if (uri.scheme != 'diceprojects' ||
+        uri.host != 'oauth2' ||
+        !uri.path.startsWith('/callback')) {
+      return;
+    }
+    final fragment = Uri.splitQueryString(uri.fragment);
+    final token = fragment['access_token'] ?? fragment['accessToken'];
+    if (token == null || token.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo completar Google login.')),
+      );
+      return;
+    }
+    await ref.read(authNotifierProvider.notifier).loginWithToken(token);
   }
 
   Future<void> _submit() async {
@@ -34,6 +78,97 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           _usernameCtrl.text.trim(),
           _passwordCtrl.text.trimRight(),
         );
+    await _persistRememberedLoginIfNeeded();
+  }
+
+  Future<void> _hydrateSavedLogin() async {
+    try {
+      final storage = ref.read(secureStorageProvider);
+      final remember =
+          (await storage.read(AppConfig.rememberLoginKey)) == 'true';
+      final username = await storage.read(AppConfig.rememberedUsernameKey);
+      final password = await storage.read(AppConfig.rememberedPasswordKey);
+      final localAuth = LocalAuthentication();
+      final supported = await localAuth.isDeviceSupported();
+      final canCheck = await localAuth.canCheckBiometrics;
+      if (!mounted) return;
+      setState(() {
+        _rememberLogin = remember;
+        if (remember && username != null) _usernameCtrl.text = username;
+        if (remember && password != null) _passwordCtrl.text = password;
+        _biometricAvailable = remember &&
+            (username?.isNotEmpty ?? false) &&
+            (password?.isNotEmpty ?? false) &&
+            supported &&
+            canCheck;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _biometricAvailable = false);
+    }
+  }
+
+  Future<void> _persistRememberedLoginIfNeeded() async {
+    final auth = ref.read(authNotifierProvider);
+    final storage = ref.read(secureStorageProvider);
+    if (!auth.isAuthenticated || auth.error != null) return;
+    if (_rememberLogin) {
+      await storage.write(AppConfig.rememberLoginKey, 'true');
+      await storage.write(
+          AppConfig.rememberedUsernameKey, _usernameCtrl.text.trim());
+      await storage.write(
+          AppConfig.rememberedPasswordKey, _passwordCtrl.text.trimRight());
+    } else {
+      await storage.write(AppConfig.rememberLoginKey, 'false');
+      await storage.delete(AppConfig.rememberedUsernameKey);
+      await storage.delete(AppConfig.rememberedPasswordKey);
+    }
+    await _hydrateSavedLogin();
+  }
+
+  Future<void> _loginWithBiometric() async {
+    if (_loadingBiometric) return;
+    setState(() => _loadingBiometric = true);
+    try {
+      final authenticated = await LocalAuthentication().authenticate(
+        localizedReason: 'Usá tu huella para ingresar a DiceProjects',
+        options: const AuthenticationOptions(
+          biometricOnly: true,
+          stickyAuth: true,
+        ),
+      );
+      if (!authenticated) return;
+      final storage = ref.read(secureStorageProvider);
+      final username = await storage.read(AppConfig.rememberedUsernameKey);
+      final password = await storage.read(AppConfig.rememberedPasswordKey);
+      if (username == null || password == null) return;
+      _usernameCtrl.text = username;
+      _passwordCtrl.text = password;
+      await ref.read(authNotifierProvider.notifier).login(username, password);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No se pudo validar la huella en este dispositivo.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingBiometric = false);
+    }
+  }
+
+  Future<void> _loginWithGoogle() async {
+    final baseUrl = AppConfig.apiBaseUrl.endsWith('/')
+        ? AppConfig.apiBaseUrl.substring(0, AppConfig.apiBaseUrl.length - 1)
+        : AppConfig.apiBaseUrl;
+    final uri = Uri.parse('$baseUrl/auth/oauth2/google?client=mobile');
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo abrir Gmail / Google.')),
+      );
+    }
   }
 
   @override
@@ -221,6 +356,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     onPressed: _submit,
                                   ),
 
+                                  const SizedBox(height: 10),
+                                  _RememberRow(
+                                    value: _rememberLogin,
+                                    onChanged: (value) {
+                                      setState(() => _rememberLogin = value);
+                                    },
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _SecondaryLoginButton(
+                                          icon: Icons.mail_outline_rounded,
+                                          label: 'Gmail',
+                                          onPressed:
+                                              auth.isLoading ? null : _loginWithGoogle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: _SecondaryLoginButton(
+                                          icon: Icons.fingerprint_rounded,
+                                          label: 'Huella',
+                                          isLoading: _loadingBiometric,
+                                          onPressed: auth.isLoading ||
+                                                  !_biometricAvailable
+                                              ? null
+                                              : _loginWithBiometric,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                   const SizedBox(height: 6),
                                   TextButton(
                                     onPressed: () {
@@ -284,6 +451,97 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Login options ────────────────────────────────────────────────────────────
+
+class _RememberRow extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _RememberRow({
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => onChanged(!value),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Checkbox(
+              value: value,
+              activeColor: AppColors.accent,
+              onChanged: (next) => onChanged(next ?? false),
+            ),
+            Expanded(
+              child: Text(
+                'Recordar usuario y contraseña en este dispositivo',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  height: 1.25,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SecondaryLoginButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isLoading;
+  final VoidCallback? onPressed;
+
+  const _SecondaryLoginButton({
+    required this.icon,
+    required this.label,
+    this.isLoading = false,
+    this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 46,
+      child: OutlinedButton.icon(
+        onPressed: isLoading ? null : onPressed,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.ink,
+          disabledForegroundColor: AppColors.textMuted,
+          backgroundColor: AppColors.surface,
+          side: BorderSide(color: AppColors.border),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        icon: isLoading
+            ? SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.accent,
+                ),
+              )
+            : Icon(icon, size: 18, color: AppColors.accent),
+        label: Text(label),
       ),
     );
   }
