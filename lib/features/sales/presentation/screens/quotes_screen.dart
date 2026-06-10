@@ -1,13 +1,17 @@
 import 'package:app_diceprojects_admin/core/http/dio_client.dart';
 import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
 import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
+import 'package:app_diceprojects_admin/core/ui/widgets/app_button.dart';
+import 'package:app_diceprojects_admin/core/ui/widgets/app_text_field.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/confirm_dialog.dart';
+import 'package:app_diceprojects_admin/core/ui/widgets/create_fab.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/empty_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/status_badge.dart';
 import 'package:app_diceprojects_admin/core/utils/list_state.dart';
 import 'package:app_diceprojects_admin/core/utils/pagination.dart';
+import 'package:app_diceprojects_admin/features/auth/presentation/controllers/auth_notifier.dart';
 import 'package:app_diceprojects_admin/features/permissions/permissions_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -180,6 +184,11 @@ class QuotesNotifier extends ListNotifier<QuoteDto> {
     await _dio.delete('/v1/quotes/${quote.id}');
     reload();
   }
+
+  Future<void> createManual(Map<String, dynamic> payload) async {
+    await _dio.post('/v1/quotes', data: payload);
+    reload();
+  }
 }
 
 final quotesNotifierProvider =
@@ -210,10 +219,9 @@ class QuotesScreen extends ConsumerWidget {
         ),
       ],
       floatingActionButton: canCreate
-          ? FloatingActionButton.extended(
-              onPressed: () => _showCreateSoon(context),
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Nueva'),
+          ? CreateFab(
+              label: 'Nueva cotización',
+              onPressed: () => _openCreate(context, ref),
             )
           : null,
       body: Column(
@@ -225,13 +233,256 @@ class QuotesScreen extends ConsumerWidget {
     );
   }
 
-  void _showCreateSoon(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Alta manual: usar web hasta cerrar el formulario móvil.'),
+  void _openCreate(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: AppColors.surface,
+      builder: (_) => const _QuoteCreateSheet(),
+    );
+  }
+}
+
+class _LookupOption {
+  final String id;
+  final String label;
+
+  const _LookupOption({required this.id, required this.label});
+
+  factory _LookupOption.tenant(Map<String, dynamic> json) => _LookupOption(
+        id: (json['tenantId'] ?? json['id'] ?? '').toString(),
+        label: (json['name'] ?? json['code'] ?? 'Empresa').toString(),
+      );
+
+  factory _LookupOption.seller(Map<String, dynamic> json) => _LookupOption(
+        id: (json['sellerId'] ?? json['id'] ?? '').toString(),
+        label: (json['name'] ?? json['sellerName'] ?? json['sellerCode'] ?? 'Seller').toString(),
+      );
+}
+
+final _quoteTenantsProvider = FutureProvider.autoDispose<List<_LookupOption>>((ref) async {
+  final auth = ref.watch(authNotifierProvider);
+  if (!auth.isAdminGlobal && auth.tenantId != null && auth.tenantId!.trim().isNotEmpty) {
+    return [_lookupTenant(auth.tenantId!, 'Empresa asociada')];
+  }
+  final resp = await ref.watch(dioProvider).get('/v1/tenants', queryParameters: const {'page': 0, 'size': 200, 'pageSize': 200});
+  return PaginatedResponse.fromJson(resp.data, _LookupOption.tenant).items;
+});
+
+_LookupOption _lookupTenant(String id, String label) => _LookupOption(id: id, label: label);
+
+final _quoteSellersProvider = FutureProvider.autoDispose.family<List<_LookupOption>, String>((ref, tenantId) async {
+  if (tenantId.trim().isEmpty) return const [];
+  final resp = await ref.watch(dioProvider).get(
+    '/v1/sellers',
+    queryParameters: {'tenantId': tenantId, 'page': 0, 'size': 200, 'pageSize': 200, 'active': true},
+  );
+  return PaginatedResponse.fromJson(resp.data, _LookupOption.seller).items;
+});
+
+class _QuoteCreateSheet extends ConsumerStatefulWidget {
+  const _QuoteCreateSheet();
+
+  @override
+  ConsumerState<_QuoteCreateSheet> createState() => _QuoteCreateSheetState();
+}
+
+class _QuoteCreateSheetState extends ConsumerState<_QuoteCreateSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _firstName = TextEditingController();
+  final _lastName = TextEditingController();
+  final _phone = TextEditingController();
+  final _email = TextEditingController();
+  final _product = TextEditingController();
+  final _sku = TextEditingController();
+  final _quantity = TextEditingController(text: '1');
+  final _unit = TextEditingController(text: 'U');
+  final _price = TextEditingController(text: '0');
+  final _color = TextEditingController();
+  final _presentation = TextEditingController();
+  final _notes = TextEditingController();
+  String? _tenantId;
+  String? _sellerId;
+  String _purchaseMode = 'PENDING';
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    for (final ctrl in [_firstName, _lastName, _phone, _email, _product, _sku, _quantity, _unit, _price, _color, _presentation, _notes]) {
+      ctrl.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tenantsAsync = ref.watch(_quoteTenantsProvider);
+    final sellersAsync = _tenantId == null || _tenantId!.trim().isEmpty
+        ? const AsyncData<List<_LookupOption>>([])
+        : ref.watch(_quoteSellersProvider(_tenantId!));
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.92,
+      minChildSize: 0.60,
+      maxChildSize: 0.98,
+      builder: (_, controller) => Form(
+        key: _formKey,
+        child: ListView(
+          controller: controller,
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+          children: [
+            Text('Nueva cotización', style: TextStyle(color: AppColors.ink, fontSize: 22, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 16),
+            tenantsAsync.when(
+              loading: () => const LinearProgressIndicator(),
+              error: (error, _) => Text('No se pudieron cargar empresas: $error'),
+              data: (tenants) {
+                if (_tenantId == null && tenants.length == 1) _tenantId = tenants.first.id;
+                return DropdownButtonFormField<String>(
+                  initialValue: _tenantId,
+                  decoration: const InputDecoration(labelText: 'Empresa *'),
+                  items: tenants.map((t) => DropdownMenuItem(value: t.id, child: Text(t.label, overflow: TextOverflow.ellipsis))).toList(),
+                  validator: (v) => v == null || v.isEmpty ? 'Requerido' : null,
+                  onChanged: _saving ? null : (value) => setState(() {
+                    _tenantId = value;
+                    _sellerId = null;
+                  }),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            sellersAsync.when(
+              loading: () => const LinearProgressIndicator(),
+              error: (error, _) => Text('No se pudieron cargar sellers: $error'),
+              data: (sellers) {
+                if (_sellerId == null && sellers.length == 1) _sellerId = sellers.first.id;
+                return DropdownButtonFormField<String>(
+                  initialValue: _sellerId,
+                  decoration: const InputDecoration(labelText: 'Seller *'),
+                  items: sellers.map((s) => DropdownMenuItem(value: s.id, child: Text(s.label, overflow: TextOverflow.ellipsis))).toList(),
+                  validator: (v) => v == null || v.isEmpty ? 'Requerido' : null,
+                  onChanged: _saving ? null : (value) => setState(() => _sellerId = value),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            _SectionTitle('Cliente'),
+            AppTextField(label: 'Nombre *', controller: _firstName, validator: _required),
+            const SizedBox(height: 10),
+            AppTextField(label: 'Apellido', controller: _lastName),
+            const SizedBox(height: 10),
+            AppTextField(label: 'Teléfono *', controller: _phone, keyboardType: TextInputType.phone, validator: _required),
+            const SizedBox(height: 10),
+            AppTextField(label: 'Email', controller: _email, keyboardType: TextInputType.emailAddress),
+            const SizedBox(height: 16),
+            _SectionTitle('Producto'),
+            AppTextField(label: 'Producto *', controller: _product, validator: _required),
+            const SizedBox(height: 10),
+            AppTextField(label: 'SKU', controller: _sku),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: AppTextField(label: 'Cantidad *', controller: _quantity, keyboardType: TextInputType.number, validator: _required)),
+                const SizedBox(width: 10),
+                Expanded(child: AppTextField(label: 'Unidad', controller: _unit)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            AppTextField(label: 'Precio cotizado', controller: _price, keyboardType: TextInputType.number),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: AppTextField(label: 'Color', controller: _color)),
+                const SizedBox(width: 10),
+                Expanded(child: AppTextField(label: 'Presentación', controller: _presentation)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: _purchaseMode,
+              decoration: const InputDecoration(labelText: 'Tipo de venta'),
+              items: const [
+                DropdownMenuItem(value: 'PENDING', child: Text('Pendiente')),
+                DropdownMenuItem(value: 'WHOLESALE', child: Text('Por mayor')),
+                DropdownMenuItem(value: 'RETAIL', child: Text('Por menor')),
+              ],
+              onChanged: _saving ? null : (value) => setState(() => _purchaseMode = value ?? 'PENDING'),
+            ),
+            const SizedBox(height: 10),
+            AppTextField(label: 'Notas', controller: _notes, maxLines: 3),
+            const SizedBox(height: 18),
+            AppButton(
+              label: 'Crear cotización',
+              icon: Icons.add_rounded,
+              isLoading: _saving,
+              fullWidth: true,
+              onPressed: _save,
+            ),
+          ],
+        ),
       ),
     );
   }
+
+  String? _required(String? value) => value == null || value.trim().isEmpty ? 'Requerido' : null;
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    try {
+      final quantity = double.tryParse(_quantity.text.replaceAll(',', '.')) ?? 1;
+      final price = double.tryParse(_price.text.replaceAll(',', '.')) ?? 0;
+      final payload = {
+        'tenantId': _tenantId,
+        'sellerId': _sellerId,
+        'customerFirstName': _firstName.text.trim(),
+        'customerLastName': _lastName.text.trim(),
+        'customerPhone': _phone.text.trim(),
+        if (_email.text.trim().isNotEmpty) 'customerEmail': _email.text.trim(),
+        'source': 'MOBILE_BACKOFFICE',
+        'currencyCode': 'ARS',
+        if (_notes.text.trim().isNotEmpty) 'notes': _notes.text.trim(),
+        'items': [
+          {
+            'productId': _sku.text.trim().isNotEmpty ? _sku.text.trim() : 'MOBILE-MANUAL',
+            'productSku': _sku.text.trim(),
+            'productName': _product.text.trim(),
+            'color': _color.text.trim(),
+            'presentation': _presentation.text.trim(),
+            'purchaseMode': _purchaseMode,
+            'quantity': quantity,
+            'unit': _unit.text.trim().isEmpty ? 'U' : _unit.text.trim().toUpperCase(),
+            'unitPrice': price,
+          }
+        ],
+      };
+      await ref.read(quotesNotifierProvider.notifier).createManual(payload);
+      if (mounted) Navigator.of(context).pop();
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  final String label;
+  const _SectionTitle(this.label);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(
+          label.toUpperCase(),
+          style: TextStyle(
+            color: AppColors.textMuted,
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.2,
+          ),
+        ),
+      );
 }
 
 class _StatusFilters extends StatefulWidget {

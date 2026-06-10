@@ -24,6 +24,20 @@ class _TenantLookupDto {
       );
 }
 
+class _SellerLookupDto {
+  final String id;
+  final String name;
+  final String? tenantId;
+
+  const _SellerLookupDto({required this.id, required this.name, this.tenantId});
+
+  factory _SellerLookupDto.fromJson(Map<String, dynamic> json) => _SellerLookupDto(
+        id: (json['sellerId'] ?? json['id'])?.toString() ?? '',
+        name: (json['name'] ?? json['sellerCode'] ?? 'Seller').toString(),
+        tenantId: (json['tenantId'] ?? json['companyId'])?.toString(),
+      );
+}
+
 final _tenantsLookupProvider = FutureProvider.autoDispose<List<_TenantLookupDto>>(
   (ref) async {
     final dio = ref.watch(dioProvider);
@@ -38,6 +52,19 @@ final _tenantsLookupProvider = FutureProvider.autoDispose<List<_TenantLookupDto>
     return PaginatedResponse.fromJson(resp.data, _TenantLookupDto.fromJson).items;
   },
 );
+
+final _sellersLookupProvider = FutureProvider.autoDispose
+    .family<List<_SellerLookupDto>, String?>((ref, tenantId) async {
+  final dio = ref.watch(dioProvider);
+  final resp = await dio.get(
+    '/v1/sellers',
+    queryParameters: const {'page': 0, 'size': 200, 'pageSize': 200},
+  );
+  final items = PaginatedResponse.fromJson(resp.data, _SellerLookupDto.fromJson).items;
+  final scope = tenantId?.trim();
+  if (scope == null || scope.isEmpty) return items;
+  return items.where((s) => s.tenantId == null || s.tenantId == scope).toList();
+});
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
@@ -91,10 +118,23 @@ class ProductFormNotifier extends StateNotifier<_ProductFormState> {
           'slug': data['slug']?.toString(),
           'sku': data['sku']?.toString(),
           'companyId': data['companyId']?.toString(),
+          'sellerId': data['sellerId']?.toString(),
           'priceTypeCode': data['priceTypeCode']?.toString() ?? 'FIXED',
           'basePrice': data['basePrice']?.toString(),
+          'currencyCode': data['currencyCode']?.toString() ?? 'ARS',
+          'statusCode': data['statusCode']?.toString() ?? 'DRAFT',
+          'stockStatusCode': data['stockStatusCode']?.toString(),
+          'featured': data['featured']?.toString(),
           'description': data['description']?.toString(),
           'category': data['category']?.toString(),
+          'tags': (data['tags'] as List<dynamic>?)?.map((e) => e.toString()).join(', '),
+          'uses': (data['uses'] as List<dynamic>?)?.map((e) => e.toString()).join(', '),
+          'netWeight': data['netWeight']?.toString(),
+          'grossWeight': data['grossWeight']?.toString(),
+          'volume': data['volume']?.toString(),
+          'height': data['height']?.toString(),
+          'width': data['width']?.toString(),
+          'length': data['length']?.toString(),
         },
       );
     } catch (e) {
@@ -107,11 +147,24 @@ class ProductFormNotifier extends StateNotifier<_ProductFormState> {
     required String name,
     required String slug,
     required String companyId,
+    required String sellerId,
     required String priceTypeCode,
+    required String currencyCode,
+    required String statusCode,
     String? sku,
     String? description,
     String? category,
     String? basePrice,
+    String? stockStatusCode,
+    String? tags,
+    String? uses,
+    String? netWeight,
+    String? grossWeight,
+    String? volume,
+    String? height,
+    String? width,
+    String? length,
+    required bool featured,
   }) async {
     state = state.copyWith(isSaving: true, error: null);
     try {
@@ -119,13 +172,33 @@ class ProductFormNotifier extends StateNotifier<_ProductFormState> {
         'name': name,
         'slug': slug,
         'companyId': companyId,
+        'sellerId': sellerId,
         'priceTypeCode': priceTypeCode,
+        'currencyCode': currencyCode,
+        'statusCode': statusCode,
+        'featured': featured,
         if (sku != null && sku.isNotEmpty) 'sku': sku,
         if (description != null && description.isNotEmpty)
           'description': description,
         if (category != null && category.isNotEmpty) 'category': category,
+        if (stockStatusCode != null && stockStatusCode.isNotEmpty)
+          'stockStatusCode': stockStatusCode,
+        if (tags != null && tags.isNotEmpty) 'tags': _splitCsv(tags),
+        if (uses != null && uses.isNotEmpty) 'uses': _splitCsv(uses),
         if (basePrice != null && basePrice.isNotEmpty)
           'basePrice': double.tryParse(basePrice),
+        if (netWeight != null && netWeight.isNotEmpty)
+          'netWeight': double.tryParse(netWeight),
+        if (grossWeight != null && grossWeight.isNotEmpty)
+          'grossWeight': double.tryParse(grossWeight),
+        if (volume != null && volume.isNotEmpty)
+          'volume': double.tryParse(volume),
+        if (height != null && height.isNotEmpty)
+          'height': double.tryParse(height),
+        if (width != null && width.isNotEmpty)
+          'width': double.tryParse(width),
+        if (length != null && length.isNotEmpty)
+          'length': double.tryParse(length),
       };
       if (productId == null) {
         await _dio.post('/v1/products', data: body);
@@ -140,6 +213,12 @@ class ProductFormNotifier extends StateNotifier<_ProductFormState> {
       return false;
     }
   }
+
+  List<String> _splitCsv(String raw) => raw
+      .split(',')
+      .map((v) => v.trim())
+      .where((v) => v.isNotEmpty)
+      .toList();
 }
 
 final productFormNotifierProvider = StateNotifierProvider.autoDispose
@@ -164,11 +243,24 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   late final TextEditingController _skuCtrl;
   late final TextEditingController _priceTypeCtrl;
   late final TextEditingController _basePriceCtrl;
+  late final TextEditingController _currencyCtrl;
+  late final TextEditingController _stockStatusCtrl;
+  late final TextEditingController _tagsCtrl;
+  late final TextEditingController _usesCtrl;
+  late final TextEditingController _netWeightCtrl;
+  late final TextEditingController _grossWeightCtrl;
+  late final TextEditingController _volumeCtrl;
+  late final TextEditingController _heightCtrl;
+  late final TextEditingController _widthCtrl;
+  late final TextEditingController _lengthCtrl;
   late final TextEditingController _descriptionCtrl;
   late final TextEditingController _categoryCtrl;
 
   bool _didHydrateFromServer = false;
   String? _selectedCompanyId;
+  String? _selectedSellerId;
+  String _statusCode = 'DRAFT';
+  bool _featured = false;
 
   @override
   void initState() {
@@ -178,6 +270,16 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     _skuCtrl = TextEditingController();
     _priceTypeCtrl = TextEditingController(text: 'FIXED');
     _basePriceCtrl = TextEditingController();
+    _currencyCtrl = TextEditingController(text: 'ARS');
+    _stockStatusCtrl = TextEditingController();
+    _tagsCtrl = TextEditingController();
+    _usesCtrl = TextEditingController();
+    _netWeightCtrl = TextEditingController();
+    _grossWeightCtrl = TextEditingController();
+    _volumeCtrl = TextEditingController();
+    _heightCtrl = TextEditingController();
+    _widthCtrl = TextEditingController();
+    _lengthCtrl = TextEditingController();
     _descriptionCtrl = TextEditingController();
     _categoryCtrl = TextEditingController();
 
@@ -198,14 +300,30 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         _skuCtrl.text = next.fields['sku'] ?? '';
         _priceTypeCtrl.text = next.fields['priceTypeCode'] ?? 'FIXED';
         _basePriceCtrl.text = next.fields['basePrice'] ?? '';
+        _currencyCtrl.text = next.fields['currencyCode'] ?? 'ARS';
+        _stockStatusCtrl.text = next.fields['stockStatusCode'] ?? '';
+        _tagsCtrl.text = next.fields['tags'] ?? '';
+        _usesCtrl.text = next.fields['uses'] ?? '';
+        _netWeightCtrl.text = next.fields['netWeight'] ?? '';
+        _grossWeightCtrl.text = next.fields['grossWeight'] ?? '';
+        _volumeCtrl.text = next.fields['volume'] ?? '';
+        _heightCtrl.text = next.fields['height'] ?? '';
+        _widthCtrl.text = next.fields['width'] ?? '';
+        _lengthCtrl.text = next.fields['length'] ?? '';
         _descriptionCtrl.text = next.fields['description'] ?? '';
         _categoryCtrl.text = next.fields['category'] ?? '';
+        _statusCode = next.fields['statusCode'] ?? 'DRAFT';
+        _featured = next.fields['featured'] == 'true';
 
         if (_selectedCompanyId == null || _selectedCompanyId!.trim().isEmpty) {
           final companyId = next.fields['companyId'];
           if (companyId != null && companyId.trim().isNotEmpty) {
             setState(() => _selectedCompanyId = companyId.trim());
           }
+        }
+        final sellerId = next.fields['sellerId'];
+        if (sellerId != null && sellerId.trim().isNotEmpty) {
+          setState(() => _selectedSellerId = sellerId.trim());
         }
       },
     );
@@ -215,7 +333,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   void dispose() {
     for (final c in [
       _nameCtrl, _slugCtrl, _skuCtrl,
-      _priceTypeCtrl, _basePriceCtrl, _descriptionCtrl, _categoryCtrl,
+      _priceTypeCtrl, _basePriceCtrl, _currencyCtrl, _stockStatusCtrl,
+      _tagsCtrl, _usesCtrl, _netWeightCtrl, _grossWeightCtrl, _volumeCtrl,
+      _heightCtrl, _widthCtrl, _lengthCtrl, _descriptionCtrl, _categoryCtrl,
     ]) {
       c.dispose();
     }
@@ -236,6 +356,13 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       );
       return;
     }
+    final sellerId = _selectedSellerId?.trim();
+    if (sellerId == null || sellerId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Seleccioná un seller para continuar.')),
+      );
+      return;
+    }
 
     final notifier =
         ref.read(productFormNotifierProvider(widget.productId).notifier);
@@ -243,11 +370,24 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       name: _nameCtrl.text.trim(),
       slug: _slugCtrl.text.trim(),
       companyId: companyId,
+      sellerId: sellerId,
       priceTypeCode: _priceTypeCtrl.text.trim(),
+      currencyCode: _currencyCtrl.text.trim().isEmpty ? 'ARS' : _currencyCtrl.text.trim().toUpperCase(),
+      statusCode: _statusCode,
       sku: _skuCtrl.text.trim(),
       description: _descriptionCtrl.text.trim(),
       category: _categoryCtrl.text.trim(),
       basePrice: _basePriceCtrl.text.trim(),
+      stockStatusCode: _stockStatusCtrl.text.trim().toUpperCase(),
+      tags: _tagsCtrl.text.trim(),
+      uses: _usesCtrl.text.trim(),
+      netWeight: _netWeightCtrl.text.trim(),
+      grossWeight: _grossWeightCtrl.text.trim(),
+      volume: _volumeCtrl.text.trim(),
+      height: _heightCtrl.text.trim(),
+      width: _widthCtrl.text.trim(),
+      length: _lengthCtrl.text.trim(),
+      featured: _featured,
     );
     if (ok && mounted) context.pop();
   }
@@ -258,6 +398,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     final isEdit = widget.productId != null;
     final auth = ref.watch(authNotifierProvider);
     final tenantsAsync = auth.isAdminGlobal ? ref.watch(_tenantsLookupProvider) : null;
+    final companyForSellers = auth.isAdminGlobal ? _selectedCompanyId : auth.tenantId;
+    final sellersAsync = ref.watch(_sellersLookupProvider(companyForSellers));
 
     return AppPageScaffold(
       title: isEdit ? 'Editar producto' : 'Nuevo producto',
@@ -326,6 +468,51 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                       ),
                       const SizedBox(height: 12),
                     ],
+                    sellersAsync.when(
+                      loading: () => const SizedBox(
+                        height: 56,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text('Cargando sellers…'),
+                        ),
+                      ),
+                      error: (_, __) => const SizedBox.shrink(),
+                      data: (sellers) {
+                        if (sellers.isEmpty) return const SizedBox.shrink();
+                        if (_selectedSellerId == null && sellers.length == 1) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted && _selectedSellerId == null) {
+                              setState(() => _selectedSellerId = sellers.first.id);
+                            }
+                          });
+                        }
+                        return DropdownButtonFormField<String>(
+                          key: ValueKey(_selectedSellerId ?? 'seller-none'),
+                          initialValue: _selectedSellerId,
+                          decoration: const InputDecoration(labelText: 'Seller *'),
+                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                          items: sellers
+                              .map((s) => DropdownMenuItem(
+                                    value: s.id,
+                                    child: Text(s.name, overflow: TextOverflow.ellipsis),
+                                  ))
+                              .toList(),
+                          onChanged: (v) => setState(() => _selectedSellerId = v),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: _statusCode,
+                      decoration: const InputDecoration(labelText: 'Estado'),
+                      items: const [
+                        DropdownMenuItem(value: 'DRAFT', child: Text('Borrador')),
+                        DropdownMenuItem(value: 'ACTIVE', child: Text('Activo')),
+                        DropdownMenuItem(value: 'INACTIVE', child: Text('Inactivo')),
+                      ],
+                      onChanged: (v) => setState(() => _statusCode = v ?? 'DRAFT'),
+                    ),
+                    const SizedBox(height: 12),
                     AppTextField(
                       label: 'Tipo de precio *',
                       hint: 'FIXED / CONSULT',
@@ -355,8 +542,51 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                     ),
                     const SizedBox(height: 12),
                     AppTextField(
+                      label: 'Moneda',
+                      controller: _currencyCtrl,
+                    ),
+                    const SizedBox(height: 12),
+                    AppTextField(
                       label: 'Categoría',
                       controller: _categoryCtrl,
+                    ),
+                    const SizedBox(height: 12),
+                    AppTextField(
+                      label: 'Estado de stock',
+                      hint: 'IN_STOCK / OUT_OF_STOCK',
+                      controller: _stockStatusCtrl,
+                    ),
+                    const SizedBox(height: 12),
+                    AppTextField(
+                      label: 'Tags',
+                      hint: 'Separados por coma',
+                      controller: _tagsCtrl,
+                    ),
+                    const SizedBox(height: 12),
+                    AppTextField(
+                      label: 'Usos',
+                      hint: 'Separados por coma',
+                      controller: _usesCtrl,
+                    ),
+                    const SizedBox(height: 12),
+                    SwitchListTile.adaptive(
+                      value: _featured,
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Producto destacado'),
+                      onChanged: (value) => setState(() => _featured = value),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        _SizedNumberField(label: 'Peso neto', controller: _netWeightCtrl),
+                        _SizedNumberField(label: 'Peso bruto', controller: _grossWeightCtrl),
+                        _SizedNumberField(label: 'Volumen', controller: _volumeCtrl),
+                        _SizedNumberField(label: 'Alto', controller: _heightCtrl),
+                        _SizedNumberField(label: 'Ancho', controller: _widthCtrl),
+                        _SizedNumberField(label: 'Largo', controller: _lengthCtrl),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     AppTextField(
@@ -375,6 +605,29 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                 ),
               ),
             ),
+    );
+  }
+}
+
+class _SizedNumberField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+
+  const _SizedNumberField({required this.label, required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: MediaQuery.sizeOf(context).width >= 620 ? 170 : double.infinity,
+      child: AppTextField(
+        label: label,
+        controller: controller,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        validator: (v) {
+          if (v == null || v.trim().isEmpty) return null;
+          return double.tryParse(v.trim()) == null ? 'Número inválido' : null;
+        },
+      ),
     );
   }
 }

@@ -113,7 +113,10 @@ class ProductsListScreen extends ConsumerWidget {
       onSearch: notifier.setSearch,
       floatingActionButton: canCreate
           ? CreateFab(
-              onPressed: () => context.push('/products/new'),
+              onPressed: () async {
+                await context.push('/products/new');
+                notifier.reload();
+              },
               label: 'Nuevo producto',
             )
           : null,
@@ -160,6 +163,10 @@ class ProductsListScreen extends ConsumerWidget {
             final product = state.items[i];
             return _ProductTile(
               product: product,
+              onEdit: () async {
+                await ctx.push('/products/${product.id}/edit');
+                notifier.reload();
+              },
               onToggle: () => notifier.toggleActive(product.id),
               onDelete: () => notifier.delete(product.id),
               canEdit: canEdit,
@@ -174,6 +181,7 @@ class ProductsListScreen extends ConsumerWidget {
 
 class _ProductTile extends StatelessWidget {
   final ProductDto product;
+  final Future<void> Function() onEdit;
   final VoidCallback onToggle;
   final VoidCallback onDelete;
   final bool canEdit;
@@ -181,6 +189,7 @@ class _ProductTile extends StatelessWidget {
 
   const _ProductTile({
     required this.product,
+    required this.onEdit,
     required this.onToggle,
     required this.onDelete,
     required this.canEdit,
@@ -252,7 +261,7 @@ class _ProductTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           splashColor: AppColors.accentLight,
           highlightColor: AppColors.accentLight,
-          onTap: canEdit ? () => context.push('/products/${product.id}/edit') : null,
+          onTap: canEdit ? onEdit : null,
           child: Padding(
             padding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -302,10 +311,17 @@ class _ProductTile extends StatelessWidget {
                 ),
                 StatusBadge(status: product.status),
                 const SizedBox(width: 2),
-                Icon(Icons.chevron_right_rounded,
-                  color: AppColors.textMuted, size: 16),
-                const SizedBox(width: 2),
-                if (canEdit || canDelete)
+                if (canEdit)
+                  IconButton(
+                    tooltip: 'Editar',
+                    icon: const Icon(Icons.edit_rounded, size: 20),
+                    color: AppColors.textSecondary,
+                    onPressed: onEdit,
+                  )
+                else
+                  Icon(Icons.chevron_right_rounded,
+                    color: AppColors.textMuted, size: 16),
+                if (canDelete)
                   PopupMenuButton<String>(
                     onSelected: (v) {
                       if (v == 'toggle') _confirmToggle(context);

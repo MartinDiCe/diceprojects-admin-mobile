@@ -178,13 +178,6 @@ class AppDrawer extends ConsumerWidget {
                 if (perms.canAccessRoute('/products'))
                   _navItem(context, '/products',
                       Icons.inventory_2_rounded, 'Artículos', primary: true),
-                if (perms.canAccessRoute('/products/import'))
-                  _navItem(context, '/products/import',
-                    Icons.upload_file_rounded, 'Importación masiva'),
-                if (perms.canAccessRoute('/marketing/destacados'))
-                  _navItem(context, '/marketing/destacados',
-                      Icons.star_rounded, 'Destacados'),
-
                 // ── Ventas ──────────────────────────────────────
                 const _SectionHeader(label: 'Ventas'),
                 if (perms.canAccessRoute('/sales/quotes'))

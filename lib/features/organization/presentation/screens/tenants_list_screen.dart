@@ -35,7 +35,7 @@ class TenantDto {
   });
 
   factory TenantDto.fromJson(Map<String, dynamic> json) => TenantDto(
-        id: json['id']?.toString() ?? '',
+        id: (json['tenantId'] ?? json['id'])?.toString() ?? '',
         name: json['name']?.toString() ?? '',
         domain: json['domain']?.toString(),
         status: json['status']?.toString() ?? 'ACTIVE',
@@ -111,7 +111,10 @@ class TenantsListScreen extends ConsumerWidget {
       onSearch: notifier.setSearch,
       floatingActionButton: canCreate
           ? CreateFab(
-              onPressed: () => context.push('/admin/tenants/new'),
+              onPressed: () async {
+                await context.push('/admin/tenants/new');
+                notifier.reload();
+              },
               label: 'Nueva empresa',
             )
           : null,
@@ -193,7 +196,10 @@ class _TenantTile extends StatelessWidget {
           splashColor: AppColors.accentLight,
           highlightColor: AppColors.accentLight,
           onTap: canEdit
-              ? () => context.push('/admin/tenants/${tenant.id}/edit')
+              ? () async {
+                  await context.push('/admin/tenants/${tenant.id}/edit');
+                  notifier.reload();
+                }
               : null,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -236,12 +242,21 @@ class _TenantTile extends StatelessWidget {
                 ),
                 StatusBadge(status: tenant.status),
                 const SizedBox(width: 2),
-                Icon(Icons.chevron_right_rounded,
-                  color: AppColors.textMuted, size: 16),
-                const SizedBox(width: 2),
+                if (canEdit)
+                  IconButton(
+                    tooltip: 'Editar',
+                    icon: const Icon(Icons.edit_rounded, size: 20),
+                    color: AppColors.textSecondary,
+                    onPressed: () async {
+                      await context.push('/admin/tenants/${tenant.id}/edit');
+                      notifier.reload();
+                    },
+                  )
+                else
+                  Icon(Icons.chevron_right_rounded,
+                    color: AppColors.textMuted, size: 16),
                 PopupMenuButton<String>(
-                  onSelected: (v) {
-                    if (v == 'edit') context.push('/admin/tenants/${tenant.id}/edit');
+                  onSelected: (v) async {
                     if (v == 'branches') {
                       context.push('/admin/branches?tenantId=${tenant.id}');
                     }
@@ -249,8 +264,6 @@ class _TenantTile extends StatelessWidget {
                     if (v == 'restore') notifier.restore(tenant.id);
                   },
                   itemBuilder: (_) => [
-                    if (canEdit)
-                      const PopupMenuItem(value: 'edit', child: Text('Editar')),
                     const PopupMenuItem(value: 'branches', child: Text('Ver Sucursales')),
                     if (canDelete && tenant.status == 'INACTIVE')
                       const PopupMenuItem(value: 'restore', child: Text('Restaurar')),

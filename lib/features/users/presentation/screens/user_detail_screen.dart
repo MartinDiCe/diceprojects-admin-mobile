@@ -32,7 +32,7 @@ class _RoleLookupDto {
   factory _RoleLookupDto.fromJson(Map<String, dynamic> json) => _RoleLookupDto(
         id: (json['id'])?.toString() ?? '',
         code: (json['code'])?.toString() ?? '',
-        name: (json['description'] ?? json['name'] ?? json['code'] ?? '').toString(),
+        name: (json['code'] ?? json['name'] ?? json['description'] ?? '').toString(),
       );
 }
 
@@ -81,7 +81,7 @@ class UserRoleRef {
       final map = Map<String, dynamic>.from(raw);
       final id = (map['roleId'] ?? map['id'])?.toString();
       final code = (map['role'] ?? map['code'] ?? map['roleCode'])?.toString();
-      final label = (map['description'] ?? map['name'] ?? code ?? id ?? 'Rol')
+      final label = (code ?? map['name'] ?? map['description'] ?? id ?? 'Rol')
           .toString();
       return UserRoleRef(id: id, code: code, label: label);
     }

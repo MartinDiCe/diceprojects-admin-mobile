@@ -24,8 +24,16 @@ class SellerDto {
   final String? description;
   final String? email;
   final String? phone;
+  final String? taxId;
   final String? logoUrl;
   final String? websiteUrl;
+  final String? instagramUrl;
+  final String? facebookUrl;
+  final String? address;
+  final String? city;
+  final String? province;
+  final String? country;
+  final String? postalCode;
   final bool active;
 
   const SellerDto({
@@ -36,8 +44,16 @@ class SellerDto {
     this.description,
     this.email,
     this.phone,
+    this.taxId,
     this.logoUrl,
     this.websiteUrl,
+    this.instagramUrl,
+    this.facebookUrl,
+    this.address,
+    this.city,
+    this.province,
+    this.country,
+    this.postalCode,
     required this.active,
   });
 
@@ -49,8 +65,16 @@ class SellerDto {
         description: json['description']?.toString(),
         email: json['email']?.toString(),
         phone: json['phone']?.toString(),
+        taxId: json['taxId']?.toString(),
         logoUrl: json['logoUrl']?.toString(),
         websiteUrl: json['websiteUrl']?.toString(),
+        instagramUrl: json['instagramUrl']?.toString(),
+        facebookUrl: json['facebookUrl']?.toString(),
+        address: json['address']?.toString(),
+        city: json['city']?.toString(),
+        province: json['province']?.toString(),
+        country: json['country']?.toString(),
+        postalCode: json['postalCode']?.toString(),
         active: json['active'] == true,
       );
 
@@ -156,7 +180,10 @@ class SellersListScreen extends ConsumerWidget {
       ],
       floatingActionButton: canCreate
           ? CreateFab(
-              onPressed: () => context.push('/organization/sellers/new'),
+              onPressed: () async {
+                await context.push('/organization/sellers/new');
+                notifier.reload();
+              },
               label: 'Nuevo vendedor',
             )
           : null,
@@ -204,10 +231,10 @@ class SellersListScreen extends ConsumerWidget {
             final seller = state.items[i];
             return _SellerTile(
               seller: seller,
-              onEdit: () => ctx.push(
-                '/organization/sellers/${seller.sellerId}/edit',
-                extra: seller,
-              ),
+              onEdit: () async {
+                await ctx.push('/organization/sellers/${seller.sellerId}/edit', extra: seller);
+                notifier.reload();
+              },
               onToggleActive: () async {
                 if (seller.active) {
                   await notifier.deactivate(seller.sellerId);
@@ -226,7 +253,7 @@ class SellersListScreen extends ConsumerWidget {
 
 class _SellerTile extends StatelessWidget {
   final SellerDto seller;
-  final VoidCallback onEdit;
+  final Future<void> Function() onEdit;
   final VoidCallback onToggleActive;
   final bool canEdit;
 
@@ -263,7 +290,7 @@ class _SellerTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           splashColor: AppColors.accentLight,
           highlightColor: AppColors.accentLight,
-          onTap: canEdit ? onEdit : null,
+          onTap: canEdit ? () => onEdit() : null,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
@@ -313,20 +340,25 @@ class _SellerTile extends StatelessWidget {
                 ),
                 StatusBadge(status: seller.statusCode),
                 const SizedBox(width: 2),
-                if (canEdit)
+                if (canEdit) ...[
+                  IconButton(
+                    tooltip: 'Editar',
+                    icon: const Icon(Icons.edit_rounded, size: 20),
+                    color: AppColors.textSecondary,
+                    onPressed: onEdit,
+                  ),
                   PopupMenuButton<String>(
                     onSelected: (v) {
-                      if (v == 'edit') onEdit();
                       if (v == 'toggle') onToggleActive();
                     },
                     itemBuilder: (_) => [
-                      const PopupMenuItem(value: 'edit', child: Text('Editar')),
                       PopupMenuItem(
                         value: 'toggle',
                         child: Text(seller.active ? 'Desactivar' : 'Activar'),
                       ),
                     ],
                   ),
+                ],
               ],
             ),
           ),

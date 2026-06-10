@@ -83,7 +83,10 @@ class PeopleListScreen extends ConsumerWidget {
       onSearch: notifier.setSearch,
       floatingActionButton: canCreate
           ? CreateFab(
-              onPressed: () => context.push('/people/new'),
+              onPressed: () async {
+                await context.push('/people/new');
+                notifier.reload();
+              },
               label: 'Nueva persona',
             )
           : null,
@@ -139,7 +142,12 @@ class PeopleListScreen extends ConsumerWidget {
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
                 splashColor: AppColors.accentLight,
-                onTap: canEdit ? () => ctx.push('/people/${person.id}/edit') : null,
+                onTap: canEdit
+                    ? () async {
+                        await ctx.push('/people/${person.id}/edit');
+                        notifier.reload();
+                      }
+                    : null,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 12),
@@ -193,6 +201,18 @@ class PeopleListScreen extends ConsumerWidget {
                         ),
                       ),
                       StatusBadge(status: person.status),
+                      if (canEdit) ...[
+                        const SizedBox(width: 4),
+                        IconButton(
+                          tooltip: 'Editar',
+                          icon: const Icon(Icons.edit_rounded, size: 20),
+                          color: AppColors.textSecondary,
+                          onPressed: () async {
+                            await ctx.push('/people/${person.id}/edit');
+                            notifier.reload();
+                          },
+                        ),
+                      ],
                     ],
                   ),
                 ),

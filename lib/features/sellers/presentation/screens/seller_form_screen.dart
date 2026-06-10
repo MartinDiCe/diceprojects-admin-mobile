@@ -63,8 +63,16 @@ class SellerFormNotifier extends StateNotifier<_SellerFormState> {
         'description': seller.description,
         'email': seller.email,
         'phone': seller.phone,
+        'taxId': seller.taxId,
         'logoUrl': seller.logoUrl,
         'websiteUrl': seller.websiteUrl,
+        'instagramUrl': seller.instagramUrl,
+        'facebookUrl': seller.facebookUrl,
+        'address': seller.address,
+        'city': seller.city,
+        'province': seller.province,
+        'country': seller.country,
+        'postalCode': seller.postalCode,
       },
     );
   }
@@ -140,8 +148,16 @@ class SellerFormNotifier extends StateNotifier<_SellerFormState> {
     required String? description,
     required String? email,
     required String? phone,
+    required String? taxId,
     required String? logoUrl,
     required String? websiteUrl,
+    required String? instagramUrl,
+    required String? facebookUrl,
+    required String? address,
+    required String? city,
+    required String? province,
+    required String? country,
+    required String? postalCode,
   }) async {
     state = state.copyWith(isSaving: true);
     try {
@@ -151,8 +167,16 @@ class SellerFormNotifier extends StateNotifier<_SellerFormState> {
         'description': description,
         'email': email,
         'phone': phone,
+        'taxId': taxId,
         'logoUrl': logoUrl,
         'websiteUrl': websiteUrl,
+        'instagramUrl': instagramUrl,
+        'facebookUrl': facebookUrl,
+        'address': address,
+        'city': city,
+        'province': province,
+        'country': country,
+        'postalCode': postalCode,
       };
 
       if (sellerId == null) {
@@ -168,6 +192,7 @@ class SellerFormNotifier extends StateNotifier<_SellerFormState> {
       return false;
     }
   }
+
 }
 
 final sellerFormNotifierProvider = StateNotifierProvider.autoDispose
@@ -201,8 +226,16 @@ class _SellerFormScreenState extends ConsumerState<SellerFormScreen> {
   late final TextEditingController _descriptionCtrl;
   late final TextEditingController _emailCtrl;
   late final TextEditingController _phoneCtrl;
+  late final TextEditingController _taxIdCtrl;
   late final TextEditingController _logoUrlCtrl;
   late final TextEditingController _websiteUrlCtrl;
+  late final TextEditingController _instagramUrlCtrl;
+  late final TextEditingController _facebookUrlCtrl;
+  late final TextEditingController _addressCtrl;
+  late final TextEditingController _cityCtrl;
+  late final TextEditingController _provinceCtrl;
+  late final TextEditingController _countryCtrl;
+  late final TextEditingController _postalCodeCtrl;
 
   bool _populated = false;
 
@@ -214,8 +247,16 @@ class _SellerFormScreenState extends ConsumerState<SellerFormScreen> {
     _descriptionCtrl = TextEditingController();
     _emailCtrl = TextEditingController();
     _phoneCtrl = TextEditingController();
+    _taxIdCtrl = TextEditingController();
     _logoUrlCtrl = TextEditingController();
     _websiteUrlCtrl = TextEditingController();
+    _instagramUrlCtrl = TextEditingController();
+    _facebookUrlCtrl = TextEditingController();
+    _addressCtrl = TextEditingController();
+    _cityCtrl = TextEditingController();
+    _provinceCtrl = TextEditingController();
+    _countryCtrl = TextEditingController();
+    _postalCodeCtrl = TextEditingController();
   }
 
   @override
@@ -225,8 +266,16 @@ class _SellerFormScreenState extends ConsumerState<SellerFormScreen> {
     _descriptionCtrl.dispose();
     _emailCtrl.dispose();
     _phoneCtrl.dispose();
+    _taxIdCtrl.dispose();
     _logoUrlCtrl.dispose();
     _websiteUrlCtrl.dispose();
+    _instagramUrlCtrl.dispose();
+    _facebookUrlCtrl.dispose();
+    _addressCtrl.dispose();
+    _cityCtrl.dispose();
+    _provinceCtrl.dispose();
+    _countryCtrl.dispose();
+    _postalCodeCtrl.dispose();
     super.dispose();
   }
 
@@ -248,8 +297,16 @@ class _SellerFormScreenState extends ConsumerState<SellerFormScreen> {
       _descriptionCtrl.text = state.fields['description'] ?? '';
       _emailCtrl.text = state.fields['email'] ?? '';
       _phoneCtrl.text = state.fields['phone'] ?? '';
+      _taxIdCtrl.text = state.fields['taxId'] ?? '';
       _logoUrlCtrl.text = state.fields['logoUrl'] ?? '';
       _websiteUrlCtrl.text = state.fields['websiteUrl'] ?? '';
+      _instagramUrlCtrl.text = state.fields['instagramUrl'] ?? '';
+      _facebookUrlCtrl.text = state.fields['facebookUrl'] ?? '';
+      _addressCtrl.text = state.fields['address'] ?? '';
+      _cityCtrl.text = state.fields['city'] ?? '';
+      _provinceCtrl.text = state.fields['province'] ?? '';
+      _countryCtrl.text = state.fields['country'] ?? '';
+      _postalCodeCtrl.text = state.fields['postalCode'] ?? '';
       _populated = true;
     }
 
@@ -334,6 +391,12 @@ class _SellerFormScreenState extends ConsumerState<SellerFormScreen> {
             ),
             const SizedBox(height: 12),
             AppTextField(
+              controller: _taxIdCtrl,
+              label: 'CUIT',
+              hint: '20-00000000-0',
+            ),
+            const SizedBox(height: 12),
+            AppTextField(
               controller: _logoUrlCtrl,
               label: 'Logo URL',
               hint: 'https://…',
@@ -345,6 +408,28 @@ class _SellerFormScreenState extends ConsumerState<SellerFormScreen> {
               label: 'Sitio Web',
               hint: 'https://…',
               keyboardType: TextInputType.url,
+            ),
+            const SizedBox(height: 12),
+            AppTextField(controller: _instagramUrlCtrl, label: 'Instagram URL', keyboardType: TextInputType.url),
+            const SizedBox(height: 12),
+            AppTextField(controller: _facebookUrlCtrl, label: 'Facebook URL', keyboardType: TextInputType.url),
+            const SizedBox(height: 12),
+            AppTextField(controller: _addressCtrl, label: 'Dirección'),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: AppTextField(controller: _cityCtrl, label: 'Ciudad')),
+                const SizedBox(width: 10),
+                Expanded(child: AppTextField(controller: _provinceCtrl, label: 'Provincia')),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: AppTextField(controller: _countryCtrl, label: 'País')),
+                const SizedBox(width: 10),
+                Expanded(child: AppTextField(controller: _postalCodeCtrl, label: 'CP')),
+              ],
             ),
             const SizedBox(height: 24),
             AppButton(
@@ -360,8 +445,16 @@ class _SellerFormScreenState extends ConsumerState<SellerFormScreen> {
                       : _descriptionCtrl.text.trim(),
                   email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
                   phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
+                  taxId: _emptyToNull(_taxIdCtrl.text),
                   logoUrl: _logoUrlCtrl.text.trim().isEmpty ? null : _logoUrlCtrl.text.trim(),
                   websiteUrl: _websiteUrlCtrl.text.trim().isEmpty ? null : _websiteUrlCtrl.text.trim(),
+                  instagramUrl: _emptyToNull(_instagramUrlCtrl.text),
+                  facebookUrl: _emptyToNull(_facebookUrlCtrl.text),
+                  address: _emptyToNull(_addressCtrl.text),
+                  city: _emptyToNull(_cityCtrl.text),
+                  province: _emptyToNull(_provinceCtrl.text),
+                  country: _emptyToNull(_countryCtrl.text),
+                  postalCode: _emptyToNull(_postalCodeCtrl.text),
                 );
                 if (!ok || !context.mounted) return;
                 if (context.canPop()) {
@@ -376,4 +469,10 @@ class _SellerFormScreenState extends ConsumerState<SellerFormScreen> {
       ),
     );
   }
+
+  String? _emptyToNull(String value) {
+    final text = value.trim();
+    return text.isEmpty ? null : text;
+  }
+
 }

@@ -54,9 +54,17 @@ class TenantFormNotifier extends StateNotifier<_TenantFormState> {
       state = state.copyWith(
         isLoading: false,
         fields: {
+          'code': data['code'],
           'name': data['name'],
-          'domain': data['domain'],
-          'plan': data['plan'],
+          'taxId': data['taxId'],
+          'description': data['description'],
+          'logoUrl': data['logoUrl'],
+          'websiteUrl': data['websiteUrl'],
+          'baseCurrencyCode': data['baseCurrencyCode'],
+          'languageCode': data['languageCode'],
+          'countryId': data['countryId'],
+          'sectorId': data['sectorId'],
+          'timezoneId': data['timezoneId'],
         },
       );
     } catch (e) {
@@ -65,13 +73,33 @@ class TenantFormNotifier extends StateNotifier<_TenantFormState> {
   }
 
   Future<bool> save({
+    required String code,
     required String name,
-    required String? domain,
-    required String? plan,
+    required String? taxId,
+    required String? description,
+    required String? logoUrl,
+    required String? websiteUrl,
+    required String? baseCurrencyCode,
+    required String? languageCode,
+    required String? countryId,
+    required String? sectorId,
+    required String? timezoneId,
   }) async {
     state = state.copyWith(isSaving: true);
     try {
-      final body = {'name': name, 'domain': domain, 'plan': plan};
+      final body = {
+        'code': code,
+        'name': name,
+        'taxId': taxId,
+        'description': description,
+        'logoUrl': logoUrl,
+        'websiteUrl': websiteUrl,
+        'baseCurrencyCode': baseCurrencyCode,
+        'languageCode': languageCode,
+        'countryId': countryId,
+        'sectorId': sectorId,
+        'timezoneId': timezoneId,
+      };
       if (tenantId == null) {
         await _dio.post('/v1/tenants', data: body);
       } else {
@@ -84,6 +112,7 @@ class TenantFormNotifier extends StateNotifier<_TenantFormState> {
       return false;
     }
   }
+
 }
 
 final tenantFormNotifierProvider = StateNotifierProvider.autoDispose
@@ -103,23 +132,47 @@ class TenantFormScreen extends ConsumerStatefulWidget {
 
 class _TenantFormScreenState extends ConsumerState<TenantFormScreen> {
   final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _codeCtrl;
   late final TextEditingController _nameCtrl;
-  late final TextEditingController _domainCtrl;
-  late final TextEditingController _planCtrl;
+  late final TextEditingController _taxIdCtrl;
+  late final TextEditingController _descriptionCtrl;
+  late final TextEditingController _logoCtrl;
+  late final TextEditingController _websiteCtrl;
+  late final TextEditingController _currencyCtrl;
+  late final TextEditingController _languageCtrl;
+  late final TextEditingController _countryCtrl;
+  late final TextEditingController _sectorCtrl;
+  late final TextEditingController _timezoneCtrl;
 
   @override
   void initState() {
     super.initState();
+    _codeCtrl = TextEditingController();
     _nameCtrl = TextEditingController();
-    _domainCtrl = TextEditingController();
-    _planCtrl = TextEditingController();
+    _taxIdCtrl = TextEditingController();
+    _descriptionCtrl = TextEditingController();
+    _logoCtrl = TextEditingController();
+    _websiteCtrl = TextEditingController();
+    _currencyCtrl = TextEditingController(text: 'ARS');
+    _languageCtrl = TextEditingController(text: 'es-AR');
+    _countryCtrl = TextEditingController();
+    _sectorCtrl = TextEditingController();
+    _timezoneCtrl = TextEditingController();
   }
 
   @override
   void dispose() {
+    _codeCtrl.dispose();
     _nameCtrl.dispose();
-    _domainCtrl.dispose();
-    _planCtrl.dispose();
+    _taxIdCtrl.dispose();
+    _descriptionCtrl.dispose();
+    _logoCtrl.dispose();
+    _websiteCtrl.dispose();
+    _currencyCtrl.dispose();
+    _languageCtrl.dispose();
+    _countryCtrl.dispose();
+    _sectorCtrl.dispose();
+    _timezoneCtrl.dispose();
     super.dispose();
   }
 
@@ -133,9 +186,17 @@ class _TenantFormScreenState extends ConsumerState<TenantFormScreen> {
         ref.read(tenantFormNotifierProvider(widget.tenantId).notifier);
 
     if (!_populated && state.fields.isNotEmpty) {
+      _codeCtrl.text = state.fields['code'] ?? '';
       _nameCtrl.text = state.fields['name'] ?? '';
-      _domainCtrl.text = state.fields['domain'] ?? '';
-      _planCtrl.text = state.fields['plan'] ?? '';
+      _taxIdCtrl.text = state.fields['taxId'] ?? '';
+      _descriptionCtrl.text = state.fields['description'] ?? '';
+      _logoCtrl.text = state.fields['logoUrl'] ?? '';
+      _websiteCtrl.text = state.fields['websiteUrl'] ?? '';
+      _currencyCtrl.text = state.fields['baseCurrencyCode'] ?? 'ARS';
+      _languageCtrl.text = state.fields['languageCode'] ?? 'es-AR';
+      _countryCtrl.text = state.fields['countryId'] ?? '';
+      _sectorCtrl.text = state.fields['sectorId'] ?? '';
+      _timezoneCtrl.text = state.fields['timezoneId'] ?? '';
       _populated = true;
     }
 
@@ -177,6 +238,14 @@ class _TenantFormScreenState extends ConsumerState<TenantFormScreen> {
                     style: TextStyle(color: Colors.red.shade700)),
               ),
             AppTextField(
+              controller: _codeCtrl,
+              label: 'Código',
+              hint: 'ALMICO_TEXTIL',
+              validator: (v) =>
+                  v == null || v.trim().isEmpty ? 'Requerido' : null,
+            ),
+            const SizedBox(height: 12),
+            AppTextField(
               controller: _nameCtrl,
               label: 'Nombre',
               hint: 'Nombre de la empresa',
@@ -185,15 +254,47 @@ class _TenantFormScreenState extends ConsumerState<TenantFormScreen> {
             ),
             const SizedBox(height: 12),
             AppTextField(
-              controller: _domainCtrl,
-              label: 'Dominio',
-              hint: 'ejemplo.com',
+              controller: _taxIdCtrl,
+              label: 'CUIT',
             ),
             const SizedBox(height: 12),
             AppTextField(
-              controller: _planCtrl,
-              label: 'Plan',
-              hint: 'FREE, BASIC, PRO…',
+              controller: _descriptionCtrl,
+              label: 'Descripción',
+              maxLines: 3,
+            ),
+            const SizedBox(height: 12),
+            AppTextField(
+              controller: _logoCtrl,
+              label: 'Logo URL',
+            ),
+            const SizedBox(height: 12),
+            AppTextField(
+              controller: _websiteCtrl,
+              label: 'Sitio web',
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: AppTextField(controller: _currencyCtrl, label: 'Moneda')),
+                const SizedBox(width: 10),
+                Expanded(child: AppTextField(controller: _languageCtrl, label: 'Idioma')),
+              ],
+            ),
+            const SizedBox(height: 12),
+            AppTextField(
+              controller: _countryCtrl,
+              label: 'País ID',
+            ),
+            const SizedBox(height: 12),
+            AppTextField(
+              controller: _sectorCtrl,
+              label: 'Sector ID',
+            ),
+            const SizedBox(height: 12),
+            AppTextField(
+              controller: _timezoneCtrl,
+              label: 'Timezone ID',
             ),
             const SizedBox(height: 24),
             AppButton(
@@ -202,13 +303,17 @@ class _TenantFormScreenState extends ConsumerState<TenantFormScreen> {
               onPressed: () async {
                 if (!_formKey.currentState!.validate()) return;
                 final ok = await notifier.save(
+                  code: _codeCtrl.text.trim(),
                   name: _nameCtrl.text.trim(),
-                  domain: _domainCtrl.text.trim().isEmpty
-                      ? null
-                      : _domainCtrl.text.trim(),
-                  plan: _planCtrl.text.trim().isEmpty
-                      ? null
-                      : _planCtrl.text.trim(),
+                  taxId: _emptyToNull(_taxIdCtrl.text),
+                  description: _emptyToNull(_descriptionCtrl.text),
+                  logoUrl: _emptyToNull(_logoCtrl.text),
+                  websiteUrl: _emptyToNull(_websiteCtrl.text),
+                  baseCurrencyCode: _emptyToNull(_currencyCtrl.text),
+                  languageCode: _emptyToNull(_languageCtrl.text),
+                  countryId: _emptyToNull(_countryCtrl.text),
+                  sectorId: _emptyToNull(_sectorCtrl.text),
+                  timezoneId: _emptyToNull(_timezoneCtrl.text),
                 );
                 if (!ok || !context.mounted) return;
                 if (context.canPop()) {
@@ -223,4 +328,10 @@ class _TenantFormScreenState extends ConsumerState<TenantFormScreen> {
       ),
     );
   }
+
+  String? _emptyToNull(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
 }

@@ -29,14 +29,12 @@ class DestacadoDto {
   });
 
   factory DestacadoDto.fromJson(Map<String, dynamic> json) => DestacadoDto(
-        id: json['id']?.toString() ?? '',
-      // Backend contract uses /v1/featured-products
-      // Fields: id, productId, channel, priority, startsAt, endsAt, active, label
-    title: (json['label'] ?? json['title'] ?? 'Producto destacado').toString(),
-      description: (json['channel'] ?? json['description'])?.toString(),
-      status: (json['active'] == true || json['status'] == 'ACTIVE') ? 'ACTIVE' : 'INACTIVE',
-      order: (json['priority'] as num?)?.toInt() ?? (json['order'] as num?)?.toInt(),
-      imageUrl: json['imageUrl']?.toString(),
+        id: (json['productId'] ?? json['id'])?.toString() ?? '',
+        title: (json['name'] ?? json['label'] ?? json['title'] ?? 'Producto destacado').toString(),
+        description: (json['sku'] ?? json['channel'] ?? json['description'])?.toString(),
+        status: (json['statusCode'] ?? json['status'] ?? 'ACTIVE').toString(),
+        order: (json['priority'] as num?)?.toInt() ?? (json['order'] as num?)?.toInt(),
+        imageUrl: json['imageUrl']?.toString(),
       );
 }
 
@@ -46,10 +44,8 @@ class DestacadosNotifier extends ListNotifier<DestacadoDto> {
 
   @override
   Future<PaginatedResponse<DestacadoDto>> fetchPage(PageParams params) async {
-    final resp = await _dio.get(
-      '/v1/featured-products',
-      queryParameters: params.toQueryParams(),
-    );
+    final query = params.toQueryParams()..['featured'] = true;
+    final resp = await _dio.get('/v1/products', queryParameters: query);
     return PaginatedResponse.fromJson(resp.data, DestacadoDto.fromJson);
   }
 }

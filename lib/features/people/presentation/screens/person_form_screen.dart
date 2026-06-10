@@ -57,7 +57,18 @@ class PersonFormNotifier extends StateNotifier<_PersonFormState> {
           'lastName': data['lastName'],
           'email': data['email'],
           'phone': data['phone'],
+          'secondaryPhone': data['secondaryPhone'],
+          'documentType': data['documentType'],
           'documentNumber': data['documentNumber'],
+          'status': data['status'],
+          'countryId': data['countryId'],
+          'stateId': data['stateId'],
+          'cityId': data['cityId'],
+          'street': data['street'],
+          'neighborhood': data['neighborhood'],
+          'addressComplement': data['addressComplement'],
+          'postalCode': data['postalCode'],
+          'avatarUrl': data['avatarUrl'],
         },
       );
     } catch (e) {
@@ -70,7 +81,17 @@ class PersonFormNotifier extends StateNotifier<_PersonFormState> {
     required String lastName,
     required String? email,
     required String? phone,
+    required String? secondaryPhone,
+    required String? documentType,
     required String? documentNumber,
+    required String? status,
+    required String? countryId,
+    required String? stateId,
+    required String? cityId,
+    required String? street,
+    required String? neighborhood,
+    required String? addressComplement,
+    required String? postalCode,
   }) async {
     state = state.copyWith(isSaving: true);
     try {
@@ -79,7 +100,17 @@ class PersonFormNotifier extends StateNotifier<_PersonFormState> {
         'lastName': lastName,
         'email': email,
         'phone': phone,
+        'secondaryPhone': secondaryPhone,
+        'documentType': documentType,
         'documentNumber': documentNumber,
+        'status': status,
+        'countryId': countryId,
+        'stateId': stateId,
+        'cityId': cityId,
+        'street': street,
+        'neighborhood': neighborhood,
+        'addressComplement': addressComplement,
+        'postalCode': postalCode,
       };
       if (personId == null) {
         await _dio.post('/v1/people', data: body);
@@ -93,6 +124,7 @@ class PersonFormNotifier extends StateNotifier<_PersonFormState> {
       return false;
     }
   }
+
 }
 
 final personFormNotifierProvider = StateNotifierProvider.autoDispose
@@ -114,7 +146,18 @@ class _PersonFormScreenState extends ConsumerState<PersonFormScreen> {
   late final TextEditingController _lastNameCtrl;
   late final TextEditingController _emailCtrl;
   late final TextEditingController _phoneCtrl;
+  late final TextEditingController _secondaryPhoneCtrl;
+  late final TextEditingController _docTypeCtrl;
   late final TextEditingController _docCtrl;
+  late final TextEditingController _statusCtrl;
+  late final TextEditingController _countryCtrl;
+  late final TextEditingController _stateCtrl;
+  late final TextEditingController _cityCtrl;
+  late final TextEditingController _streetCtrl;
+  late final TextEditingController _neighborhoodCtrl;
+  late final TextEditingController _addressComplementCtrl;
+  late final TextEditingController _postalCodeCtrl;
+  late final TextEditingController _avatarCtrl;
   bool _populated = false;
 
   @override
@@ -124,7 +167,18 @@ class _PersonFormScreenState extends ConsumerState<PersonFormScreen> {
     _lastNameCtrl = TextEditingController();
     _emailCtrl = TextEditingController();
     _phoneCtrl = TextEditingController();
+    _secondaryPhoneCtrl = TextEditingController();
+    _docTypeCtrl = TextEditingController();
     _docCtrl = TextEditingController();
+    _statusCtrl = TextEditingController(text: 'ACTIVE');
+    _countryCtrl = TextEditingController();
+    _stateCtrl = TextEditingController();
+    _cityCtrl = TextEditingController();
+    _streetCtrl = TextEditingController();
+    _neighborhoodCtrl = TextEditingController();
+    _addressComplementCtrl = TextEditingController();
+    _postalCodeCtrl = TextEditingController();
+    _avatarCtrl = TextEditingController();
   }
 
   @override
@@ -133,7 +187,18 @@ class _PersonFormScreenState extends ConsumerState<PersonFormScreen> {
     _lastNameCtrl.dispose();
     _emailCtrl.dispose();
     _phoneCtrl.dispose();
+    _secondaryPhoneCtrl.dispose();
+    _docTypeCtrl.dispose();
     _docCtrl.dispose();
+    _statusCtrl.dispose();
+    _countryCtrl.dispose();
+    _stateCtrl.dispose();
+    _cityCtrl.dispose();
+    _streetCtrl.dispose();
+    _neighborhoodCtrl.dispose();
+    _addressComplementCtrl.dispose();
+    _postalCodeCtrl.dispose();
+    _avatarCtrl.dispose();
     super.dispose();
   }
 
@@ -148,7 +213,18 @@ class _PersonFormScreenState extends ConsumerState<PersonFormScreen> {
       _lastNameCtrl.text = state.fields['lastName'] ?? '';
       _emailCtrl.text = state.fields['email'] ?? '';
       _phoneCtrl.text = state.fields['phone'] ?? '';
+      _secondaryPhoneCtrl.text = state.fields['secondaryPhone'] ?? '';
+      _docTypeCtrl.text = state.fields['documentType'] ?? '';
       _docCtrl.text = state.fields['documentNumber'] ?? '';
+      _statusCtrl.text = state.fields['status'] ?? 'ACTIVE';
+      _countryCtrl.text = state.fields['countryId'] ?? '';
+      _stateCtrl.text = state.fields['stateId'] ?? '';
+      _cityCtrl.text = state.fields['cityId'] ?? '';
+      _streetCtrl.text = state.fields['street'] ?? '';
+      _neighborhoodCtrl.text = state.fields['neighborhood'] ?? '';
+      _addressComplementCtrl.text = state.fields['addressComplement'] ?? '';
+      _postalCodeCtrl.text = state.fields['postalCode'] ?? '';
+      _avatarCtrl.text = state.fields['avatarUrl'] ?? '';
       _populated = true;
     }
 
@@ -220,9 +296,59 @@ class _PersonFormScreenState extends ConsumerState<PersonFormScreen> {
             ),
             const SizedBox(height: 12),
             AppTextField(
-              controller: _docCtrl,
-              label: 'Documento',
-              hint: 'DNI / Pasaporte',
+              controller: _secondaryPhoneCtrl,
+              label: 'Teléfono secundario',
+              keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: AppTextField(
+                    controller: _docTypeCtrl,
+                    label: 'Tipo documento',
+                    hint: 'DNI / CUIT',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: AppTextField(
+                    controller: _docCtrl,
+                    label: 'Documento',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            AppTextField(
+              controller: _statusCtrl,
+              label: 'Estado',
+              hint: 'ACTIVE',
+            ),
+            const SizedBox(height: 12),
+            AppTextField(
+              controller: _avatarCtrl,
+              label: 'Avatar URL',
+            ),
+            const SizedBox(height: 12),
+            AppTextField(
+              controller: _streetCtrl,
+              label: 'Dirección',
+            ),
+            const SizedBox(height: 12),
+            AppTextField(
+              controller: _neighborhoodCtrl,
+              label: 'Barrio',
+            ),
+            const SizedBox(height: 12),
+            AppTextField(
+              controller: _addressComplementCtrl,
+              label: 'Complemento',
+            ),
+            const SizedBox(height: 12),
+            AppTextField(
+              controller: _postalCodeCtrl,
+              label: 'Código postal',
             ),
             const SizedBox(height: 24),
             AppButton(
@@ -239,9 +365,19 @@ class _PersonFormScreenState extends ConsumerState<PersonFormScreen> {
                   phone: _phoneCtrl.text.trim().isEmpty
                       ? null
                       : _phoneCtrl.text.trim(),
+                  secondaryPhone: _emptyToNull(_secondaryPhoneCtrl.text),
+                  documentType: _emptyToNull(_docTypeCtrl.text),
                   documentNumber: _docCtrl.text.trim().isEmpty
                       ? null
                       : _docCtrl.text.trim(),
+                  status: _emptyToNull(_statusCtrl.text),
+                  countryId: _emptyToNull(_countryCtrl.text),
+                  stateId: _emptyToNull(_stateCtrl.text),
+                  cityId: _emptyToNull(_cityCtrl.text),
+                  street: _emptyToNull(_streetCtrl.text),
+                  neighborhood: _emptyToNull(_neighborhoodCtrl.text),
+                  addressComplement: _emptyToNull(_addressComplementCtrl.text),
+                  postalCode: _emptyToNull(_postalCodeCtrl.text),
                 );
                 if (!ok || !context.mounted) return;
                 if (context.canPop()) {
@@ -256,4 +392,10 @@ class _PersonFormScreenState extends ConsumerState<PersonFormScreen> {
       ),
     );
   }
+
+  String? _emptyToNull(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
 }
