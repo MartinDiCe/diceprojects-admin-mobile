@@ -1,11 +1,12 @@
-import 'package:app_diceprojects_admin/core/ui/widgets/fade_in_slide.dart';
+import 'dart:async';
+
+import 'package:app_diceprojects_admin/app/theme_mode_provider.dart';
 import 'package:app_diceprojects_admin/core/config/app_config.dart';
 import 'package:app_diceprojects_admin/core/http/dio_client.dart';
 import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
-import 'package:app_diceprojects_admin/app/theme_mode_provider.dart';
+import 'package:app_diceprojects_admin/core/ui/widgets/fade_in_slide.dart';
 import 'package:app_diceprojects_admin/features/auth/presentation/controllers/auth_notifier.dart';
 import 'package:app_links/app_links.dart';
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
@@ -61,10 +62,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
     final fragment = Uri.splitQueryString(uri.fragment);
     final token = fragment['access_token'] ?? fragment['accessToken'];
+    final authError = fragment['authError'];
     if (token == null || token.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo completar Google login.')),
+        SnackBar(
+          content: Text(authError == null || authError.isEmpty
+              ? 'No se pudo completar Google login.'
+              : 'Google login rechazado: $authError'),
+        ),
       );
       return;
     }
