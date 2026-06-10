@@ -9,6 +9,7 @@ class AppConfig {
 
   static const String tokenKey = 'access_token';
   static const String rememberLoginKey = 'auth_remember_login';
+  static const String biometricLoginKey = 'auth_biometric_login';
   static const String rememberedUsernameKey = 'auth_remembered_username';
   static const String rememberedPasswordKey = 'auth_remembered_password';
 

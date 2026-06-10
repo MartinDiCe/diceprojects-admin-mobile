@@ -19,13 +19,17 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class QuoteDto {
   final String id;
   final String number;
   final String status;
   final String? publicToken;
+  final String? pdfUrl;
   final String? sellerName;
+  final String customerFirstName;
+  final String? customerLastName;
   final String customerName;
   final String? customerEmail;
   final String? customerPhone;
@@ -42,7 +46,10 @@ class QuoteDto {
     required this.number,
     required this.status,
     this.publicToken,
+    this.pdfUrl,
     this.sellerName,
+    required this.customerFirstName,
+    this.customerLastName,
     required this.customerName,
     this.customerEmail,
     this.customerPhone,
@@ -68,7 +75,10 @@ class QuoteDto {
       number: (json['quoteNumber'] ?? json['number'] ?? '').toString(),
       status: (json['status'] ?? 'DRAFT').toString(),
       publicToken: json['publicToken']?.toString(),
+      pdfUrl: _nonEmpty(json['pdfUrl']),
       sellerName: json['sellerName']?.toString(),
+      customerFirstName: first.isNotEmpty ? first : fullName,
+      customerLastName: _nonEmpty(json['customerLastName']),
       customerName: fullName.isNotEmpty ? fullName : 'Cliente sin nombre',
       customerEmail: _nonEmpty(json['customerEmail']),
       customerPhone: _nonEmpty(json['customerPhone']),
@@ -113,8 +123,10 @@ class QuoteDto {
 }
 
 class QuoteItemDto {
+  final String? quoteItemId;
+  final String? productId;
   final String productName;
-  final String? sku;
+  final String? productSku;
   final String? color;
   final String? presentation;
   final String? purchaseMode;
@@ -124,8 +136,10 @@ class QuoteItemDto {
   final double lineTotal;
 
   const QuoteItemDto({
+    this.quoteItemId,
+    this.productId,
     required this.productName,
-    this.sku,
+    this.productSku,
     this.color,
     this.presentation,
     this.purchaseMode,
@@ -136,9 +150,11 @@ class QuoteItemDto {
   });
 
   factory QuoteItemDto.fromJson(Map<String, dynamic> json) => QuoteItemDto(
+        quoteItemId: json['quoteItemId']?.toString(),
+        productId: json['productId']?.toString(),
         productName: (json['productName'] ?? json['name'] ?? 'Producto')
             .toString(),
-        sku: json['sku']?.toString(),
+        productSku: (json['productSku'] ?? json['sku'])?.toString(),
         color: json['color']?.toString(),
         presentation: json['presentation']?.toString(),
         purchaseMode: json['purchaseMode']?.toString(),
@@ -178,6 +194,13 @@ class QuotesNotifier extends ListNotifier<QuoteDto> {
       data: {'status': status},
     );
     reload();
+  }
+
+  Future<QuoteDto> updateQuote(QuoteDto quote, Map<String, dynamic> payload) async {
+    final resp = await _dio.put('/v1/quotes/${quote.id}', data: payload);
+    final updated = QuoteDto.fromJson(Map<String, dynamic>.from(resp.data as Map));
+    reload();
+    return updated;
   }
 
   Future<void> delete(QuoteDto quote) async {
@@ -693,6 +716,8 @@ class _QuoteDetailSheetState extends ConsumerState<_QuoteDetailSheet> {
     final perms = ref.watch(permissionsProvider);
     final canStatus =
         perms.hasAnyPermission(['Sales.Quotes.Status', 'Sales.Admin']);
+    final canEdit =
+        perms.hasAnyPermission(['Sales.Quotes.Edit', 'Sales.Quotes.Create', 'Sales.Admin']);
     final canDelete =
         perms.hasAnyPermission(['Sales.Quotes.Delete', 'Sales.Admin']);
 
@@ -742,6 +767,15 @@ class _QuoteDetailSheetState extends ConsumerState<_QuoteDetailSheet> {
           ),
           const SizedBox(height: 18),
           _CustomerPanel(quote: widget.quote),
+          if (canEdit) ...[
+            const SizedBox(height: 12),
+            AppButton.secondary(
+              label: 'Editar cotización',
+              icon: Icons.edit_rounded,
+              fullWidth: true,
+              onPressed: _saving ? null : _openEditSheet,
+            ),
+          ],
           if (widget.quote.expiresAt != null) ...[
             const SizedBox(height: 10),
             _InfoRow(
@@ -803,6 +837,10 @@ class _QuoteDetailSheetState extends ConsumerState<_QuoteDetailSheet> {
             _PublicQrPanel(url: widget.quote.publicUrl)
           else
             _LockedLinkPanel(status: widget.quote.status),
+          if (widget.quote.status == 'SENT') ...[
+            const SizedBox(height: 12),
+            _QuoteDeliveryActions(quote: widget.quote),
+          ],
           if (canDelete) ...[
             const SizedBox(height: 12),
             OutlinedButton.icon(
@@ -817,6 +855,16 @@ class _QuoteDetailSheetState extends ConsumerState<_QuoteDetailSheet> {
         ],
       ),
     );
+  }
+
+  Future<void> _openEditSheet() async {
+    final updated = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _QuoteEditSheet(quote: widget.quote),
+    );
+    if (mounted && updated == true) Navigator.of(context).pop();
   }
 
   Future<void> _saveStatus() async {
@@ -845,6 +893,326 @@ class _QuoteDetailSheetState extends ConsumerState<_QuoteDetailSheet> {
       if (mounted) Navigator.of(context).pop();
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+}
+
+class _QuoteEditSheet extends ConsumerStatefulWidget {
+  final QuoteDto quote;
+
+  const _QuoteEditSheet({required this.quote});
+
+  @override
+  ConsumerState<_QuoteEditSheet> createState() => _QuoteEditSheetState();
+}
+
+class _QuoteEditSheetState extends ConsumerState<_QuoteEditSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _firstName;
+  late final TextEditingController _lastName;
+  late final TextEditingController _phone;
+  late final TextEditingController _email;
+  late final TextEditingController _notes;
+  late final TextEditingController _expiresAt;
+  late final List<_QuoteItemEditControllers> _items;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _firstName = TextEditingController(text: widget.quote.customerFirstName);
+    _lastName = TextEditingController(text: widget.quote.customerLastName ?? '');
+    _phone = TextEditingController(text: widget.quote.customerPhone ?? '');
+    _email = TextEditingController(text: widget.quote.customerEmail ?? '');
+    _notes = TextEditingController(text: widget.quote.notes ?? '');
+    _expiresAt = TextEditingController(
+      text: widget.quote.expiresAt == null
+          ? ''
+          : DateFormat("yyyy-MM-dd'T'HH:mm").format(widget.quote.expiresAt!),
+    );
+    _items = widget.quote.items.isEmpty
+        ? [_QuoteItemEditControllers.empty()]
+        : widget.quote.items
+            .map(_QuoteItemEditControllers.fromItem)
+            .toList(growable: true);
+  }
+
+  @override
+  void dispose() {
+    for (final ctrl in [_firstName, _lastName, _phone, _email, _notes, _expiresAt]) {
+      ctrl.dispose();
+    }
+    for (final item in _items) {
+      item.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.94,
+      maxChildSize: 0.98,
+      minChildSize: 0.60,
+      builder: (_, controller) => Form(
+        key: _formKey,
+        child: ListView(
+          controller: controller,
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+          children: [
+            Text(
+              'Ajustar cotización',
+              style: TextStyle(
+                color: AppColors.ink,
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            Text(
+              widget.quote.number,
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 18),
+            _SectionTitle('Cliente'),
+            AppTextField(label: 'Nombre *', controller: _firstName, validator: _required),
+            const SizedBox(height: 10),
+            AppTextField(label: 'Apellido', controller: _lastName),
+            const SizedBox(height: 10),
+            AppTextField(label: 'Teléfono *', controller: _phone, keyboardType: TextInputType.phone, validator: _required),
+            const SizedBox(height: 10),
+            AppTextField(label: 'Email', controller: _email, keyboardType: TextInputType.emailAddress),
+            const SizedBox(height: 10),
+            AppTextField(label: 'Vigencia', controller: _expiresAt, hint: '2026-06-10T18:00'),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                const Expanded(child: _SectionTitle('Items')),
+                TextButton.icon(
+                  onPressed: _saving ? null : _addItem,
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('Agregar'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            for (var index = 0; index < _items.length; index++) ...[
+              _EditableQuoteItemCard(
+                item: _items[index],
+                canRemove: _items.length > 1,
+                onRemove: _saving ? null : () => _removeItem(index),
+              ),
+              const SizedBox(height: 12),
+            ],
+            AppTextField(label: 'Notas', controller: _notes, maxLines: 3),
+            const SizedBox(height: 18),
+            AppButton(
+              label: 'Guardar ajuste',
+              icon: Icons.save_rounded,
+              isLoading: _saving,
+              fullWidth: true,
+              onPressed: _save,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String? _required(String? value) =>
+      value == null || value.trim().isEmpty ? 'Requerido' : null;
+
+  void _addItem() {
+    setState(() => _items.add(_QuoteItemEditControllers.empty()));
+  }
+
+  void _removeItem(int index) {
+    final removed = _items.removeAt(index);
+    removed.dispose();
+    setState(() {});
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    final items = _items.map((item) => item.toPayload()).whereType<Map<String, dynamic>>().toList();
+    if (items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Agregá al menos un item válido.')),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await ref.read(quotesNotifierProvider.notifier).updateQuote(widget.quote, {
+        'customerFirstName': _firstName.text.trim(),
+        'customerLastName': _emptyToNull(_lastName.text),
+        'customerEmail': _emptyToNull(_email.text),
+        'customerPhone': _phone.text.trim(),
+        'notes': _emptyToNull(_notes.text),
+        'currencyCode': widget.quote.currency,
+        'expiresAt': _emptyToNull(_expiresAt.text),
+        'items': items,
+      });
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo guardar el ajuste.')),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+}
+
+class _EditableQuoteItemCard extends StatelessWidget {
+  final _QuoteItemEditControllers item;
+  final bool canRemove;
+  final VoidCallback? onRemove;
+
+  const _EditableQuoteItemCard({
+    required this.item,
+    required this.canRemove,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          AppTextField(label: 'Producto *', controller: item.productName, validator: _required),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(child: AppTextField(label: 'SKU', controller: item.productSku)),
+              const SizedBox(width: 10),
+              Expanded(child: AppTextField(label: 'Unidad', controller: item.unit)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(child: AppTextField(label: 'Cantidad *', controller: item.quantity, keyboardType: TextInputType.number, validator: _required)),
+              const SizedBox(width: 10),
+              Expanded(child: AppTextField(label: 'Precio cotizado *', controller: item.unitPrice, keyboardType: TextInputType.number, validator: _required)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(child: AppTextField(label: 'Color', controller: item.color)),
+              const SizedBox(width: 10),
+              Expanded(child: AppTextField(label: 'Presentación', controller: item.presentation)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            initialValue: item.purchaseMode,
+            decoration: const InputDecoration(labelText: 'Tipo de venta'),
+            items: const [
+              DropdownMenuItem(value: 'PENDING', child: Text('Pendiente')),
+              DropdownMenuItem(value: 'WHOLESALE', child: Text('Por mayor')),
+              DropdownMenuItem(value: 'RETAIL', child: Text('Por menor')),
+            ],
+            onChanged: (value) => item.purchaseMode = value ?? 'PENDING',
+          ),
+          if (canRemove) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: onRemove,
+                icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                label: const Text('Quitar'),
+                style: TextButton.styleFrom(foregroundColor: AppColors.error),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String? _required(String? value) =>
+      value == null || value.trim().isEmpty ? 'Requerido' : null;
+}
+
+class _QuoteItemEditControllers {
+  final String? productId;
+  final TextEditingController productName;
+  final TextEditingController productSku;
+  final TextEditingController quantity;
+  final TextEditingController unit;
+  final TextEditingController unitPrice;
+  final TextEditingController color;
+  final TextEditingController presentation;
+  String purchaseMode;
+
+  _QuoteItemEditControllers({
+    required this.productId,
+    required this.productName,
+    required this.productSku,
+    required this.quantity,
+    required this.unit,
+    required this.unitPrice,
+    required this.color,
+    required this.presentation,
+    required this.purchaseMode,
+  });
+
+  factory _QuoteItemEditControllers.empty() => _QuoteItemEditControllers(
+        productId: null,
+        productName: TextEditingController(),
+        productSku: TextEditingController(),
+        quantity: TextEditingController(text: '1'),
+        unit: TextEditingController(text: 'U'),
+        unitPrice: TextEditingController(text: '0'),
+        color: TextEditingController(),
+        presentation: TextEditingController(),
+        purchaseMode: 'PENDING',
+      );
+
+  factory _QuoteItemEditControllers.fromItem(QuoteItemDto item) =>
+      _QuoteItemEditControllers(
+        productId: item.productId,
+        productName: TextEditingController(text: item.productName),
+        productSku: TextEditingController(text: item.productSku ?? ''),
+        quantity: TextEditingController(text: _qty(item.quantity)),
+        unit: TextEditingController(text: item.unit),
+        unitPrice: TextEditingController(text: _plainNumber(item.unitPrice)),
+        color: TextEditingController(text: item.color ?? ''),
+        presentation: TextEditingController(text: item.presentation ?? ''),
+        purchaseMode: item.purchaseMode ?? 'PENDING',
+      );
+
+  Map<String, dynamic>? toPayload() {
+    final name = productName.text.trim();
+    final qty = _parseAmount(quantity.text);
+    if (name.isEmpty || qty <= 0) return null;
+    final sku = productSku.text.trim();
+    return {
+      'productId': productId ?? (sku.isNotEmpty ? sku : 'MOBILE-MANUAL'),
+      'productSku': sku,
+      'productName': name,
+      'color': _upperOrNull(color.text),
+      'presentation': _upperOrNull(presentation.text),
+      'purchaseMode': purchaseMode,
+      'quantity': qty,
+      'unit': _upperOrDefault(unit.text, 'U'),
+      'unitPrice': _parseAmount(unitPrice.text),
+    };
+  }
+
+  void dispose() {
+    for (final ctrl in [productName, productSku, quantity, unit, unitPrice, color, presentation]) {
+      ctrl.dispose();
     }
   }
 }
@@ -968,10 +1336,10 @@ class _QuoteItemCard extends StatelessWidget {
               ),
             ],
           ),
-          if (item.sku != null) ...[
+          if (item.productSku != null) ...[
             const SizedBox(height: 2),
             Text(
-              item.sku!,
+              item.productSku!,
               style: TextStyle(color: AppColors.textMuted, fontSize: 11),
             ),
           ],
@@ -1016,6 +1384,121 @@ class _Pill extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _QuoteDeliveryActions extends StatelessWidget {
+  final QuoteDto quote;
+
+  const _QuoteDeliveryActions({required this.quote});
+
+  @override
+  Widget build(BuildContext context) {
+    final emailEnabled = quote.customerEmail != null;
+    final whatsappEnabled = _phoneDigits(quote.customerPhone).isNotEmpty;
+    final pdfEnabled = quote.pdfUrl != null;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Enviar cotización',
+            style: TextStyle(
+              color: AppColors.ink,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Acciones habilitadas porque la cotización está enviada.',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton.secondary(
+                  label: 'PDF',
+                  icon: Icons.picture_as_pdf_rounded,
+                  onPressed: () => _openPdf(context),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: AppButton(
+                  label: 'Email',
+                  icon: Icons.mail_outline_rounded,
+                  onPressed: emailEnabled ? () => _openEmail(context) : null,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          AppButton(
+            label: 'WhatsApp',
+            icon: Icons.chat_bubble_outline_rounded,
+            fullWidth: true,
+            onPressed: whatsappEnabled ? () => _openWhatsapp(context) : null,
+          ),
+          if (!emailEnabled || !whatsappEnabled || !pdfEnabled) ...[
+            const SizedBox(height: 8),
+            Text(
+              _missingText(emailEnabled, whatsappEnabled, pdfEnabled),
+              style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openPdf(BuildContext context) async {
+    final url = quote.pdfUrl;
+    if (url == null) {
+      _showSnack(context, 'El PDF todavía no fue generado por backend.');
+      return;
+    }
+    await _launchExternal(context, Uri.parse(url), 'No se pudo abrir el PDF.');
+  }
+
+  Future<void> _openEmail(BuildContext context) async {
+    final email = quote.customerEmail;
+    if (email == null) return;
+    final uri = Uri(
+      scheme: 'mailto',
+      path: email,
+      queryParameters: {
+        'subject': 'Cotización ${quote.number}',
+        'body': _quoteShareText(quote),
+      },
+    );
+    await _launchExternal(context, uri, 'No se pudo abrir el email.');
+  }
+
+  Future<void> _openWhatsapp(BuildContext context) async {
+    final phone = _phoneDigits(quote.customerPhone);
+    if (phone.isEmpty) return;
+    final uri = Uri.parse(
+      'https://wa.me/$phone?text=${Uri.encodeComponent(_quoteShareText(quote))}',
+    );
+    await _launchExternal(context, uri, 'No se pudo abrir WhatsApp.');
+  }
+
+  String _missingText(bool email, bool whatsapp, bool pdf) {
+    final missing = <String>[
+      if (!pdf) 'PDF pendiente',
+      if (!email) 'sin email',
+      if (!whatsapp) 'sin teléfono',
+    ];
+    return missing.join(' · ');
   }
 }
 
@@ -1197,6 +1680,54 @@ String _purchaseModeLabel(String? value) {
 }
 
 String _formatDate(DateTime date) => DateFormat('dd/MM/yyyy HH:mm').format(date);
+
+String? _emptyToNull(String value) {
+  final text = value.trim();
+  return text.isEmpty ? null : text;
+}
+
+String? _upperOrNull(String value) {
+  final text = value.trim();
+  return text.isEmpty ? null : text.toUpperCase();
+}
+
+String _upperOrDefault(String value, String fallback) {
+  final text = value.trim();
+  return text.isEmpty ? fallback : text.toUpperCase();
+}
+
+double _parseAmount(String value) =>
+    double.tryParse(value.trim().replaceAll(',', '.')) ?? 0;
+
+String _plainNumber(double value) {
+  if (value == value.roundToDouble()) return value.toInt().toString();
+  return value.toStringAsFixed(2);
+}
+
+String _phoneDigits(String? value) =>
+    (value ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+
+String _quoteShareText(QuoteDto quote) {
+  final lines = <String>[
+    'Hola ${quote.customerName}, te enviamos la cotización ${quote.number}.',
+    'Total: ${_money(quote.total, quote.currency)}.',
+    if (quote.hasPublicLink) 'Podés aprobarla o solicitar ajuste acá: ${quote.publicUrl}',
+  ];
+  return lines.join('\n');
+}
+
+Future<void> _launchExternal(
+  BuildContext context,
+  Uri uri,
+  String errorMessage,
+) async {
+  final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (!opened && context.mounted) _showSnack(context, errorMessage);
+}
+
+void _showSnack(BuildContext context, String message) {
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+}
 
 String _money(double value, String currency) {
   final format = NumberFormat.currency(

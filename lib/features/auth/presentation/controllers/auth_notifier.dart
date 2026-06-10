@@ -107,7 +107,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> login(String username, String password) async {
+  Future<bool> login(String username, String password) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final response = await _dio.post(
@@ -115,24 +115,25 @@ class AuthNotifier extends StateNotifier<AuthState> {
         data: {'username': username, 'password': password},
       );
 
-      debugPrint('[AUTH] login response: status=${response.statusCode} data=${response.data}');
+      debugPrint('[AUTH] login response: status=${response.statusCode}');
 
       // Defensive parsing — avoids hard-cast TypeError if response shape is unexpected
       final data = response.data;
       final token = data is Map ? data['token']?.toString() : null;
       if (token == null || token.isEmpty) {
-        debugPrint('[AUTH] login failed — token field missing. Full response: $data');
+        debugPrint('[AUTH] login failed — token field missing.');
         state = state.copyWith(
           isLoading: false,
           error: 'Respuesta inesperada del servidor. Contactá soporte.',
         );
-        return;
+        return false;
       }
 
       await _storage.write(AppConfig.tokenKey, token);
       await _buildStateFromToken(token);
+      return true;
     } on DioException catch (e) {
-      debugPrint('[AUTH] DioException: status=${e.response?.statusCode} data=${e.response?.data} msg=${e.message}');
+      debugPrint('[AUTH] DioException: status=${e.response?.statusCode} msg=${e.message}');
       // Try to extract the real backend message for better diagnostics
       final responseData = e.response?.data;
       final backendMsg = responseData is Map
@@ -150,6 +151,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         message = backendMsg?.isNotEmpty == true ? backendMsg! : ErrorHandler.handle(e).message;
       }
       state = state.copyWith(isLoading: false, error: message);
+      return false;
     } catch (e, s) {
       debugPrint('[AUTH] unexpected login error: $e\n$s');
       state = state.copyWith(
@@ -158,6 +160,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
             ? 'Error: ${e.toString().split('\n').first}'
             : 'Error inesperado al iniciar sesión.',
       );
+      return false;
     }
   }
 

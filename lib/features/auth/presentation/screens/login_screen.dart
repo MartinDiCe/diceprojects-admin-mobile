@@ -80,11 +80,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
-    await ref.read(authNotifierProvider.notifier).login(
+    final loggedIn = await ref.read(authNotifierProvider.notifier).login(
           _usernameCtrl.text.trim(),
           _passwordCtrl.text.trimRight(),
         );
-    await _persistRememberedLoginIfNeeded();
+    if (!loggedIn) return;
+    final biometricEnabled = await _offerBiometricEnrollmentIfAvailable();
+    await _persistRememberedLoginIfNeeded(
+      preserveBiometricCredentials: biometricEnabled,
+    );
   }
 
   Future<void> _hydrateSavedLogin() async {
@@ -92,6 +96,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final storage = ref.read(secureStorageProvider);
       final remember =
           (await storage.read(AppConfig.rememberLoginKey)) == 'true';
+      final biometricEnabled =
+          (await storage.read(AppConfig.biometricLoginKey)) == 'true';
       final username = await storage.read(AppConfig.rememberedUsernameKey);
       final password = await storage.read(AppConfig.rememberedPasswordKey);
       final localAuth = LocalAuthentication();
@@ -102,7 +108,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         _rememberLogin = remember;
         if (remember && username != null) _usernameCtrl.text = username;
         if (remember && password != null) _passwordCtrl.text = password;
-        _biometricAvailable = remember &&
+        _biometricAvailable = biometricEnabled &&
             (username?.isNotEmpty ?? false) &&
             (password?.isNotEmpty ?? false) &&
             supported &&
@@ -114,7 +120,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  Future<void> _persistRememberedLoginIfNeeded() async {
+  Future<void> _persistRememberedLoginIfNeeded({
+    bool preserveBiometricCredentials = false,
+  }) async {
     final auth = ref.read(authNotifierProvider);
     final storage = ref.read(secureStorageProvider);
     if (!auth.isAuthenticated || auth.error != null) return;
@@ -126,10 +134,67 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           AppConfig.rememberedPasswordKey, _passwordCtrl.text.trimRight());
     } else {
       await storage.write(AppConfig.rememberLoginKey, 'false');
-      await storage.delete(AppConfig.rememberedUsernameKey);
-      await storage.delete(AppConfig.rememberedPasswordKey);
+      if (!preserveBiometricCredentials) {
+        await storage.delete(AppConfig.biometricLoginKey);
+        await storage.delete(AppConfig.rememberedUsernameKey);
+        await storage.delete(AppConfig.rememberedPasswordKey);
+      }
     }
     await _hydrateSavedLogin();
+  }
+
+  Future<bool> _offerBiometricEnrollmentIfAvailable() async {
+    try {
+      final storage = ref.read(secureStorageProvider);
+      final alreadyEnabled =
+          (await storage.read(AppConfig.biometricLoginKey)) == 'true';
+      if (alreadyEnabled) return true;
+
+      final localAuth = LocalAuthentication();
+      final supported = await localAuth.isDeviceSupported();
+      final canCheck = await localAuth.canCheckBiometrics;
+      if (!supported || !canCheck || !mounted) return false;
+
+      final shouldEnable = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Activar ingreso con huella'),
+          content: const Text(
+            'Podés asociar este dispositivo a tu cuenta para ingresar con huella o biometría la próxima vez.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Ahora no'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Activar'),
+            ),
+          ],
+        ),
+      );
+      if (shouldEnable != true) return false;
+
+      final authenticated = await localAuth.authenticate(
+        localizedReason: 'Confirmá tu huella para activar el ingreso biométrico',
+        options: const AuthenticationOptions(
+          biometricOnly: true,
+          stickyAuth: true,
+        ),
+      );
+      if (!authenticated) return false;
+
+      await storage.write(AppConfig.biometricLoginKey, 'true');
+      await storage.write(
+          AppConfig.rememberedUsernameKey, _usernameCtrl.text.trim());
+      await storage.write(
+          AppConfig.rememberedPasswordKey, _passwordCtrl.text.trimRight());
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _loginWithBiometric() async {
