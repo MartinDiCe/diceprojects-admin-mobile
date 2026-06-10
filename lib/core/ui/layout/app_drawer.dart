@@ -187,6 +187,12 @@ class AppDrawer extends ConsumerWidget {
 
                 // ── Marketing ────────────────────────────────────
                 const _SectionHeader(label: 'Marketing'),
+                if (perms.canAccessRoute('/marketing/campaigns'))
+                  _navItem(context, '/marketing/campaigns',
+                      Icons.campaign_rounded, 'Campañas'),
+                if (perms.canAccessRoute('/marketing/coupons'))
+                  _navItem(context, '/marketing/coupons',
+                      Icons.confirmation_number_rounded, 'Cupones'),
                 if (perms.canAccessRoute('/marketing/leads'))
                   _navItem(context, '/marketing/leads',
                       Icons.leaderboard_rounded, 'Leads'),

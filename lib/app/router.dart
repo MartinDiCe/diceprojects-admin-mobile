@@ -9,6 +9,8 @@ import 'package:app_diceprojects_admin/features/core_masters/presentation/screen
 import 'package:app_diceprojects_admin/features/core_masters/presentation/screens/parameters_screen.dart';
 import 'package:app_diceprojects_admin/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:app_diceprojects_admin/features/invitations/presentation/screens/invitations_screen.dart';
+import 'package:app_diceprojects_admin/features/marketing_campaigns/presentation/screens/campaigns_screen.dart';
+import 'package:app_diceprojects_admin/features/marketing_coupons/presentation/screens/coupons_screen.dart';
 import 'package:app_diceprojects_admin/features/marketing_destacados/presentation/screens/destacados_screen.dart';
 import 'package:app_diceprojects_admin/features/marketing_leads/presentation/screens/leads_list_screen.dart';
 import 'package:app_diceprojects_admin/features/notifications/presentation/screens/notif_logs_screen.dart';
@@ -245,6 +247,14 @@ final routerProvider = Provider<GoRouter>((ref) {
                 ProductFormScreen(productId: state.pathParameters['id']),
           ),
           // Marketing
+          GoRoute(
+            path: '/marketing/campaigns',
+            builder: (_, __) => const CampaignsScreen(),
+          ),
+          GoRoute(
+            path: '/marketing/coupons',
+            builder: (_, __) => const CouponsScreen(),
+          ),
           GoRoute(
             path: '/marketing/leads',
             builder: (_, __) => const LeadsListScreen(),

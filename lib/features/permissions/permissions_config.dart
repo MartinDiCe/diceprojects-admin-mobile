@@ -74,6 +74,22 @@ const Map<String, List<String>> permissionGates = {
     'Warehouse.Warehouses.View',
     'Warehouse.Admin',
   ],
+  '/marketing/campaigns': [
+    'Marketing.Campaigns.List',
+    'Marketing.Campaigns.View',
+    'Marketing.Campaign.List',
+    'Marketing.Campaign.View',
+    'Marketing.VerCampanias',
+    'Marketing.Admin',
+  ],
+  '/marketing/coupons': [
+    'Marketing.Coupons.List',
+    'Marketing.Coupons.View',
+    'Marketing.Coupon.List',
+    'Marketing.Coupon.View',
+    'Marketing.VerCupones',
+    'Marketing.Admin',
+  ],
   '/marketing/leads': [
     'Marketing.Leads.List',
     'Marketing.Leads.View',
