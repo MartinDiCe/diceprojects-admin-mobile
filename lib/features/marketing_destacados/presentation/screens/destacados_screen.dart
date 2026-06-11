@@ -7,6 +7,7 @@ import 'package:app_diceprojects_admin/core/ui/widgets/empty_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/status_badge.dart';
+import 'package:app_diceprojects_admin/features/auth/presentation/controllers/auth_notifier.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class DestacadoDto {
   final String id;
   final String title;
+  final String? sku;
   final String? description;
   final String status;
   final int? order;
@@ -24,6 +26,7 @@ class DestacadoDto {
   const DestacadoDto({
     required this.id,
     required this.title,
+    this.sku,
     this.description,
     required this.status,
     this.order,
@@ -35,12 +38,25 @@ class DestacadoDto {
   factory DestacadoDto.fromJson(Map<String, dynamic> json) => DestacadoDto(
         id: (json['productId'] ?? json['id'])?.toString() ?? '',
         title: (json['name'] ?? json['label'] ?? json['title'] ?? 'Producto destacado').toString(),
+        sku: (json['sku'] ?? json['code'])?.toString(),
         description: (json['sku'] ?? json['channel'] ?? json['description'])?.toString(),
         status: (json['statusCode'] ?? json['status'] ?? 'ACTIVE').toString(),
         order: (json['priority'] as num?)?.toInt() ?? (json['order'] as num?)?.toInt(),
         views: _intAny(json, ['views', 'viewCount', 'productViews', 'impressions']),
         likes: _intAny(json, ['likes', 'likeCount', 'productLikes']),
         imageUrl: json['imageUrl']?.toString(),
+      );
+
+  DestacadoDto withMetrics(_DestacadoMetrics metrics) => DestacadoDto(
+        id: id,
+        title: title,
+        sku: sku,
+        description: description,
+        status: status,
+        order: order,
+        views: metrics.views > 0 ? metrics.views : views,
+        likes: metrics.likes > 0 ? metrics.likes : likes,
+        imageUrl: imageUrl,
       );
 }
 
@@ -56,20 +72,121 @@ int _intAny(Map<String, dynamic> json, List<String> keys) {
 
 class DestacadosNotifier extends ListNotifier<DestacadoDto> {
   final Dio _dio;
-  DestacadosNotifier(this._dio) : super();
+  final AuthState _auth;
+  DestacadosNotifier(this._dio, this._auth) : super();
 
   @override
   Future<PaginatedResponse<DestacadoDto>> fetchPage(PageParams params) async {
-    final query = params.toQueryParams()..['featured'] = true;
-    final resp = await _dio.get('/v1/products', queryParameters: query);
-    return PaginatedResponse.fromJson(resp.data, DestacadoDto.fromJson);
+    final scope = _scopedQuery(_auth);
+    final query = params.toQueryParams()
+      ..['featured'] = true
+      ..addAll(scope);
+    final productsFuture = _dio.get(
+      '/v1/products',
+      queryParameters: query,
+      options: _tenantOptions(_auth, scope['tenantId']?.toString()),
+    );
+    final metricsFuture = _loadMetrics(scope);
+    final resp = await productsFuture;
+    final page = PaginatedResponse.fromJson(resp.data, DestacadoDto.fromJson);
+    final metrics = await metricsFuture;
+    final items = page.items.map((item) {
+      final metric = metrics[item.id] ??
+          (item.sku == null ? null : metrics[item.sku!]) ??
+          metrics[item.title.toLowerCase()];
+      return metric == null ? item : item.withMetrics(metric);
+    }).toList();
+    return PaginatedResponse(
+      items: items,
+      totalElements: page.totalElements,
+      totalPages: page.totalPages,
+      currentPage: page.currentPage,
+      hasMore: page.hasMore,
+    );
+  }
+
+  Future<Map<String, _DestacadoMetrics>> _loadMetrics(Map<String, dynamic> scope) async {
+    try {
+      final response = await _dio.get(
+        '/v1/campaigns/reporting/products/top',
+        queryParameters: {
+          ...scope,
+          'period': 'all',
+          'limit': 200,
+        },
+        options: _tenantOptions(_auth, scope['tenantId']?.toString()),
+      );
+      final data = response.data;
+      final raw = data is List
+          ? data
+          : data is Map
+              ? ((data['content'] as List?) ?? (data['items'] as List?) ?? const [])
+              : const [];
+      final metrics = <String, _DestacadoMetrics>{};
+      for (final item in raw.whereType<Map>()) {
+        final map = Map<String, dynamic>.from(item);
+        final metric = _DestacadoMetrics(
+          views: _intAny(map, ['productViews', 'views', 'impressions', 'featuredViews']),
+          likes: _intAny(map, ['likes', 'productLikes', 'likeCount']),
+        );
+        for (final key in [
+          map['productId'],
+          map['id'],
+          map['sku'],
+          map['code'],
+          map['productName']?.toString().toLowerCase(),
+          map['name']?.toString().toLowerCase(),
+        ]) {
+          final value = key?.toString().trim();
+          if (value != null && value.isNotEmpty && value != 'null') {
+            metrics[value] = metric;
+          }
+        }
+      }
+      return metrics;
+    } catch (_) {
+      return const {};
+    }
   }
 }
 
 final destacadosNotifierProvider =
     StateNotifierProvider.autoDispose<DestacadosNotifier, ListState<DestacadoDto>>(
-  (ref) => DestacadosNotifier(ref.watch(dioProvider)),
+  (ref) => DestacadosNotifier(ref.watch(dioProvider), ref.watch(authNotifierProvider)),
 );
+
+class _DestacadoMetrics {
+  final int views;
+  final int likes;
+
+  const _DestacadoMetrics({
+    required this.views,
+    required this.likes,
+  });
+}
+
+Map<String, dynamic> _scopedQuery(AuthState auth) {
+  final params = <String, dynamic>{};
+  final tenantId = auth.tenantId?.trim();
+  if (tenantId != null && tenantId.isNotEmpty) {
+    params['tenantId'] = tenantId;
+  }
+  final sellerId = auth.sellerId?.trim();
+  if (sellerId != null && sellerId.isNotEmpty) {
+    params['sellerId'] = sellerId;
+  } else if (!auth.isAdminGlobal && auth.sellerIds.length == 1) {
+    params['sellerId'] = auth.sellerIds.first;
+  }
+  return params;
+}
+
+Options? _tenantOptions(AuthState auth, String? tenantId) {
+  final headers = <String, String>{};
+  final tenant = tenantId?.trim();
+  if (tenant != null && tenant.isNotEmpty) headers['X-Tenant-Id'] = tenant;
+  if (auth.roles.isNotEmpty) headers['X-Roles'] = auth.roles.join(',');
+  return headers.isEmpty ? null : Options(headers: headers);
+}
 
 class DestacadosScreen extends ConsumerWidget {
   const DestacadosScreen({super.key});

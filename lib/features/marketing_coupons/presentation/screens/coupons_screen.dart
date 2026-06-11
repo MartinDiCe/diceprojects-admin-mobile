@@ -7,6 +7,7 @@ import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/status_badge.dart';
 import 'package:app_diceprojects_admin/core/utils/list_state.dart';
 import 'package:app_diceprojects_admin/core/utils/pagination.dart';
+import 'package:app_diceprojects_admin/features/auth/presentation/controllers/auth_notifier.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -47,23 +48,92 @@ class CouponDto {
 
 class CouponsNotifier extends ListNotifier<CouponDto> {
   final Dio _dio;
+  final AuthState _auth;
 
-  CouponsNotifier(this._dio) : super();
+  CouponsNotifier(this._dio, this._auth) : super();
 
   @override
   Future<PaginatedResponse<CouponDto>> fetchPage(PageParams params) async {
+    final scope = _scopedQuery(_auth);
+    if (scope.isEmpty && _auth.isAdminGlobal) {
+      return _fetchAcrossTenants(params);
+    }
     final response = await _dio.get(
       '/v1/coupons',
-      queryParameters: params.toQueryParams(),
+      queryParameters: {
+        ...params.toQueryParams(),
+        ...scope,
+      },
+      options: _tenantOptions(_auth, scope['tenantId']?.toString()),
     );
     return PaginatedResponse.fromJson(response.data, CouponDto.fromJson);
+  }
+
+  Future<PaginatedResponse<CouponDto>> _fetchAcrossTenants(PageParams params) async {
+    final tenants = await _dio.get('/v1/tenants', queryParameters: {'page': 0, 'size': 50, 'pageSize': 50});
+    final tenantIds = _extractTenantIds(tenants.data);
+    final items = <CouponDto>[];
+    for (final tenantId in tenantIds) {
+      final response = await _dio.get(
+        '/v1/coupons',
+        queryParameters: {
+          ...params.toQueryParams(),
+          'tenantId': tenantId,
+        },
+        options: _tenantOptions(_auth, tenantId),
+      );
+      items.addAll(PaginatedResponse.fromJson(response.data, CouponDto.fromJson).items);
+    }
+    return PaginatedResponse(
+      items: items,
+      totalElements: items.length,
+      totalPages: 1,
+      currentPage: 0,
+      hasMore: false,
+    );
   }
 }
 
 final couponsNotifierProvider =
     StateNotifierProvider.autoDispose<CouponsNotifier, ListState<CouponDto>>(
-  (ref) => CouponsNotifier(ref.watch(dioProvider)),
+  (ref) => CouponsNotifier(ref.watch(dioProvider), ref.watch(authNotifierProvider)),
 );
+
+Map<String, dynamic> _scopedQuery(AuthState auth) {
+  final params = <String, dynamic>{};
+  final tenantId = auth.tenantId?.trim();
+  if (tenantId != null && tenantId.isNotEmpty) {
+    params['tenantId'] = tenantId;
+  }
+  final sellerId = auth.sellerId?.trim();
+  if (sellerId != null && sellerId.isNotEmpty) {
+    params['sellerId'] = sellerId;
+  } else if (!auth.isAdminGlobal && auth.sellerIds.length == 1) {
+    params['sellerId'] = auth.sellerIds.first;
+  }
+  return params;
+}
+
+Options? _tenantOptions(AuthState auth, String? tenantId) {
+  final headers = <String, String>{};
+  final tenant = tenantId?.trim();
+  if (tenant != null && tenant.isNotEmpty) headers['X-Tenant-Id'] = tenant;
+  if (auth.roles.isNotEmpty) headers['X-Roles'] = auth.roles.join(',');
+  return headers.isEmpty ? null : Options(headers: headers);
+}
+
+List<String> _extractTenantIds(dynamic raw) {
+  final list = raw is List
+      ? raw
+      : raw is Map
+          ? ((raw['content'] as List?) ?? (raw['items'] as List?) ?? const [])
+          : const [];
+  return list
+      .whereType<Map>()
+      .map((item) => (item['tenantId'] ?? item['companyId'] ?? item['id'] ?? '').toString())
+      .where((id) => id.isNotEmpty)
+      .toList();
+}
 
 class CouponsScreen extends ConsumerWidget {
   const CouponsScreen({super.key});

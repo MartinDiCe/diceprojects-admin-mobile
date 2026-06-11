@@ -20,18 +20,21 @@ final dashboardPeriodProvider =
   (ref, scope) => DashboardPeriod.today,
 );
 
-final marketingTenantFilterProvider = StateProvider.autoDispose<String?>((ref) {
+final dashboardTenantFilterProvider = StateProvider.autoDispose<String?>((ref) {
   final auth = ref.watch(authNotifierProvider);
   final tenantId = auth.tenantId?.trim();
   return tenantId == null || tenantId.isEmpty ? null : tenantId;
 });
 
-final marketingSellerFilterProvider = StateProvider.autoDispose<String?>((ref) {
+final dashboardSellerFilterProvider = StateProvider.autoDispose<String?>((ref) {
   final auth = ref.watch(authNotifierProvider);
   final sellerId = auth.sellerId?.trim();
   if (sellerId != null && sellerId.isNotEmpty) return sellerId;
   return auth.sellerIds.length == 1 ? auth.sellerIds.first : null;
 });
+
+final marketingTenantFilterProvider = dashboardTenantFilterProvider;
+final marketingSellerFilterProvider = dashboardSellerFilterProvider;
 
 class _DashboardLookupOption {
   final String id;
@@ -63,7 +66,7 @@ class _DashboardLookupOption {
                 json['sellerName'] ??
                 json['businessName'] ??
                 json['sellerCode'] ??
-                'Seller')
+                'Vendedor')
             .toString(),
         tenantId: (json['tenantId'] ?? json['companyId'])?.toString(),
       );
@@ -84,7 +87,7 @@ final _dashboardTenantsProvider =
     } catch (_) {
       // Keep the selector usable even if the display name endpoint is unavailable.
     }
-    return [_DashboardLookupOption(id: tenantId, label: 'Tenant asociado')];
+    return [_DashboardLookupOption(id: tenantId, label: 'Empresa asociada')];
   }
   final page = await _getPage(dio, '/v1/tenants', size: 200);
   return page.items.map(_DashboardLookupOption.tenant).where((item) => item.id.isNotEmpty).toList();
@@ -224,6 +227,8 @@ class RecentTrace {
 }
 
 class MarketingDashboardDetails {
+  final int campaigns;
+  final int coupons;
   final int events;
   final int productViews;
   final int productLikes;
@@ -237,6 +242,8 @@ class MarketingDashboardDetails {
   final List<MarketingProductMetric> topProducts;
 
   const MarketingDashboardDetails({
+    required this.campaigns,
+    required this.coupons,
     required this.events,
     required this.productViews,
     required this.productLikes,
@@ -347,14 +354,30 @@ class RecentQuote {
 
 final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) async {
   final dio = ref.watch(dioProvider);
+  final auth = ref.watch(authNotifierProvider);
+  final period = ref.watch(dashboardPeriodProvider(DashboardScope.general));
+  final selectedTenantId = ref.watch(dashboardTenantFilterProvider);
+  final selectedSellerId = ref.watch(dashboardSellerFilterProvider);
+  final scope = _dashboardScope(
+    auth,
+    selectedTenantId: selectedTenantId,
+    selectedSellerId: selectedSellerId,
+  );
+  final headers = _marketingHeaders(auth, tenantId: scope['tenantId']?.toString());
 
-  final products = await _getPage(dio, '/v1/products', size: 80);
-  final quotes = await _getPage(dio, '/v1/quotes', size: 80);
-  final leads = await _getPage(dio, '/v1/leads', size: 1);
-  final featured = await _getPage(dio, '/v1/products', size: 1, extra: {'featured': true});
-  final campaigns = await _getPage(dio, '/v1/campaigns', size: 20);
-  final coupons = await _getPage(dio, '/v1/coupons', size: 1);
-  final sellers = await _getPage(dio, '/v1/sellers', size: 1);
+  final products = await _getPage(dio, '/v1/products', size: 80, extra: scope, headers: headers);
+  final quotes = await _getPage(
+    dio,
+    '/v1/quotes',
+    size: 80,
+    extra: {...scope, ..._quotePeriodParams(period)},
+    headers: headers,
+  );
+  final leads = await _getPage(dio, '/v1/leads', size: 1, extra: scope, headers: headers);
+  final featured = await _getPage(dio, '/v1/products', size: 1, extra: {...scope, 'featured': true}, headers: headers);
+  final campaigns = await _getPage(dio, '/v1/campaigns', size: 20, extra: scope, headers: headers);
+  final coupons = await _getPage(dio, '/v1/coupons', size: 1, extra: scope, headers: headers);
+  final sellers = await _getPage(dio, '/v1/sellers', size: 1, extra: scope, headers: headers);
   final people = await _getPage(dio, '/v1/people', size: 1);
   final users = await _getPage(dio, '/v1/users', size: 1);
   final warehouses = await _getPage(dio, '/v1/warehouses', size: 1);
@@ -429,14 +452,22 @@ final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) as
 final productDashboardDetailsProvider =
     FutureProvider.autoDispose.family<ProductDashboardDetails, DashboardPeriod>((ref, period) async {
   final dio = ref.watch(dioProvider);
+  final auth = ref.watch(authNotifierProvider);
+  final scope = _dashboardScope(
+    auth,
+    selectedTenantId: ref.watch(dashboardTenantFilterProvider),
+    selectedSellerId: ref.watch(dashboardSellerFilterProvider),
+  );
+  final headers = _marketingHeaders(auth, tenantId: scope['tenantId']?.toString());
   final summary = await _getMap(
     dio,
     '/v1/products/reporting/summary',
-    extra: {'period': _periodCode(period)},
+    extra: {...scope, 'period': _periodCode(period)},
+    headers: headers,
   );
 
   if (summary.isEmpty) {
-    final products = await _getPage(dio, '/v1/products', size: 500);
+    final products = await _getPage(dio, '/v1/products', size: 500, extra: scope, headers: headers);
     return ProductDashboardDetails(
       products: products.total,
       activeProducts: products.items.where((item) => _status(item) == 'ACTIVE').length,
@@ -456,11 +487,19 @@ final productDashboardDetailsProvider =
 final salesDashboardDetailsProvider =
     FutureProvider.autoDispose.family<SalesDashboardDetails, DashboardPeriod>((ref, period) async {
   final dio = ref.watch(dioProvider);
+  final auth = ref.watch(authNotifierProvider);
+  final scope = _dashboardScope(
+    auth,
+    selectedTenantId: ref.watch(dashboardTenantFilterProvider),
+    selectedSellerId: ref.watch(dashboardSellerFilterProvider),
+  );
+  final headers = _marketingHeaders(auth, tenantId: scope['tenantId']?.toString());
   final quotes = await _getPage(
     dio,
     '/v1/quotes',
     size: 500,
-    extra: _quotePeriodParams(period),
+    extra: {...scope, ..._quotePeriodParams(period)},
+    headers: headers,
   );
   final quoteItems = quotes.items;
   final recentQuotes = quoteItems.map((item) => RecentQuote(
@@ -488,15 +527,23 @@ final salesDashboardDetailsProvider =
 final warehouseDashboardDetailsProvider =
     FutureProvider.autoDispose.family<WarehouseDashboardDetails, DashboardPeriod>((ref, period) async {
   final dio = ref.watch(dioProvider);
+  final auth = ref.watch(authNotifierProvider);
+  final scope = _dashboardScope(
+    auth,
+    selectedTenantId: ref.watch(dashboardTenantFilterProvider),
+    selectedSellerId: ref.watch(dashboardSellerFilterProvider),
+  );
+  final headers = _marketingHeaders(auth, tenantId: scope['tenantId']?.toString());
   final summary = await _getMap(
     dio,
     '/v1/warehouse/reporting/summary',
-    extra: {'period': _periodCode(period)},
+    extra: {...scope, 'period': _periodCode(period)},
+    headers: headers,
   );
 
   if (summary.isEmpty) {
-    final warehouses = await _getPage(dio, '/v1/warehouses', size: 200);
-    final stock = await _getPage(dio, '/v1/warehouse/stock', size: 200);
+    final warehouses = await _getPage(dio, '/v1/warehouses', size: 200, extra: scope, headers: headers);
+    final stock = await _getPage(dio, '/v1/warehouse/stock', size: 200, extra: scope, headers: headers);
     return WarehouseDashboardDetails(
       warehouses: warehouses.total,
       activeWarehouses: warehouses.items.where((item) => _boolAny(item, ['active', 'enabled'])).length,
@@ -562,6 +609,20 @@ final marketingDashboardDetailsProvider =
     extra: scoped({'period': periodCode}),
     headers: requestHeaders,
   );
+  final campaigns = await _getPage(
+    dio,
+    '/v1/campaigns',
+    size: 1,
+    extra: scoped({'active': true}),
+    headers: requestHeaders,
+  );
+  final coupons = await _getPage(
+    dio,
+    '/v1/coupons',
+    size: 1,
+    extra: scoped({'active': true}),
+    headers: requestHeaders,
+  );
   final actionEvents = actions.fold<int>(0, (sum, item) => sum + _intAny(item, ['count', 'total']));
   final productViews = topProducts.fold<int>(0, (sum, item) => sum + _intAny(item, ['productViews', 'views']));
   final productLikes = topProducts.fold<int>(0, (sum, item) => sum + _intAny(item, ['likes']));
@@ -583,6 +644,8 @@ final marketingDashboardDetailsProvider =
   );
 
   return MarketingDashboardDetails(
+    campaigns: _firstPositive([_intAny(summary, ['campaigns', 'totalCampaigns', 'activeCampaigns']), campaigns.total]),
+    coupons: _firstPositive([_intAny(summary, ['coupons', 'totalCoupons', 'activeCoupons']), coupons.total]),
     events: _firstPositive([events, fallbackEvents]),
     productViews: _firstPositive([_intAny(summary, ['productViews', 'views']), productViews]),
     productLikes: _firstPositive([_intAny(summary, ['productLikes', 'likes']), productLikes]),
@@ -645,6 +708,28 @@ Map<String, String>? _marketingHeaders(AuthState auth, {String? tenantId}) {
     headers['X-Tenant-Id'] = tenant;
   }
   return headers.isEmpty ? null : headers;
+}
+
+Map<String, dynamic> _dashboardScope(
+  AuthState auth, {
+  String? selectedTenantId,
+  String? selectedSellerId,
+}) {
+  final params = <String, dynamic>{};
+  final tenantId = selectedTenantId?.trim().isNotEmpty == true
+      ? selectedTenantId!.trim()
+      : auth.tenantId?.trim();
+  if (tenantId != null && tenantId.isNotEmpty) {
+    params['tenantId'] = tenantId;
+  }
+
+  final sellerId = selectedSellerId?.trim().isNotEmpty == true
+      ? selectedSellerId!.trim()
+      : auth.sellerId?.trim();
+  if (sellerId != null && sellerId.isNotEmpty) {
+    params['sellerId'] = sellerId;
+  }
+  return params;
 }
 
 Future<String?> _resolveMarketingTenantId(
@@ -883,7 +968,15 @@ List<MarketingFunnelMetric> _marketingFunnelMetrics(
     ),
     MarketingFunnelMetric(
       label: 'Compra mayorista',
-      value: _actionCount(actions, ['mayorista', 'wholesale']),
+      value: _actionCount(actions, [
+        'compra mayorista',
+        'compra_mayorista',
+        'contact-compra-mayorista',
+        'purchase_mode',
+        'purchase mode',
+        'mayorista',
+        'wholesale',
+      ]),
       icon: Icons.groups_rounded,
       color: const Color(0xFFFF5A1F),
     ),
@@ -1085,7 +1178,7 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-class _DashboardContent extends StatelessWidget {
+class _DashboardContent extends ConsumerWidget {
   final DashboardData data;
   final String username;
   final PermissionsService permissions;
@@ -1099,7 +1192,7 @@ class _DashboardContent extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final modules = _modules(permissions);
     final cards = _dashboardCards(permissions);
     final visibleDashboards = cards.where((item) => item.visible).toList();
@@ -1123,11 +1216,21 @@ class _DashboardContent extends StatelessWidget {
         child: _WarehouseDashboardContent(data: data),
       );
     }
+    final period = ref.watch(dashboardPeriodProvider(DashboardScope.general));
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
       children: [
         _HeroHeader(username: username),
         const SizedBox(height: 14),
+        const _DashboardScopeSelector(),
+        const SizedBox(height: 12),
+        _PeriodSelector(
+          value: period,
+          onChanged: (value) => ref
+              .read(dashboardPeriodProvider(DashboardScope.general).notifier)
+              .state = value,
+        ),
+        const SizedBox(height: 18),
         _SectionTitle('Dashboards'),
         const SizedBox(height: 10),
         _DashboardShortcutGrid(cards: visibleDashboards),
@@ -1357,6 +1460,8 @@ class _ProductsDashboardContent extends ConsumerWidget {
           subtitle: 'Publicación, calidad de ficha y señales comerciales.',
         ),
         const SizedBox(height: 12),
+        const _DashboardScopeSelector(),
+        const SizedBox(height: 12),
         _PeriodSelector(
           value: period,
           onChanged: (value) => ref
@@ -1421,7 +1526,7 @@ class _MarketingDashboardContent extends ConsumerWidget {
           subtitle: 'Campañas, intención comercial y señales del catálogo.',
         ),
         const SizedBox(height: 12),
-        const _MarketingScopeSelector(),
+        const _DashboardScopeSelector(),
         const SizedBox(height: 12),
         _PeriodSelector(
           value: period,
@@ -1432,7 +1537,7 @@ class _MarketingDashboardContent extends ConsumerWidget {
         const SizedBox(height: 14),
         details.when(
           data: (value) => _KpiGrid(cards: [
-            _KpiData('Campañas', _n(data.campaigns), 'Configuradas', Icons.campaign_rounded, const Color(0xFFFF5A1F)),
+            _KpiData('Campañas', _n(value.campaigns), 'Configuradas', Icons.campaign_rounded, const Color(0xFFFF5A1F)),
             _KpiData('Eventos', _n(value.events), _periodLabel(period), Icons.leaderboard_rounded, const Color(0xFF2563EB)),
             _KpiData('Leads', _n(value.leads), 'Capturas comerciales', Icons.person_add_alt_1_rounded, const Color(0xFF00A676)),
             _KpiData('Conversiones', _n(value.conversions), 'Cierre medido', Icons.trending_up_rounded, const Color(0xFF0F172A)),
@@ -1496,6 +1601,8 @@ class _WarehouseDashboardContent extends ConsumerWidget {
           title: 'Almacenes',
           subtitle: 'Cobertura de stock y operación por depósito.',
         ),
+        const SizedBox(height: 12),
+        const _DashboardScopeSelector(),
         const SizedBox(height: 12),
         _PeriodSelector(
           value: period,
@@ -1562,6 +1669,8 @@ class _SalesDashboardContent extends ConsumerWidget {
           title: 'Ventas',
           subtitle: 'Cotizaciones, pipeline y pendientes por período.',
         ),
+        const SizedBox(height: 12),
+        const _DashboardScopeSelector(),
         const SizedBox(height: 12),
         _PeriodSelector(
           value: period,
@@ -1680,8 +1789,8 @@ class _DashboardIntro extends StatelessWidget {
   }
 }
 
-class _MarketingScopeSelector extends ConsumerWidget {
-  const _MarketingScopeSelector();
+class _DashboardScopeSelector extends ConsumerWidget {
+  const _DashboardScopeSelector();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1711,7 +1820,7 @@ class _MarketingScopeSelector extends ConsumerWidget {
               }
               return DropdownButtonFormField<String>(
                 value: current,
-                decoration: const InputDecoration(labelText: 'Tenant'),
+                decoration: const InputDecoration(labelText: 'Empresa'),
                 items: items
                     .map(
                       (item) => DropdownMenuItem(
@@ -1734,10 +1843,10 @@ class _MarketingScopeSelector extends ConsumerWidget {
             loading: () => const LinearProgressIndicator(minHeight: 2),
             error: (_, __) => const SizedBox.shrink(),
             data: (items) {
-              final allOption = const _DashboardLookupOption(id: '', label: 'Todos los sellers');
+              final allOption = const _DashboardLookupOption(id: '', label: 'Todos los vendedores');
               final visible = lockSeller ? items : [allOption, ...items];
               if (visible.isEmpty) {
-                return const Text('Sin sellers asociados para este tenant.');
+                return const Text('Sin vendedores asociados para esta empresa.');
               }
               final current = visible.any((item) => item.id == (sellerId ?? ''))
                   ? (sellerId ?? '')
@@ -1749,7 +1858,7 @@ class _MarketingScopeSelector extends ConsumerWidget {
               }
               return DropdownButtonFormField<String>(
                 value: current,
-                decoration: const InputDecoration(labelText: 'Seller'),
+                decoration: const InputDecoration(labelText: 'Vendedor'),
                 items: visible
                     .map(
                       (item) => DropdownMenuItem(

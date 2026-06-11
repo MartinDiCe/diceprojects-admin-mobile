@@ -3,6 +3,18 @@ class AppConfig {
     'API_BASE_URL',
     defaultValue: 'https://api.diceprojects.com/api',
   );
+  static const String privacyPolicyUrl = String.fromEnvironment(
+    'PRIVACY_POLICY_URL',
+    defaultValue: 'https://diceprojects.com/privacy',
+  );
+  static const String reviewerUsername = String.fromEnvironment(
+    'REVIEWER_USERNAME',
+    defaultValue: '',
+  );
+  static const String reviewerPassword = String.fromEnvironment(
+    'REVIEWER_PASSWORD',
+    defaultValue: '',
+  );
 
   static const Duration connectTimeout = Duration(seconds: 30);
   static const Duration receiveTimeout = Duration(seconds: 30);

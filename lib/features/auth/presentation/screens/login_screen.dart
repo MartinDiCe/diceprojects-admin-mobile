@@ -242,6 +242,73 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  Future<void> _openPrivacyPolicy() async {
+    final uri = Uri.parse(AppConfig.privacyPolicyUrl);
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo abrir la política de privacidad.')),
+      );
+    }
+  }
+
+  void _showPermissionsInfo() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Permisos de la app',
+                style: TextStyle(
+                  color: AppColors.ink,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const _PermissionReason(
+                icon: Icons.photo_camera_rounded,
+                title: 'Cámara e imágenes',
+                body:
+                    'Se usan solo cuando elegís cargar fotos de productos, vendedores, personas u organización.',
+              ),
+              const _PermissionReason(
+                icon: Icons.notifications_active_rounded,
+                title: 'Notificaciones',
+                body:
+                    'Permiten avisarte sobre cotizaciones, alertas operativas y eventos importantes de tu cuenta.',
+              ),
+              const _PermissionReason(
+                icon: Icons.fingerprint_rounded,
+                title: 'Biometría',
+                body:
+                    'Es opcional y queda asociada a este dispositivo para acelerar tu próximo ingreso.',
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    _openPrivacyPolicy();
+                  },
+                  icon: const Icon(Icons.privacy_tip_outlined),
+                  label: const Text('Ver política de privacidad'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authNotifierProvider);
@@ -440,6 +507,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       Expanded(
                                         child: _SecondaryLoginButton(
                                           icon: Icons.mail_outline_rounded,
+                                          customIcon: const _GmailIcon(),
                                           label: 'Gmail',
                                           onPressed:
                                               auth.isLoading ? null : _loginWithGoogle,
@@ -495,6 +563,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     child: const Text(
                                       '¿Olvidaste tu contraseña?',
                                     ),
+                                  ),
+                                  if (AppConfig.reviewerUsername.isNotEmpty &&
+                                      AppConfig.reviewerPassword.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    _ReviewerAccessButton(
+                                      onPressed: () {
+                                        _usernameCtrl.text =
+                                            AppConfig.reviewerUsername;
+                                        _passwordCtrl.text =
+                                            AppConfig.reviewerPassword;
+                                        setState(() => _rememberLogin = false);
+                                      },
+                                    ),
+                                  ],
+                                  const SizedBox(height: 6),
+                                  Wrap(
+                                    alignment: WrapAlignment.center,
+                                    spacing: 8,
+                                    runSpacing: 0,
+                                    children: [
+                                      TextButton(
+                                        onPressed: _showPermissionsInfo,
+                                        child: const Text('Permisos'),
+                                      ),
+                                      TextButton(
+                                        onPressed: _openPrivacyPolicy,
+                                        child: const Text('Privacidad'),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -572,12 +669,14 @@ class _RememberRow extends StatelessWidget {
 
 class _SecondaryLoginButton extends StatelessWidget {
   final IconData icon;
+  final Widget? customIcon;
   final String label;
   final bool isLoading;
   final VoidCallback? onPressed;
 
   const _SecondaryLoginButton({
     required this.icon,
+    this.customIcon,
     required this.label,
     this.isLoading = false,
     this.onPressed,
@@ -611,8 +710,150 @@ class _SecondaryLoginButton extends StatelessWidget {
                   color: AppColors.accent,
                 ),
               )
-            : Icon(icon, size: 18, color: AppColors.accent),
+            : customIcon ?? Icon(icon, size: 18, color: AppColors.accent),
         label: Text(label),
+      ),
+    );
+  }
+}
+
+class _GmailIcon extends StatelessWidget {
+  const _GmailIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 20,
+      height: 16,
+      child: CustomPaint(painter: _GmailIconPainter()),
+    );
+  }
+}
+
+class _GmailIconPainter extends CustomPainter {
+  const _GmailIconPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.4
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final w = size.width;
+    final h = size.height;
+
+    stroke.color = const Color(0xFF4285F4);
+    canvas.drawLine(Offset(1.5, 3), Offset(1.5, h - 1.5), stroke);
+
+    stroke.color = const Color(0xFF34A853);
+    canvas.drawLine(Offset(1.5, h - 1.5), Offset(w * 0.33, h - 1.5), stroke);
+
+    stroke.color = const Color(0xFFEA4335);
+    final leftFlap = Path()
+      ..moveTo(1.5, 3)
+      ..lineTo(w * 0.5, h * 0.58);
+    canvas.drawPath(leftFlap, stroke);
+
+    stroke.color = const Color(0xFFFBBC04);
+    final rightFlap = Path()
+      ..moveTo(w - 1.5, 3)
+      ..lineTo(w * 0.5, h * 0.58);
+    canvas.drawPath(rightFlap, stroke);
+
+    stroke.color = const Color(0xFFEA4335);
+    canvas.drawLine(Offset(w - 1.5, 3), Offset(w - 1.5, h - 1.5), stroke);
+
+    stroke.color = const Color(0xFF34A853);
+    canvas.drawLine(Offset(w - 1.5, h - 1.5), Offset(w * 0.67, h - 1.5), stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _ReviewerAccessButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _ReviewerAccessButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: const Icon(Icons.verified_user_outlined, size: 18),
+        label: const Text('Completar acceso demo para revisión'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.accent,
+          side: BorderSide(color: AppColors.accent.withValues(alpha: 0.35)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PermissionReason extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String body;
+
+  const _PermissionReason({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppColors.accentLight,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: AppColors.accent, size: 19),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  body,
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
