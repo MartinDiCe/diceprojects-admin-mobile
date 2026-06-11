@@ -38,6 +38,13 @@ class AuthInterceptor extends Interceptor {
       final tenantId = claims['tenantId']?.toString();
       final sellerId = claims['sellerId']?.toString();
       final sellerIds = claims['sellerIds'];
+      final roles = claims['roles'];
+      if (roles is List && roles.isNotEmpty) {
+        final rolesCsv = roles.map((role) => role.toString().trim()).where((role) => role.isNotEmpty).join(',');
+        if (rolesCsv.isNotEmpty) {
+          options.headers['X-Roles'] = rolesCsv;
+        }
+      }
       final isAdminGlobal = tenantId == null || tenantId.trim().isEmpty;
       if (!isAdminGlobal && tenantId.trim().isNotEmpty) {
         options.queryParameters['tenantId'] = tenantId;

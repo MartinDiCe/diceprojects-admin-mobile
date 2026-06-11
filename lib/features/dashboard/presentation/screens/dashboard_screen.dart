@@ -725,18 +725,25 @@ class DashboardScreen extends ConsumerWidget {
     final perms = ref.watch(permissionsProvider);
     final data = ref.watch(dashboardDataProvider);
     final username = (auth.username?.trim().isNotEmpty ?? false) ? auth.username!.trim() : 'Usuario';
+    void refreshDashboard() {
+      ref.invalidate(dashboardDataProvider);
+      ref.invalidate(productDashboardDetailsProvider(ref.read(dashboardPeriodProvider(DashboardScope.products))));
+      ref.invalidate(salesDashboardDetailsProvider(ref.read(dashboardPeriodProvider(DashboardScope.sales))));
+      ref.invalidate(marketingDashboardDetailsProvider(ref.read(dashboardPeriodProvider(DashboardScope.marketing))));
+      ref.invalidate(warehouseDashboardDetailsProvider(ref.read(dashboardPeriodProvider(DashboardScope.warehouse))));
+    }
 
     return AppPageScaffold(
       title: _dashboardTitle(scope),
       actions: [
         IconButton(
           tooltip: 'Actualizar',
-          onPressed: () => ref.invalidate(dashboardDataProvider),
+          onPressed: refreshDashboard,
           icon: const Icon(Icons.refresh_rounded),
         ),
       ],
       body: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(dashboardDataProvider),
+        onRefresh: () async => refreshDashboard(),
         child: data.when(
           data: (value) => _DashboardContent(
             data: value,

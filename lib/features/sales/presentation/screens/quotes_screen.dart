@@ -284,6 +284,45 @@ class _LookupOption {
       );
 }
 
+class _QuoteProductOption {
+  final String id;
+  final String name;
+  final String sku;
+  final double basePrice;
+  final double discountPercent;
+  final double suggestedPrice;
+
+  const _QuoteProductOption({
+    required this.id,
+    required this.name,
+    required this.sku,
+    required this.basePrice,
+    required this.discountPercent,
+    required this.suggestedPrice,
+  });
+
+  factory _QuoteProductOption.fromJson(Map<String, dynamic> json) {
+    final basePrice = _parseAnyAmount(json['basePrice'] ?? json['price']);
+    final discount = _parseAnyAmount(json['discountPercent'] ?? json['discount']);
+    final explicitSuggested = _parseAnyAmount(
+      json['salePrice'] ?? json['finalPrice'] ?? json['discountedPrice'],
+    );
+    final calculated = discount > 0
+        ? basePrice * (1 - ((discount.clamp(0, 100) as num).toDouble() / 100))
+        : basePrice;
+    return _QuoteProductOption(
+      id: (json['productId'] ?? json['id'] ?? '').toString(),
+      name: (json['name'] ?? json['productName'] ?? 'Producto').toString(),
+      sku: (json['sku'] ?? json['code'] ?? '').toString(),
+      basePrice: basePrice,
+      discountPercent: discount,
+      suggestedPrice: explicitSuggested > 0 ? explicitSuggested : calculated,
+    );
+  }
+
+  String get label => sku.trim().isEmpty ? name : '$name · $sku';
+}
+
 final _quoteTenantsProvider = FutureProvider.autoDispose<List<_LookupOption>>((ref) async {
   final auth = ref.watch(authNotifierProvider);
   if (!auth.isAdminGlobal && auth.tenantId != null && auth.tenantId!.trim().isNotEmpty) {
@@ -304,6 +343,18 @@ final _quoteSellersProvider = FutureProvider.autoDispose.family<List<_LookupOpti
   return PaginatedResponse.fromJson(resp.data, _LookupOption.seller).items;
 });
 
+final _quoteProductsProvider =
+    FutureProvider.autoDispose.family<List<_QuoteProductOption>, String?>((ref, sellerId) async {
+  final query = <String, dynamic>{
+    'page': 0,
+    'size': 500,
+    'pageSize': 500,
+    if (sellerId != null && sellerId.trim().isNotEmpty) 'sellerId': sellerId.trim(),
+  };
+  final resp = await ref.watch(dioProvider).get('/v1/products', queryParameters: query);
+  return PaginatedResponse.fromJson(resp.data, _QuoteProductOption.fromJson).items;
+});
+
 class _QuoteCreateSheet extends ConsumerStatefulWidget {
   const _QuoteCreateSheet();
 
@@ -321,18 +372,20 @@ class _QuoteCreateSheetState extends ConsumerState<_QuoteCreateSheet> {
   final _sku = TextEditingController();
   final _quantity = TextEditingController(text: '1');
   final _unit = TextEditingController(text: 'U');
+  final _suggestedPrice = TextEditingController(text: '0');
   final _price = TextEditingController(text: '0');
   final _color = TextEditingController();
   final _presentation = TextEditingController();
   final _notes = TextEditingController();
   String? _tenantId;
   String? _sellerId;
+  String? _productId;
   String _purchaseMode = 'PENDING';
   bool _saving = false;
 
   @override
   void dispose() {
-    for (final ctrl in [_firstName, _lastName, _phone, _email, _product, _sku, _quantity, _unit, _price, _color, _presentation, _notes]) {
+    for (final ctrl in [_firstName, _lastName, _phone, _email, _product, _sku, _quantity, _unit, _suggestedPrice, _price, _color, _presentation, _notes]) {
       ctrl.dispose();
     }
     super.dispose();
@@ -344,6 +397,9 @@ class _QuoteCreateSheetState extends ConsumerState<_QuoteCreateSheet> {
     final sellersAsync = _tenantId == null || _tenantId!.trim().isEmpty
         ? const AsyncData<List<_LookupOption>>([])
         : ref.watch(_quoteSellersProvider(_tenantId!));
+    final productsAsync = _sellerId == null || _sellerId!.trim().isEmpty
+        ? const AsyncData<List<_QuoteProductOption>>([])
+        : ref.watch(_quoteProductsProvider(_sellerId));
 
     return DraggableScrollableSheet(
       expand: false,
@@ -371,6 +427,7 @@ class _QuoteCreateSheetState extends ConsumerState<_QuoteCreateSheet> {
                   onChanged: _saving ? null : (value) => setState(() {
                     _tenantId = value;
                     _sellerId = null;
+                    _productId = null;
                   }),
                 );
               },
@@ -386,7 +443,10 @@ class _QuoteCreateSheetState extends ConsumerState<_QuoteCreateSheet> {
                   decoration: const InputDecoration(labelText: 'Seller *'),
                   items: sellers.map((s) => DropdownMenuItem(value: s.id, child: Text(s.label, overflow: TextOverflow.ellipsis))).toList(),
                   validator: (v) => v == null || v.isEmpty ? 'Requerido' : null,
-                  onChanged: _saving ? null : (value) => setState(() => _sellerId = value),
+                  onChanged: _saving ? null : (value) => setState(() {
+                    _sellerId = value;
+                    _productId = null;
+                  }),
                 );
               },
             ),
@@ -401,6 +461,34 @@ class _QuoteCreateSheetState extends ConsumerState<_QuoteCreateSheet> {
             AppTextField(label: 'Email', controller: _email, keyboardType: TextInputType.emailAddress),
             const SizedBox(height: 16),
             _SectionTitle('Producto'),
+            productsAsync.when(
+              loading: () => const LinearProgressIndicator(),
+              error: (_, __) => const SizedBox.shrink(),
+              data: (products) => products.isEmpty
+                  ? const SizedBox.shrink()
+                  : DropdownButtonFormField<String>(
+                      initialValue: products.any((product) => product.id == _productId) ? _productId : null,
+                      decoration: const InputDecoration(labelText: 'Producto de catálogo'),
+                      items: products
+                          .map((product) => DropdownMenuItem(
+                                value: product.id,
+                                child: Text(product.label, overflow: TextOverflow.ellipsis),
+                              ))
+                          .toList(),
+                      onChanged: _saving
+                          ? null
+                          : (value) => setState(() {
+                                _productId = value;
+                                final selected = _findQuoteProduct(products, value);
+                                if (selected == null) return;
+                                _product.text = selected.name;
+                                _sku.text = selected.sku;
+                                _suggestedPrice.text = _plainNumber(selected.suggestedPrice);
+                                _price.text = _plainNumber(selected.suggestedPrice);
+                              }),
+                    ),
+            ),
+            const SizedBox(height: 10),
             AppTextField(label: 'Producto *', controller: _product, validator: _required),
             const SizedBox(height: 10),
             AppTextField(label: 'SKU', controller: _sku),
@@ -411,6 +499,13 @@ class _QuoteCreateSheetState extends ConsumerState<_QuoteCreateSheet> {
                 const SizedBox(width: 10),
                 Expanded(child: AppTextField(label: 'Unidad', controller: _unit)),
               ],
+            ),
+            const SizedBox(height: 10),
+            AppTextField(
+              label: 'Precio sugerido',
+              controller: _suggestedPrice,
+              keyboardType: TextInputType.number,
+              readOnly: true,
             ),
             const SizedBox(height: 10),
             AppTextField(label: 'Precio cotizado', controller: _price, keyboardType: TextInputType.number),
@@ -469,7 +564,7 @@ class _QuoteCreateSheetState extends ConsumerState<_QuoteCreateSheet> {
         if (_notes.text.trim().isNotEmpty) 'notes': _notes.text.trim(),
         'items': [
           {
-            'productId': _sku.text.trim().isNotEmpty ? _sku.text.trim() : 'MOBILE-MANUAL',
+            'productId': _productId ?? (_sku.text.trim().isNotEmpty ? _sku.text.trim() : 'MOBILE-MANUAL'),
             'productSku': _sku.text.trim(),
             'productName': _product.text.trim(),
             'color': _color.text.trim(),
@@ -950,6 +1045,7 @@ class _QuoteEditSheetState extends ConsumerState<_QuoteEditSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final productsAsync = ref.watch(_quoteProductsProvider(null));
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.94,
@@ -996,14 +1092,21 @@ class _QuoteEditSheetState extends ConsumerState<_QuoteEditSheet> {
               ],
             ),
             const SizedBox(height: 8),
-            for (var index = 0; index < _items.length; index++) ...[
-              _EditableQuoteItemCard(
-                item: _items[index],
-                canRemove: _items.length > 1,
-                onRemove: _saving ? null : () => _removeItem(index),
+            productsAsync.when(
+              loading: () => const LinearProgressIndicator(),
+              error: (_, __) => _EditableQuoteItemsList(
+                items: _items,
+                products: const [],
+                saving: _saving,
+                onRemove: _removeItem,
               ),
-              const SizedBox(height: 12),
-            ],
+              data: (products) => _EditableQuoteItemsList(
+                items: _items,
+                products: products,
+                saving: _saving,
+                onRemove: _removeItem,
+              ),
+            ),
             AppTextField(label: 'Notas', controller: _notes, maxLines: 3),
             const SizedBox(height: 18),
             AppButton(
@@ -1065,19 +1168,55 @@ class _QuoteEditSheetState extends ConsumerState<_QuoteEditSheet> {
   }
 }
 
+class _EditableQuoteItemsList extends StatelessWidget {
+  final List<_QuoteItemEditControllers> items;
+  final List<_QuoteProductOption> products;
+  final bool saving;
+  final ValueChanged<int> onRemove;
+
+  const _EditableQuoteItemsList({
+    required this.items,
+    required this.products,
+    required this.saving,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (var index = 0; index < items.length; index++) ...[
+          _EditableQuoteItemCard(
+            item: items[index],
+            products: products,
+            canRemove: items.length > 1,
+            onRemove: saving ? null : () => onRemove(index),
+          ),
+          const SizedBox(height: 12),
+        ],
+      ],
+    );
+  }
+}
+
 class _EditableQuoteItemCard extends StatelessWidget {
   final _QuoteItemEditControllers item;
+  final List<_QuoteProductOption> products;
   final bool canRemove;
   final VoidCallback? onRemove;
 
   const _EditableQuoteItemCard({
     required this.item,
+    required this.products,
     required this.canRemove,
     required this.onRemove,
   });
 
   @override
   Widget build(BuildContext context) {
+    final selectedProductId = products.any((product) => product.id == item.productId)
+        ? item.productId
+        : null;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1087,6 +1226,28 @@ class _EditableQuoteItemCard extends StatelessWidget {
       ),
       child: Column(
         children: [
+          if (products.isNotEmpty) ...[
+            DropdownButtonFormField<String>(
+              initialValue: selectedProductId,
+              decoration: const InputDecoration(labelText: 'Producto de catálogo'),
+              items: products
+                  .map((product) => DropdownMenuItem(
+                        value: product.id,
+                        child: Text(product.label, overflow: TextOverflow.ellipsis),
+                      ))
+                  .toList(),
+              onChanged: (value) {
+                item.productId = value;
+                final selected = _findQuoteProduct(products, value);
+                if (selected == null) return;
+                item.productName.text = selected.name;
+                item.productSku.text = selected.sku;
+                item.suggestedPrice.text = _plainNumber(selected.suggestedPrice);
+                item.unitPrice.text = _plainNumber(selected.suggestedPrice);
+              },
+            ),
+            const SizedBox(height: 10),
+          ],
           AppTextField(label: 'Producto *', controller: item.productName, validator: _required),
           const SizedBox(height: 10),
           Row(
@@ -1095,6 +1256,13 @@ class _EditableQuoteItemCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(child: AppTextField(label: 'Unidad', controller: item.unit)),
             ],
+          ),
+          const SizedBox(height: 10),
+          AppTextField(
+            label: 'Precio sugerido',
+            controller: item.suggestedPrice,
+            keyboardType: TextInputType.number,
+            readOnly: true,
           ),
           const SizedBox(height: 10),
           Row(
@@ -1145,11 +1313,12 @@ class _EditableQuoteItemCard extends StatelessWidget {
 }
 
 class _QuoteItemEditControllers {
-  final String? productId;
+  String? productId;
   final TextEditingController productName;
   final TextEditingController productSku;
   final TextEditingController quantity;
   final TextEditingController unit;
+  final TextEditingController suggestedPrice;
   final TextEditingController unitPrice;
   final TextEditingController color;
   final TextEditingController presentation;
@@ -1161,6 +1330,7 @@ class _QuoteItemEditControllers {
     required this.productSku,
     required this.quantity,
     required this.unit,
+    required this.suggestedPrice,
     required this.unitPrice,
     required this.color,
     required this.presentation,
@@ -1173,6 +1343,7 @@ class _QuoteItemEditControllers {
         productSku: TextEditingController(),
         quantity: TextEditingController(text: '1'),
         unit: TextEditingController(text: 'U'),
+        suggestedPrice: TextEditingController(text: '0'),
         unitPrice: TextEditingController(text: '0'),
         color: TextEditingController(),
         presentation: TextEditingController(),
@@ -1186,6 +1357,7 @@ class _QuoteItemEditControllers {
         productSku: TextEditingController(text: item.productSku ?? ''),
         quantity: TextEditingController(text: _qty(item.quantity)),
         unit: TextEditingController(text: item.unit),
+        suggestedPrice: TextEditingController(text: _plainNumber(item.unitPrice)),
         unitPrice: TextEditingController(text: _plainNumber(item.unitPrice)),
         color: TextEditingController(text: item.color ?? ''),
         presentation: TextEditingController(text: item.presentation ?? ''),
@@ -1211,7 +1383,7 @@ class _QuoteItemEditControllers {
   }
 
   void dispose() {
-    for (final ctrl in [productName, productSku, quantity, unit, unitPrice, color, presentation]) {
+    for (final ctrl in [productName, productSku, quantity, unit, suggestedPrice, unitPrice, color, presentation]) {
       ctrl.dispose();
     }
   }
@@ -1680,6 +1852,23 @@ String _purchaseModeLabel(String? value) {
 }
 
 String _formatDate(DateTime date) => DateFormat('dd/MM/yyyy HH:mm').format(date);
+
+_QuoteProductOption? _findQuoteProduct(
+  List<_QuoteProductOption> products,
+  String? productId,
+) {
+  if (productId == null || productId.trim().isEmpty) return null;
+  for (final product in products) {
+    if (product.id == productId) return product;
+  }
+  return null;
+}
+
+double _parseAnyAmount(dynamic value) {
+  if (value == null) return 0;
+  if (value is num) return value.toDouble();
+  return double.tryParse(value.toString().trim().replaceAll(',', '.')) ?? 0;
+}
 
 String? _emptyToNull(String value) {
   final text = value.trim();
