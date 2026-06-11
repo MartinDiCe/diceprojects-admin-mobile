@@ -232,31 +232,45 @@ class ProductFormNotifier extends StateNotifier<_ProductFormState> {
     try {
       final resp = await _dio.get('/v1/products/$productId');
       final data = _extractProductPayload(resp.data);
+      final fields = {
+        'name': _readString(data, const ['name', 'productName']),
+        'slug': _readString(data, const ['slug']),
+        'sku': _readString(data, const ['sku', 'productSku']),
+        'companyId': _readString(data, const ['companyId', 'tenantId']),
+        'sellerId': _readString(data, const ['sellerId']),
+        'priceTypeCode':
+            _readString(data, const ['priceTypeCode', 'priceType']) ?? 'FIXED',
+        'basePrice': _readString(data, const ['basePrice', 'price', 'retailPrice']),
+        'currencyCode': _readString(data, const ['currencyCode', 'currency']) ?? 'ARS',
+        'statusCode': _readString(data, const ['statusCode', 'status']) ?? 'DRAFT',
+        'stockStatusCode': _readString(data, const ['stockStatusCode', 'stockStatus']),
+        'productTypeCode':
+            _readString(data, const ['productTypeCode', 'typeCode', 'productType']),
+        'featured': _readString(data, const ['featured']),
+        'description': _readString(data, const ['description']),
+        'category': _readString(data, const ['category', 'categoryName']),
+        'tags': (data['tags'] as List<dynamic>?)?.map((e) => e.toString()).join(', '),
+        'uses': (data['uses'] as List<dynamic>?)?.map((e) => e.toString()).join(', '),
+        'discountPercent': _readString(data, const ['discountPercent', 'discount']),
+        ..._readProductImageFields(data),
+      };
+      fields.addAll(await _loadProductImageFields());
       state = state.copyWith(
         isLoading: false,
-        fields: {
-          'name': _readString(data, const ['name', 'productName']),
-          'slug': _readString(data, const ['slug']),
-          'sku': _readString(data, const ['sku', 'productSku']),
-          'companyId': _readString(data, const ['companyId', 'tenantId']),
-          'sellerId': _readString(data, const ['sellerId']),
-          'priceTypeCode': _readString(data, const ['priceTypeCode', 'priceType']) ?? 'FIXED',
-          'basePrice': _readString(data, const ['basePrice', 'price', 'retailPrice']),
-          'currencyCode': _readString(data, const ['currencyCode', 'currency']) ?? 'ARS',
-          'statusCode': _readString(data, const ['statusCode', 'status']) ?? 'DRAFT',
-          'stockStatusCode': _readString(data, const ['stockStatusCode', 'stockStatus']),
-          'productTypeCode': _readString(data, const ['productTypeCode', 'typeCode', 'productType']),
-          'featured': _readString(data, const ['featured']),
-          'description': _readString(data, const ['description']),
-          'category': _readString(data, const ['category', 'categoryName']),
-          'tags': (data['tags'] as List<dynamic>?)?.map((e) => e.toString()).join(', '),
-          'uses': (data['uses'] as List<dynamic>?)?.map((e) => e.toString()).join(', '),
-          'discountPercent': _readString(data, const ['discountPercent', 'discount']),
-        },
+        fields: fields,
       );
     } catch (e) {
       state = state.copyWith(
           isLoading: false, error: ErrorHandler.handle(e).message);
+    }
+  }
+
+  Future<Map<String, String?>> _loadProductImageFields() async {
+    try {
+      final resp = await _dio.get('/v1/products/$productId/images');
+      return _readProductImageFields({'images': _extractListPayload(resp.data)});
+    } catch (_) {
+      return const <String, String?>{};
     }
   }
 
@@ -362,6 +376,21 @@ Map<String, dynamic> _extractProductPayload(dynamic raw) {
   return map;
 }
 
+List<dynamic> _extractListPayload(dynamic raw) {
+  if (raw is List) return raw;
+  if (raw is Map) {
+    for (final key in const ['content', 'items', 'data', 'images', 'results']) {
+      final value = raw[key];
+      if (value is List) return value;
+      if (value is Map) {
+        final nested = _extractListPayload(value);
+        if (nested.isNotEmpty) return nested;
+      }
+    }
+  }
+  return const [];
+}
+
 String? _readString(Map<String, dynamic> data, List<String> keys) {
   for (final key in keys) {
     final value = data[key];
@@ -380,6 +409,68 @@ String? _readString(Map<String, dynamic> data, List<String> keys) {
     if (text.isNotEmpty) return text;
   }
   return null;
+}
+
+Map<String, String?> _readProductImageFields(Map<String, dynamic> data) {
+  final urls = <String>[];
+
+  void addUrl(dynamic value) {
+    final text = value?.toString().trim();
+    if (text != null && text.isNotEmpty && text != 'null') {
+      urls.add(text);
+    }
+  }
+
+  addUrl(data['imageUrl']);
+  addUrl(data['mainImageUrl']);
+  addUrl(data['coverImageUrl']);
+  addUrl(data['url']);
+  addUrl(data['cardUrl']);
+  addUrl(data['thumbUrl']);
+  addUrl(data['detailUrl']);
+  addUrl(data['masterUrl']);
+
+  for (final key in const ['images', 'gallery', 'productImages']) {
+    final value = data[key];
+    if (value is! List) continue;
+    final sorted = [...value];
+    sorted.sort((a, b) {
+      int orderOf(dynamic item) {
+        if (item is Map) {
+          final raw = item['sortOrder'] ?? item['order'] ?? item['position'];
+          if (raw is num) return raw.toInt();
+          return int.tryParse(raw?.toString() ?? '') ?? 999;
+        }
+        return 999;
+      }
+
+      return orderOf(a).compareTo(orderOf(b));
+    });
+    for (final item in sorted) {
+      if (item is Map) {
+        addUrl(item['imageUrl'] ??
+            item['url'] ??
+            item['cardUrl'] ??
+            item['thumbUrl'] ??
+            item['detailUrl'] ??
+            item['masterUrl'] ??
+            item['mediaUrl'] ??
+            item['fileUrl'] ??
+            item['publicUrl'] ??
+            item['path']);
+      } else {
+        addUrl(item);
+      }
+    }
+  }
+
+  final unique = <String>[];
+  for (final url in urls) {
+    if (!unique.contains(url)) unique.add(url);
+  }
+  return {
+    for (var i = 0; i < unique.length && i < 5; i++) 'imageUrl$i': unique[i],
+  };
 }
 
 final productFormNotifierProvider = StateNotifierProvider.autoDispose
@@ -833,7 +924,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                             label: index == 0
                                 ? 'Portada / imagen principal'
                                 : 'Imagen secundaria ${index + 1}',
-                            imageUrl: null,
+                            imageUrl: state.fields['imageUrl$index'],
                             height: index == 0 ? 180 : 132,
                             onChanged: (file) => setState(() => _imageFiles[index] = file),
                           ),

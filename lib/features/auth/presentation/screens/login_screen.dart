@@ -67,14 +67,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(authError == null || authError.isEmpty
-              ? 'No se pudo completar Google login.'
-              : 'Google login rechazado: $authError'),
+          content: Text(_googleLoginMessage(authError)),
         ),
       );
       return;
     }
     await ref.read(authNotifierProvider.notifier).loginWithToken(token);
+  }
+
+  String _googleLoginMessage(String? code) {
+    switch ((code ?? '').trim()) {
+      case 'GOOGLE_NOT_LINKED':
+        return 'Google no encontró una vinculación para esa cuenta. Elegí la misma cuenta que usás en la web o ingresá con usuario y contraseña.';
+      case 'OAUTH2_MISSING_TOKEN':
+        return 'Google no devolvió el token de acceso. Intentá nuevamente.';
+      case 'OAUTH2_LOGIN_FAILED':
+        return 'No se pudo completar el acceso con Google. Intentá nuevamente o usá usuario y contraseña.';
+      default:
+        return 'No se pudo completar el acceso con Google.';
+    }
   }
 
   Future<void> _submit() async {
