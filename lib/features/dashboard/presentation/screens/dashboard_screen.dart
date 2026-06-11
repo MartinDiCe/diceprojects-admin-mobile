@@ -419,7 +419,8 @@ final marketingDashboardDetailsProvider =
   final dio = ref.watch(dioProvider);
   final auth = ref.watch(authNotifierProvider);
   final periodCode = _periodCode(period);
-  final scope = await _marketingScope(dio, auth, periodCode);
+  final headers = _marketingHeaders(auth);
+  final scope = await _marketingScope(dio, auth, periodCode, headers: headers);
   Map<String, dynamic> scoped(Map<String, dynamic> extra) => {
         ...scope,
         ...extra,
@@ -429,21 +430,25 @@ final marketingDashboardDetailsProvider =
     dio,
     '/v1/campaigns/reporting/summary',
     extra: scoped({'period': periodCode}),
+    headers: headers,
   );
   final topProducts = await _getList(
     dio,
     '/v1/campaigns/reporting/products/top',
     extra: scoped({'period': periodCode, 'limit': 3}),
+    headers: headers,
   );
   final actions = await _getList(
     dio,
     '/v1/campaigns/reporting/actions/top',
     extra: scoped({'period': periodCode, 'limit': 16}),
+    headers: headers,
   );
   final funnel = await _getMap(
     dio,
     '/v1/marketing/funnels/evaluate',
     extra: scoped({'period': periodCode}),
+    headers: headers,
   );
   final actionEvents = actions.fold<int>(0, (sum, item) => sum + _intAny(item, ['count', 'total']));
   final productViews = topProducts.fold<int>(0, (sum, item) => sum + _intAny(item, ['productViews', 'views']));
@@ -476,14 +481,15 @@ final marketingDashboardDetailsProvider =
 Future<Map<String, dynamic>> _marketingScope(
   Dio dio,
   AuthState auth,
-  String periodCode,
-) async {
+  String periodCode, {
+  Map<String, String>? headers,
+}) async {
   final params = <String, dynamic>{};
   final tenantId = auth.tenantId?.trim();
   if (tenantId != null && tenantId.isNotEmpty) {
     params['tenantId'] = tenantId;
   } else {
-    final resolvedTenantId = await _resolveMarketingTenantId(dio, periodCode);
+    final resolvedTenantId = await _resolveMarketingTenantId(dio, periodCode, headers: headers);
     if (resolvedTenantId != null && resolvedTenantId.isNotEmpty) {
       params['tenantId'] = resolvedTenantId;
     }
@@ -496,8 +502,17 @@ Future<Map<String, dynamic>> _marketingScope(
   return params;
 }
 
-Future<String?> _resolveMarketingTenantId(Dio dio, String periodCode) async {
-  final campaigns = await _getPage(dio, '/v1/campaigns', size: 50);
+Map<String, String>? _marketingHeaders(AuthState auth) {
+  if (auth.roles.isEmpty) return null;
+  return {'X-Roles': auth.roles.join(',')};
+}
+
+Future<String?> _resolveMarketingTenantId(
+  Dio dio,
+  String periodCode, {
+  Map<String, String>? headers,
+}) async {
+  final campaigns = await _getPage(dio, '/v1/campaigns', size: 50, headers: headers);
   final campaignTenantIds = <String>{};
   for (final campaign in campaigns.items) {
     final tenantId = _idAny(
@@ -512,6 +527,7 @@ Future<String?> _resolveMarketingTenantId(Dio dio, String periodCode) async {
       dio,
       '/v1/campaigns/reporting/summary',
       extra: {'tenantId': tenantId, 'period': periodCode},
+      headers: headers,
     );
     final hasMovement = _firstPositive([
           _intAny(summary, ['events']),
@@ -538,6 +554,7 @@ Future<_PageData> _getPage(
   String path, {
   int size = 20,
   Map<String, dynamic>? extra,
+  Map<String, String>? headers,
 }) async {
   try {
     final resp = await dio.get(
@@ -548,6 +565,7 @@ Future<_PageData> _getPage(
         'pageSize': size,
         if (extra != null) ...extra,
       },
+      options: headers == null ? null : Options(headers: headers),
     );
     final data = resp.data;
     if (data is List) return _PageData(items: _maps(data), total: data.length);
@@ -570,9 +588,14 @@ Future<Map<String, dynamic>> _getMap(
   Dio dio,
   String path, {
   Map<String, dynamic>? extra,
+  Map<String, String>? headers,
 }) async {
   try {
-    final resp = await dio.get(path, queryParameters: extra);
+    final resp = await dio.get(
+      path,
+      queryParameters: extra,
+      options: headers == null ? null : Options(headers: headers),
+    );
     final data = resp.data;
     if (data is Map) return Map<String, dynamic>.from(data);
   } catch (_) {
@@ -585,9 +608,14 @@ Future<List<Map<String, dynamic>>> _getList(
   Dio dio,
   String path, {
   Map<String, dynamic>? extra,
+  Map<String, String>? headers,
 }) async {
   try {
-    final resp = await dio.get(path, queryParameters: extra);
+    final resp = await dio.get(
+      path,
+      queryParameters: extra,
+      options: headers == null ? null : Options(headers: headers),
+    );
     final data = resp.data;
     if (data is List) return _maps(data);
     if (data is Map) {

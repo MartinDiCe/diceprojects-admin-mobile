@@ -302,10 +302,14 @@ class _QuoteProductOption {
   });
 
   factory _QuoteProductOption.fromJson(Map<String, dynamic> json) {
-    final basePrice = _parseAnyAmount(json['basePrice'] ?? json['price']);
-    final discount = _parseAnyAmount(json['discountPercent'] ?? json['discount']);
-    final explicitSuggested = _parseAnyAmount(
-      json['salePrice'] ?? json['finalPrice'] ?? json['discountedPrice'],
+    final basePrice = _parseFirstAmount(
+      json,
+      ['basePrice', 'price', 'unitPrice', 'retailPrice', 'wholesalePrice', 'amount'],
+    );
+    final discount = _parseFirstAmount(json, ['discountPercent', 'discount', 'discountRate']);
+    final explicitSuggested = _parseFirstAmount(
+      json,
+      ['salePrice', 'finalPrice', 'discountedPrice', 'currentPrice', 'effectivePrice', 'offerPrice'],
     );
     final calculated = discount > 0
         ? basePrice * (1 - ((discount.clamp(0, 100) as num).toDouble() / 100))
@@ -932,7 +936,7 @@ class _QuoteDetailSheetState extends ConsumerState<_QuoteDetailSheet> {
             _PublicQrPanel(url: widget.quote.publicUrl)
           else
             _LockedLinkPanel(status: widget.quote.status),
-          if (widget.quote.status == 'SENT') ...[
+          if (widget.quote.status == 'SENT' || widget.quote.status == 'DRAFT') ...[
             const SizedBox(height: 12),
             _QuoteDeliveryActions(quote: widget.quote),
           ],
@@ -963,6 +967,13 @@ class _QuoteDetailSheetState extends ConsumerState<_QuoteDetailSheet> {
   }
 
   Future<void> _saveStatus() async {
+    if (_status == 'SENT' && widget.quote.items.any((item) => item.unitPrice <= 0)) {
+      _showSnack(
+        context,
+        'Para enviar, todos los productos deben tener precio cotizado mayor a 0.',
+      );
+      return;
+    }
     setState(() => _saving = true);
     try {
       await ref
@@ -1214,9 +1225,20 @@ class _EditableQuoteItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final selectedProductId = products.any((product) => product.id == item.productId)
-        ? item.productId
-        : null;
+    final selectedProduct = _findQuoteProductByIdentity(
+      products,
+      item.productId,
+      item.productSku.text,
+    );
+    final selectedProductId = selectedProduct?.id;
+    if (selectedProduct != null && selectedProduct.suggestedPrice > 0) {
+      if (_parseAmount(item.suggestedPrice.text) <= 0) {
+        item.suggestedPrice.text = _plainNumber(selectedProduct.suggestedPrice);
+      }
+      if (_parseAmount(item.unitPrice.text) <= 0) {
+        item.unitPrice.text = _plainNumber(selectedProduct.suggestedPrice);
+      }
+    }
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1567,8 +1589,9 @@ class _QuoteDeliveryActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final emailEnabled = quote.customerEmail != null;
-    final whatsappEnabled = _phoneDigits(quote.customerPhone).isNotEmpty;
+    final whatsappEnabled = _normalizeWhatsappPhone(quote.customerPhone).isNotEmpty;
     final pdfEnabled = quote.pdfUrl != null;
+    final isDraft = quote.status == 'DRAFT';
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -1581,7 +1604,7 @@ class _QuoteDeliveryActions extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Enviar cotización',
+            isDraft ? 'Contactar cliente' : 'Enviar cotización',
             style: TextStyle(
               color: AppColors.ink,
               fontSize: 14,
@@ -1590,7 +1613,9 @@ class _QuoteDeliveryActions extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Acciones habilitadas porque la cotización está enviada.',
+            isDraft
+                ? 'En borrador se abre un mensaje simple para resolver dudas con el cliente.'
+                : 'Acciones habilitadas porque la cotización está enviada.',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
           ),
           const SizedBox(height: 12),
@@ -1656,10 +1681,10 @@ class _QuoteDeliveryActions extends StatelessWidget {
   }
 
   Future<void> _openWhatsapp(BuildContext context) async {
-    final phone = _phoneDigits(quote.customerPhone);
+    final phone = _normalizeWhatsappPhone(quote.customerPhone);
     if (phone.isEmpty) return;
     final uri = Uri.parse(
-      'https://wa.me/$phone?text=${Uri.encodeComponent(_quoteShareText(quote))}',
+      'https://wa.me/$phone?text=${Uri.encodeComponent(_quoteWhatsappText(quote))}',
     );
     await _launchExternal(context, uri, 'No se pudo abrir WhatsApp.');
   }
@@ -1864,10 +1889,37 @@ _QuoteProductOption? _findQuoteProduct(
   return null;
 }
 
+_QuoteProductOption? _findQuoteProductByIdentity(
+  List<_QuoteProductOption> products,
+  String? productId,
+  String? sku,
+) {
+  final refs = {
+    if (productId != null && productId.trim().isNotEmpty) productId.trim(),
+    if (sku != null && sku.trim().isNotEmpty) sku.trim(),
+  };
+  if (refs.isEmpty) return null;
+  for (final product in products) {
+    if (refs.contains(product.id) || refs.contains(product.sku)) return product;
+  }
+  return null;
+}
+
 double _parseAnyAmount(dynamic value) {
   if (value == null) return 0;
   if (value is num) return value.toDouble();
+  if (value is Map) {
+    return _parseAnyAmount(value['amount'] ?? value['value'] ?? value['price']);
+  }
   return double.tryParse(value.toString().trim().replaceAll(',', '.')) ?? 0;
+}
+
+double _parseFirstAmount(Map<String, dynamic> json, List<String> keys) {
+  for (final key in keys) {
+    final parsed = _parseAnyAmount(json[key]);
+    if (parsed > 0) return parsed;
+  }
+  return 0;
 }
 
 String? _emptyToNull(String value) {
@@ -1895,6 +1947,21 @@ String _plainNumber(double value) {
 
 String _phoneDigits(String? value) =>
     (value ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+
+String _normalizeWhatsappPhone(String? value, {String defaultCountryCode = '54'}) {
+  var digits = _phoneDigits(value);
+  if (digits.isEmpty) return '';
+  if (digits.startsWith('00')) digits = digits.substring(2);
+  if (digits.startsWith(defaultCountryCode)) return digits;
+  digits = digits.replaceFirst(RegExp(r'^0+'), '');
+  return '$defaultCountryCode$digits';
+}
+
+String _quoteDraftContactText(QuoteDto quote) =>
+    'Hola, quería contactarte por la cotización que nos hiciste con el comprobante ${quote.number}.';
+
+String _quoteWhatsappText(QuoteDto quote) =>
+    quote.status == 'DRAFT' ? _quoteDraftContactText(quote) : _quoteShareText(quote);
 
 String _quoteShareText(QuoteDto quote) {
   final lines = <String>[
