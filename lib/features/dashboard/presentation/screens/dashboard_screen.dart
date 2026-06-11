@@ -417,12 +417,34 @@ final warehouseDashboardDetailsProvider =
 final marketingDashboardDetailsProvider =
     FutureProvider.autoDispose.family<MarketingDashboardDetails, DashboardPeriod>((ref, period) async {
   final dio = ref.watch(dioProvider);
+  final auth = ref.watch(authNotifierProvider);
   final periodCode = _periodCode(period);
+  final scope = await _marketingScope(dio, auth, periodCode);
+  Map<String, dynamic> scoped(Map<String, dynamic> extra) => {
+        ...scope,
+        ...extra,
+      };
 
-  final summary = await _getMap(dio, '/v1/campaigns/reporting/summary', extra: {'period': periodCode});
-  final topProducts = await _getList(dio, '/v1/campaigns/reporting/products/top', extra: {'period': periodCode, 'limit': 3});
-  final actions = await _getList(dio, '/v1/campaigns/reporting/actions/top', extra: {'period': periodCode, 'limit': 16});
-  final funnel = await _getMap(dio, '/v1/marketing/funnels/evaluate', extra: {'period': periodCode});
+  final summary = await _getMap(
+    dio,
+    '/v1/campaigns/reporting/summary',
+    extra: scoped({'period': periodCode}),
+  );
+  final topProducts = await _getList(
+    dio,
+    '/v1/campaigns/reporting/products/top',
+    extra: scoped({'period': periodCode, 'limit': 3}),
+  );
+  final actions = await _getList(
+    dio,
+    '/v1/campaigns/reporting/actions/top',
+    extra: scoped({'period': periodCode, 'limit': 16}),
+  );
+  final funnel = await _getMap(
+    dio,
+    '/v1/marketing/funnels/evaluate',
+    extra: scoped({'period': periodCode}),
+  );
   final actionEvents = actions.fold<int>(0, (sum, item) => sum + _intAny(item, ['count', 'total']));
   final productViews = topProducts.fold<int>(0, (sum, item) => sum + _intAny(item, ['productViews', 'views']));
   final productLikes = topProducts.fold<int>(0, (sum, item) => sum + _intAny(item, ['likes']));
@@ -450,6 +472,66 @@ final marketingDashboardDetailsProvider =
     )).toList(),
   );
 });
+
+Future<Map<String, dynamic>> _marketingScope(
+  Dio dio,
+  AuthState auth,
+  String periodCode,
+) async {
+  final params = <String, dynamic>{};
+  final tenantId = auth.tenantId?.trim();
+  if (tenantId != null && tenantId.isNotEmpty) {
+    params['tenantId'] = tenantId;
+  } else {
+    final resolvedTenantId = await _resolveMarketingTenantId(dio, periodCode);
+    if (resolvedTenantId != null && resolvedTenantId.isNotEmpty) {
+      params['tenantId'] = resolvedTenantId;
+    }
+  }
+
+  final sellerId = auth.sellerId?.trim();
+  if (sellerId != null && sellerId.isNotEmpty) {
+    params['sellerId'] = sellerId;
+  }
+  return params;
+}
+
+Future<String?> _resolveMarketingTenantId(Dio dio, String periodCode) async {
+  final campaigns = await _getPage(dio, '/v1/campaigns', size: 50);
+  final campaignTenantIds = <String>{};
+  for (final campaign in campaigns.items) {
+    final tenantId = _idAny(
+      campaign,
+      ['tenantId', 'companyId', 'tenant', 'company'],
+    );
+    if (tenantId.isNotEmpty) campaignTenantIds.add(tenantId);
+  }
+
+  for (final tenantId in campaignTenantIds) {
+    final summary = await _getMap(
+      dio,
+      '/v1/campaigns/reporting/summary',
+      extra: {'tenantId': tenantId, 'period': periodCode},
+    );
+    final hasMovement = _firstPositive([
+          _intAny(summary, ['events']),
+          _intAny(summary, ['productViews']),
+          _intAny(summary, ['featuredViews']),
+          _intAny(summary, ['quoteRequests']),
+          _intAny(summary, ['leads']),
+        ]) >
+        0;
+    if (hasMovement) return tenantId;
+  }
+  if (campaignTenantIds.isNotEmpty) return campaignTenantIds.first;
+
+  final tenants = await _getPage(dio, '/v1/tenants', size: 50);
+  for (final tenant in tenants.items) {
+    final tenantId = _idAny(tenant, ['tenantId', 'id']);
+    if (tenantId.isNotEmpty) return tenantId;
+  }
+  return null;
+}
 
 Future<_PageData> _getPage(
   Dio dio,
@@ -665,6 +747,20 @@ String _stringAny(Map<String, dynamic> item, List<String> keys, {String fallback
     if (value != null && value.isNotEmpty && value != 'null') return value;
   }
   return fallback;
+}
+
+String _idAny(Map<String, dynamic> item, List<String> keys) {
+  for (final key in keys) {
+    final value = item[key];
+    if (value is String && value.trim().isNotEmpty && value.trim() != 'null') {
+      return value.trim();
+    }
+    if (value is Map) {
+      final nested = _idAny(Map<String, dynamic>.from(value), ['tenantId', 'companyId', 'id']);
+      if (nested.isNotEmpty) return nested;
+    }
+  }
+  return '';
 }
 
 int _intAny(Map<String, dynamic> item, List<String> keys) {
