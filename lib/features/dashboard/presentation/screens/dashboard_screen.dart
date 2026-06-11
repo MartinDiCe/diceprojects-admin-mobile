@@ -20,6 +20,105 @@ final dashboardPeriodProvider =
   (ref, scope) => DashboardPeriod.today,
 );
 
+final marketingTenantFilterProvider = StateProvider.autoDispose<String?>((ref) {
+  final auth = ref.watch(authNotifierProvider);
+  final tenantId = auth.tenantId?.trim();
+  return tenantId == null || tenantId.isEmpty ? null : tenantId;
+});
+
+final marketingSellerFilterProvider = StateProvider.autoDispose<String?>((ref) {
+  final auth = ref.watch(authNotifierProvider);
+  final sellerId = auth.sellerId?.trim();
+  if (sellerId != null && sellerId.isNotEmpty) return sellerId;
+  return auth.sellerIds.length == 1 ? auth.sellerIds.first : null;
+});
+
+class _DashboardLookupOption {
+  final String id;
+  final String label;
+  final String? tenantId;
+
+  const _DashboardLookupOption({
+    required this.id,
+    required this.label,
+    this.tenantId,
+  });
+
+  factory _DashboardLookupOption.tenant(Map<String, dynamic> json) =>
+      _DashboardLookupOption(
+        id: (json['tenantId'] ?? json['companyId'] ?? json['id'] ?? '')
+            .toString(),
+        label: (json['name'] ??
+                json['tenantName'] ??
+                json['companyName'] ??
+                json['code'] ??
+                'Empresa')
+            .toString(),
+      );
+
+  factory _DashboardLookupOption.seller(Map<String, dynamic> json) =>
+      _DashboardLookupOption(
+        id: (json['sellerId'] ?? json['id'] ?? '').toString(),
+        label: (json['name'] ??
+                json['sellerName'] ??
+                json['businessName'] ??
+                json['sellerCode'] ??
+                'Seller')
+            .toString(),
+        tenantId: (json['tenantId'] ?? json['companyId'])?.toString(),
+      );
+}
+
+final _dashboardTenantsProvider =
+    FutureProvider.autoDispose<List<_DashboardLookupOption>>((ref) async {
+  final auth = ref.watch(authNotifierProvider);
+  final tenantId = auth.tenantId?.trim();
+  final dio = ref.watch(dioProvider);
+  if (!auth.isAdminGlobal && tenantId != null && tenantId.isNotEmpty) {
+    try {
+      final resp = await dio.get('/v1/tenants/$tenantId');
+      final data = resp.data;
+      if (data is Map) {
+        return [_DashboardLookupOption.tenant(Map<String, dynamic>.from(data))];
+      }
+    } catch (_) {
+      // Keep the selector usable even if the display name endpoint is unavailable.
+    }
+    return [_DashboardLookupOption(id: tenantId, label: 'Tenant asociado')];
+  }
+  final page = await _getPage(dio, '/v1/tenants', size: 200);
+  return page.items.map(_DashboardLookupOption.tenant).where((item) => item.id.isNotEmpty).toList();
+});
+
+final _dashboardSellersProvider = FutureProvider.autoDispose
+    .family<List<_DashboardLookupOption>, String?>((ref, tenantId) async {
+  final auth = ref.watch(authNotifierProvider);
+  final dio = ref.watch(dioProvider);
+  final page = await _getPage(
+    dio,
+    '/v1/sellers',
+    size: 200,
+    extra: {
+      if (tenantId != null && tenantId.trim().isNotEmpty)
+        'tenantId': tenantId.trim(),
+      'active': true,
+    },
+  );
+  var sellers = page.items
+      .map(_DashboardLookupOption.seller)
+      .where((item) => item.id.isNotEmpty)
+      .toList();
+  final scope = tenantId?.trim();
+  if (scope != null && scope.isNotEmpty) {
+    sellers = sellers.where((seller) => seller.tenantId == null || seller.tenantId == scope).toList();
+  }
+  if (!auth.isAdminGlobal && auth.sellerIds.isNotEmpty) {
+    final allowed = auth.sellerIds.toSet();
+    sellers = sellers.where((seller) => allowed.contains(seller.id)).toList();
+  }
+  return sellers;
+});
+
 class DashboardData {
   final int products;
   final int activeProducts;
@@ -418,9 +517,22 @@ final marketingDashboardDetailsProvider =
     FutureProvider.autoDispose.family<MarketingDashboardDetails, DashboardPeriod>((ref, period) async {
   final dio = ref.watch(dioProvider);
   final auth = ref.watch(authNotifierProvider);
+  final selectedTenantId = ref.watch(marketingTenantFilterProvider);
+  final selectedSellerId = ref.watch(marketingSellerFilterProvider);
   final periodCode = _periodCode(period);
-  final headers = _marketingHeaders(auth);
-  final scope = await _marketingScope(dio, auth, periodCode, headers: headers);
+  final headers = _marketingHeaders(auth, tenantId: selectedTenantId ?? auth.tenantId);
+  final scope = await _marketingScope(
+    dio,
+    auth,
+    periodCode,
+    headers: headers,
+    selectedTenantId: selectedTenantId,
+    selectedSellerId: selectedSellerId,
+  );
+  final requestHeaders = _marketingHeaders(
+    auth,
+    tenantId: scope['tenantId']?.toString(),
+  );
   Map<String, dynamic> scoped(Map<String, dynamic> extra) => {
         ...scope,
         ...extra,
@@ -430,25 +542,25 @@ final marketingDashboardDetailsProvider =
     dio,
     '/v1/campaigns/reporting/summary',
     extra: scoped({'period': periodCode}),
-    headers: headers,
+    headers: requestHeaders,
   );
   final topProducts = await _getList(
     dio,
     '/v1/campaigns/reporting/products/top',
     extra: scoped({'period': periodCode, 'limit': 3}),
-    headers: headers,
+    headers: requestHeaders,
   );
   final actions = await _getList(
     dio,
     '/v1/campaigns/reporting/actions/top',
     extra: scoped({'period': periodCode, 'limit': 16}),
-    headers: headers,
+    headers: requestHeaders,
   );
   final funnel = await _getMap(
     dio,
     '/v1/marketing/funnels/evaluate',
     extra: scoped({'period': periodCode}),
-    headers: headers,
+    headers: requestHeaders,
   );
   final actionEvents = actions.fold<int>(0, (sum, item) => sum + _intAny(item, ['count', 'total']));
   final productViews = topProducts.fold<int>(0, (sum, item) => sum + _intAny(item, ['productViews', 'views']));
@@ -456,17 +568,34 @@ final marketingDashboardDetailsProvider =
   final productQuotes = topProducts.fold<int>(0, (sum, item) => sum + _intAny(item, ['quoteRequests']));
   final productFeaturedViews = topProducts.fold<int>(0, (sum, item) => sum + _intAny(item, ['featuredViews', 'impressions']));
 
+  final events = _firstPositive([_intAny(summary, ['events', 'totalEvents', 'eventCount']), actionEvents]);
+  final fallbackActions = events == 0 && actions.isEmpty
+      ? await _loadMarketingActionFallback(dio, scope, requestHeaders)
+      : const <Map<String, dynamic>>[];
+  final effectiveActions = actions.isNotEmpty ? actions : fallbackActions;
+  final fallbackEvents = fallbackActions.fold<int>(
+    0,
+    (sum, item) => sum + _intAny(item, ['count', 'total', 'events']),
+  );
+  final effectiveActionEvents = effectiveActions.fold<int>(
+    0,
+    (sum, item) => sum + _intAny(item, ['count', 'total', 'events']),
+  );
+
   return MarketingDashboardDetails(
-    events: _firstPositive([_intAny(summary, ['events']), actionEvents]),
-    productViews: _firstPositive([_intAny(summary, ['productViews']), productViews]),
-    productLikes: _firstPositive([_intAny(summary, ['productLikes']), productLikes]),
-    featuredViews: _firstPositive([_intAny(summary, ['featuredViews']), productFeaturedViews]),
+    events: _firstPositive([events, fallbackEvents]),
+    productViews: _firstPositive([_intAny(summary, ['productViews', 'views']), productViews]),
+    productLikes: _firstPositive([_intAny(summary, ['productLikes', 'likes']), productLikes]),
+    featuredViews: _firstPositive([_intAny(summary, ['featuredViews', 'impressions']), productFeaturedViews]),
     featuredClicks: _intAny(summary, ['featuredClicks']),
     whatsappClicks: _intAny(summary, ['whatsappClicks']),
     quoteRequests: _firstPositive([_intAny(summary, ['quoteRequests']), productQuotes]),
     conversions: _intAny(summary, ['conversions']),
     leads: _intAny(summary, ['leads']),
-    funnel: _marketingFunnelMetrics(funnel, actions, summary),
+    funnel: _marketingFunnelMetrics(funnel, effectiveActions, {
+      ...summary,
+      if (effectiveActionEvents > 0) 'events': effectiveActionEvents,
+    }),
     topProducts: topProducts.map((item) => MarketingProductMetric(
       productId: _stringAny(item, ['productId', 'id']),
       impressions: _intAny(item, ['impressions']),
@@ -483,9 +612,13 @@ Future<Map<String, dynamic>> _marketingScope(
   AuthState auth,
   String periodCode, {
   Map<String, String>? headers,
+  String? selectedTenantId,
+  String? selectedSellerId,
 }) async {
   final params = <String, dynamic>{};
-  final tenantId = auth.tenantId?.trim();
+  final tenantId = selectedTenantId?.trim().isNotEmpty == true
+      ? selectedTenantId!.trim()
+      : auth.tenantId?.trim();
   if (tenantId != null && tenantId.isNotEmpty) {
     params['tenantId'] = tenantId;
   } else {
@@ -495,16 +628,23 @@ Future<Map<String, dynamic>> _marketingScope(
     }
   }
 
-  final sellerId = auth.sellerId?.trim();
+  final sellerId = selectedSellerId?.trim().isNotEmpty == true
+      ? selectedSellerId!.trim()
+      : auth.sellerId?.trim();
   if (sellerId != null && sellerId.isNotEmpty) {
     params['sellerId'] = sellerId;
   }
   return params;
 }
 
-Map<String, String>? _marketingHeaders(AuthState auth) {
-  if (auth.roles.isEmpty) return null;
-  return {'X-Roles': auth.roles.join(',')};
+Map<String, String>? _marketingHeaders(AuthState auth, {String? tenantId}) {
+  final headers = <String, String>{};
+  if (auth.roles.isNotEmpty) headers['X-Roles'] = auth.roles.join(',');
+  final tenant = tenantId?.trim();
+  if (tenant != null && tenant.isNotEmpty) {
+    headers['X-Tenant-Id'] = tenant;
+  }
+  return headers.isEmpty ? null : headers;
 }
 
 Future<String?> _resolveMarketingTenantId(
@@ -547,6 +687,35 @@ Future<String?> _resolveMarketingTenantId(
     if (tenantId.isNotEmpty) return tenantId;
   }
   return null;
+}
+
+Future<List<Map<String, dynamic>>> _loadMarketingActionFallback(
+  Dio dio,
+  Map<String, dynamic> scope,
+  Map<String, String>? headers,
+) async {
+  final campaigns = await _getPage(
+    dio,
+    '/v1/campaigns',
+    size: 20,
+    extra: {
+      ...scope,
+      'active': true,
+    },
+    headers: headers,
+  );
+  final actions = <Map<String, dynamic>>[];
+  for (final campaign in campaigns.items.take(8)) {
+    final campaignId = _stringAny(campaign, ['campaignId', 'id']);
+    if (campaignId.isEmpty) continue;
+    actions.addAll(await _getList(
+      dio,
+      '/v1/campaigns/$campaignId/actions/metrics',
+      extra: scope,
+      headers: headers,
+    ));
+  }
+  return actions;
 }
 
 Future<_PageData> _getPage(
@@ -1252,6 +1421,8 @@ class _MarketingDashboardContent extends ConsumerWidget {
           subtitle: 'Campañas, intención comercial y señales del catálogo.',
         ),
         const SizedBox(height: 12),
+        const _MarketingScopeSelector(),
+        const SizedBox(height: 12),
         _PeriodSelector(
           value: period,
           onChanged: (value) => ref
@@ -1502,6 +1673,99 @@ class _DashboardIntro extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MarketingScopeSelector extends ConsumerWidget {
+  const _MarketingScopeSelector();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(authNotifierProvider);
+    final tenants = ref.watch(_dashboardTenantsProvider);
+    final tenantId = ref.watch(marketingTenantFilterProvider);
+    final sellers = ref.watch(_dashboardSellersProvider(tenantId));
+    final sellerId = ref.watch(marketingSellerFilterProvider);
+    final lockTenant = !auth.isAdminGlobal;
+    final lockSeller = !auth.isAdminGlobal && auth.sellerScope == 'SINGLE';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: _cardDecoration(),
+      child: Column(
+        children: [
+          tenants.when(
+            loading: () => const LinearProgressIndicator(minHeight: 2),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (items) {
+              if (items.isEmpty) return const SizedBox.shrink();
+              final current = items.any((item) => item.id == tenantId) ? tenantId : null;
+              if (current == null && items.length == 1) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  ref.read(marketingTenantFilterProvider.notifier).state = items.first.id;
+                });
+              }
+              return DropdownButtonFormField<String>(
+                value: current,
+                decoration: const InputDecoration(labelText: 'Tenant'),
+                items: items
+                    .map(
+                      (item) => DropdownMenuItem(
+                        value: item.id,
+                        child: Text(item.label, overflow: TextOverflow.ellipsis),
+                      ),
+                    )
+                    .toList(),
+                onChanged: lockTenant
+                    ? null
+                    : (value) {
+                        ref.read(marketingTenantFilterProvider.notifier).state = value;
+                        ref.read(marketingSellerFilterProvider.notifier).state = null;
+                      },
+              );
+            },
+          ),
+          const SizedBox(height: 10),
+          sellers.when(
+            loading: () => const LinearProgressIndicator(minHeight: 2),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (items) {
+              final allOption = const _DashboardLookupOption(id: '', label: 'Todos los sellers');
+              final visible = lockSeller ? items : [allOption, ...items];
+              if (visible.isEmpty) {
+                return const Text('Sin sellers asociados para este tenant.');
+              }
+              final current = visible.any((item) => item.id == (sellerId ?? ''))
+                  ? (sellerId ?? '')
+                  : (lockSeller && items.isNotEmpty ? items.first.id : '');
+              if ((sellerId == null || sellerId.isEmpty) && lockSeller && items.length == 1) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  ref.read(marketingSellerFilterProvider.notifier).state = items.first.id;
+                });
+              }
+              return DropdownButtonFormField<String>(
+                value: current,
+                decoration: const InputDecoration(labelText: 'Seller'),
+                items: visible
+                    .map(
+                      (item) => DropdownMenuItem(
+                        value: item.id,
+                        child: Text(item.label, overflow: TextOverflow.ellipsis),
+                      ),
+                    )
+                    .toList(),
+                onChanged: lockSeller
+                    ? null
+                    : (value) {
+                        ref.read(marketingSellerFilterProvider.notifier).state =
+                            value == null || value.isEmpty ? null : value;
+                      },
+              );
+            },
           ),
         ],
       ),

@@ -73,6 +73,120 @@ final _sellersLookupProvider = FutureProvider.autoDispose
   return items.where((s) => s.tenantId == null || s.tenantId == scope).toList();
 });
 
+class _CatalogLookupDto {
+  final String code;
+  final String name;
+
+  const _CatalogLookupDto({required this.code, required this.name});
+
+  factory _CatalogLookupDto.fromJson(Map<String, dynamic> json) {
+    final code = (json['code'] ??
+            json['currencyCode'] ??
+            json['statusCode'] ??
+            json['typeCode'] ??
+            json['id'] ??
+            json['typeId'])
+        ?.toString() ??
+        '';
+    final name = (json['name'] ??
+            json['currencyName'] ??
+            json['description'] ??
+            json['label'] ??
+            code)
+        .toString();
+    return _CatalogLookupDto(code: code, name: name);
+  }
+}
+
+class _CatalogDropdownField extends StatefulWidget {
+  final String label;
+  final TextEditingController controller;
+  final AsyncValue<List<_CatalogLookupDto>> options;
+  final String? fallbackHint;
+  final String? Function(String?)? validator;
+
+  const _CatalogDropdownField({
+    required this.label,
+    required this.controller,
+    required this.options,
+    this.fallbackHint,
+    this.validator,
+  });
+
+  @override
+  State<_CatalogDropdownField> createState() => _CatalogDropdownFieldState();
+}
+
+class _CatalogDropdownFieldState extends State<_CatalogDropdownField> {
+  @override
+  Widget build(BuildContext context) {
+    return widget.options.when(
+      loading: () => AppTextField(
+        label: widget.label,
+        hint: 'Cargando...',
+        controller: widget.controller,
+        validator: widget.validator,
+      ),
+      error: (_, __) => AppTextField(
+        label: widget.label,
+        hint: widget.fallbackHint,
+        controller: widget.controller,
+        validator: widget.validator,
+      ),
+      data: (options) {
+        if (options.isEmpty) {
+          return AppTextField(
+            label: widget.label,
+            hint: widget.fallbackHint,
+            controller: widget.controller,
+            validator: widget.validator,
+          );
+        }
+
+        final current = widget.controller.text.trim();
+        final values = options.map((option) => option.code).toSet();
+        final value = values.contains(current) ? current : null;
+
+        return DropdownButtonFormField<String>(
+          value: value,
+          decoration: InputDecoration(labelText: widget.label),
+          validator: widget.validator,
+          items: options
+              .map(
+                (option) => DropdownMenuItem(
+                  value: option.code,
+                  child: Text(
+                    option.name == option.code
+                        ? option.code
+                        : '${option.name} (${option.code})',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: (next) {
+            widget.controller.text = next ?? '';
+            setState(() {});
+          },
+        );
+      },
+    );
+  }
+}
+
+final _catalogLookupProvider = FutureProvider.autoDispose
+    .family<List<_CatalogLookupDto>, String>((ref, path) async {
+  final dio = ref.watch(dioProvider);
+  final resp = await dio.get(
+    path,
+    queryParameters: const {'page': 0, 'size': 200, 'pageSize': 200},
+  );
+  return PaginatedResponse.fromJson(resp.data, _CatalogLookupDto.fromJson)
+      .items
+      .where((item) => item.code.trim().isNotEmpty)
+      .toList();
+});
+
 // ─── State ───────────────────────────────────────────────────────────────────
 
 class _ProductFormState {
@@ -117,26 +231,27 @@ class ProductFormNotifier extends StateNotifier<_ProductFormState> {
     state = state.copyWith(isLoading: true);
     try {
       final resp = await _dio.get('/v1/products/$productId');
-      final data = resp.data as Map<String, dynamic>;
+      final data = _extractProductPayload(resp.data);
       state = state.copyWith(
         isLoading: false,
         fields: {
-          'name': data['name']?.toString(),
-          'slug': data['slug']?.toString(),
-          'sku': data['sku']?.toString(),
-          'companyId': data['companyId']?.toString(),
-          'sellerId': data['sellerId']?.toString(),
-          'priceTypeCode': data['priceTypeCode']?.toString() ?? 'FIXED',
-          'basePrice': data['basePrice']?.toString(),
-          'currencyCode': data['currencyCode']?.toString() ?? 'ARS',
-          'statusCode': data['statusCode']?.toString() ?? 'DRAFT',
-          'stockStatusCode': data['stockStatusCode']?.toString(),
-          'featured': data['featured']?.toString(),
-          'description': data['description']?.toString(),
-          'category': data['category']?.toString(),
+          'name': _readString(data, const ['name', 'productName']),
+          'slug': _readString(data, const ['slug']),
+          'sku': _readString(data, const ['sku', 'productSku']),
+          'companyId': _readString(data, const ['companyId', 'tenantId']),
+          'sellerId': _readString(data, const ['sellerId']),
+          'priceTypeCode': _readString(data, const ['priceTypeCode', 'priceType']) ?? 'FIXED',
+          'basePrice': _readString(data, const ['basePrice', 'price', 'retailPrice']),
+          'currencyCode': _readString(data, const ['currencyCode', 'currency']) ?? 'ARS',
+          'statusCode': _readString(data, const ['statusCode', 'status']) ?? 'DRAFT',
+          'stockStatusCode': _readString(data, const ['stockStatusCode', 'stockStatus']),
+          'productTypeCode': _readString(data, const ['productTypeCode', 'typeCode', 'productType']),
+          'featured': _readString(data, const ['featured']),
+          'description': _readString(data, const ['description']),
+          'category': _readString(data, const ['category', 'categoryName']),
           'tags': (data['tags'] as List<dynamic>?)?.map((e) => e.toString()).join(', '),
           'uses': (data['uses'] as List<dynamic>?)?.map((e) => e.toString()).join(', '),
-          'discountPercent': data['discountPercent']?.toString(),
+          'discountPercent': _readString(data, const ['discountPercent', 'discount']),
         },
       );
     } catch (e) {
@@ -158,6 +273,7 @@ class ProductFormNotifier extends StateNotifier<_ProductFormState> {
     String? category,
     String? basePrice,
     String? stockStatusCode,
+    String? productTypeCode,
     String? tags,
     String? uses,
     String? discountPercent,
@@ -180,6 +296,8 @@ class ProductFormNotifier extends StateNotifier<_ProductFormState> {
         if (category != null && category.isNotEmpty) 'category': category,
         if (stockStatusCode != null && stockStatusCode.isNotEmpty)
           'stockStatusCode': stockStatusCode,
+        if (productTypeCode != null && productTypeCode.isNotEmpty)
+          'productTypeCode': productTypeCode,
         if (tags != null && tags.isNotEmpty) 'tags': _splitCsv(tags),
         if (uses != null && uses.isNotEmpty) 'uses': _splitCsv(uses),
         if (basePrice != null && basePrice.isNotEmpty)
@@ -234,6 +352,36 @@ class ProductFormNotifier extends StateNotifier<_ProductFormState> {
       .toList();
 }
 
+Map<String, dynamic> _extractProductPayload(dynamic raw) {
+  if (raw is! Map) return <String, dynamic>{};
+  final map = Map<String, dynamic>.from(raw);
+  for (final key in const ['data', 'product', 'item']) {
+    final nested = map[key];
+    if (nested is Map) return Map<String, dynamic>.from(nested);
+  }
+  return map;
+}
+
+String? _readString(Map<String, dynamic> data, List<String> keys) {
+  for (final key in keys) {
+    final value = data[key];
+    if (value == null) continue;
+    if (value is Map) {
+      final nested = _readString(Map<String, dynamic>.from(value), const [
+        'id',
+        'code',
+        'name',
+        'value',
+      ]);
+      if (nested != null && nested.trim().isNotEmpty) return nested;
+      continue;
+    }
+    final text = value.toString().trim();
+    if (text.isNotEmpty) return text;
+  }
+  return null;
+}
+
 final productFormNotifierProvider = StateNotifierProvider.autoDispose
     .family<ProductFormNotifier, _ProductFormState, String?>(
   (ref, id) => ProductFormNotifier(ref.watch(dioProvider), id),
@@ -259,6 +407,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   late final TextEditingController _discountPercentCtrl;
   late final TextEditingController _currencyCtrl;
   late final TextEditingController _stockStatusCtrl;
+  late final TextEditingController _productTypeCtrl;
   late final TextEditingController _tagsCtrl;
   late final TextEditingController _usesCtrl;
   late final TextEditingController _descriptionCtrl;
@@ -282,6 +431,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     _discountPercentCtrl = TextEditingController();
     _currencyCtrl = TextEditingController(text: 'ARS');
     _stockStatusCtrl = TextEditingController();
+    _productTypeCtrl = TextEditingController();
     _tagsCtrl = TextEditingController();
     _usesCtrl = TextEditingController();
     _descriptionCtrl = TextEditingController();
@@ -301,37 +451,45 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     ref.listen<_ProductFormState>(
       productFormNotifierProvider(widget.productId),
       (prev, next) {
-        if (_didHydrateFromServer) return;
-        if (next.fields.isEmpty) return;
-        _didHydrateFromServer = true;
-
-        _nameCtrl.text = next.fields['name'] ?? '';
-        _slugCtrl.text = next.fields['slug'] ?? '';
-        _skuCtrl.text = next.fields['sku'] ?? '';
-        _priceTypeCtrl.text = next.fields['priceTypeCode'] ?? 'FIXED';
-        _basePriceCtrl.text = next.fields['basePrice'] ?? '';
-        _discountPercentCtrl.text = next.fields['discountPercent'] ?? '';
-        _currencyCtrl.text = next.fields['currencyCode'] ?? 'ARS';
-        _stockStatusCtrl.text = next.fields['stockStatusCode'] ?? '';
-        _tagsCtrl.text = next.fields['tags'] ?? '';
-        _usesCtrl.text = next.fields['uses'] ?? '';
-        _descriptionCtrl.text = next.fields['description'] ?? '';
-        _categoryCtrl.text = next.fields['category'] ?? '';
-        _statusCode = next.fields['statusCode'] ?? 'DRAFT';
-        _featured = next.fields['featured'] == 'true';
-
-        if (_selectedCompanyId == null || _selectedCompanyId!.trim().isEmpty) {
-          final companyId = next.fields['companyId'];
-          if (companyId != null && companyId.trim().isNotEmpty) {
-            setState(() => _selectedCompanyId = companyId.trim());
-          }
-        }
-        final sellerId = next.fields['sellerId'];
-        if (sellerId != null && sellerId.trim().isNotEmpty) {
-          setState(() => _selectedSellerId = sellerId.trim());
-        }
+        _hydrateFromServer(next.fields);
       },
     );
+  }
+
+  void _hydrateFromServer(Map<String, String?> fields) {
+    if (_didHydrateFromServer || fields.isEmpty) return;
+    _didHydrateFromServer = true;
+
+    _nameCtrl.text = fields['name'] ?? '';
+    _slugCtrl.text = fields['slug'] ?? '';
+    _skuCtrl.text = fields['sku'] ?? '';
+    _priceTypeCtrl.text = fields['priceTypeCode'] ?? 'FIXED';
+    _basePriceCtrl.text = fields['basePrice'] ?? '';
+    _discountPercentCtrl.text = fields['discountPercent'] ?? '';
+    _currencyCtrl.text = fields['currencyCode'] ?? 'ARS';
+    _stockStatusCtrl.text = fields['stockStatusCode'] ?? '';
+    _productTypeCtrl.text = fields['productTypeCode'] ?? '';
+    _tagsCtrl.text = fields['tags'] ?? '';
+    _usesCtrl.text = fields['uses'] ?? '';
+    _descriptionCtrl.text = fields['description'] ?? '';
+    _categoryCtrl.text = fields['category'] ?? '';
+    _statusCode = fields['statusCode'] ?? 'DRAFT';
+    _featured = fields['featured'] == 'true';
+
+    final companyId = fields['companyId'];
+    final sellerId = fields['sellerId'];
+    if (mounted) {
+      setState(() {
+        if ((_selectedCompanyId == null || _selectedCompanyId!.trim().isEmpty) &&
+            companyId != null &&
+            companyId.trim().isNotEmpty) {
+          _selectedCompanyId = companyId.trim();
+        }
+        if (sellerId != null && sellerId.trim().isNotEmpty) {
+          _selectedSellerId = sellerId.trim();
+        }
+      });
+    }
   }
 
   @override
@@ -339,6 +497,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     for (final c in [
       _nameCtrl, _slugCtrl, _skuCtrl,
       _priceTypeCtrl, _basePriceCtrl, _discountPercentCtrl, _currencyCtrl, _stockStatusCtrl,
+      _productTypeCtrl,
       _tagsCtrl, _usesCtrl, _descriptionCtrl, _categoryCtrl,
     ]) {
       c.dispose();
@@ -384,6 +543,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       basePrice: _basePriceCtrl.text.trim(),
       discountPercent: _discountPercentCtrl.text.trim(),
       stockStatusCode: _stockStatusCtrl.text.trim().toUpperCase(),
+      productTypeCode: _productTypeCtrl.text.trim().toUpperCase(),
       tags: _tagsCtrl.text.trim(),
       uses: _usesCtrl.text.trim(),
       featured: _featured,
@@ -422,11 +582,20 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(productFormNotifierProvider(widget.productId));
+    if (!_didHydrateFromServer && state.fields.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _hydrateFromServer(state.fields);
+      });
+    }
     final isEdit = widget.productId != null;
     final auth = ref.watch(authNotifierProvider);
     final tenantsAsync = auth.isAdminGlobal ? ref.watch(_tenantsLookupProvider) : null;
     final companyForSellers = auth.isAdminGlobal ? _selectedCompanyId : auth.tenantId;
     final sellersAsync = ref.watch(_sellersLookupProvider(companyForSellers));
+    final priceTypesAsync = ref.watch(_catalogLookupProvider('/v1/price-types'));
+    final currenciesAsync = ref.watch(_catalogLookupProvider('/v1/currencies'));
+    final stockStatusesAsync = ref.watch(_catalogLookupProvider('/v1/stock-statuses'));
+    final productTypesAsync = ref.watch(_catalogLookupProvider('/v1/product-types'));
     final lockSeller = !auth.isAdminGlobal && auth.sellerScope == 'SINGLE';
 
     return AppPageScaffold(
@@ -558,10 +727,11 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                       onChanged: (v) => setState(() => _statusCode = v ?? 'DRAFT'),
                     ),
                     const SizedBox(height: 12),
-                    AppTextField(
+                    _CatalogDropdownField(
                       label: 'Tipo de precio *',
-                      hint: 'FIXED / CONSULT',
                       controller: _priceTypeCtrl,
+                      options: priceTypesAsync,
+                      fallbackHint: 'FIXED / CONSULT',
                       validator: (v) =>
                           (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                     ),
@@ -599,9 +769,11 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                       },
                     ),
                     const SizedBox(height: 12),
-                    AppTextField(
+                    _CatalogDropdownField(
                       label: 'Moneda',
                       controller: _currencyCtrl,
+                      options: currenciesAsync,
+                      fallbackHint: 'ARS',
                     ),
                     const SizedBox(height: 12),
                     AppTextField(
@@ -609,10 +781,18 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                       controller: _categoryCtrl,
                     ),
                     const SizedBox(height: 12),
-                    AppTextField(
+                    _CatalogDropdownField(
                       label: 'Estado de stock',
-                      hint: 'IN_STOCK / OUT_OF_STOCK',
                       controller: _stockStatusCtrl,
+                      options: stockStatusesAsync,
+                      fallbackHint: 'IN_STOCK / OUT_OF_STOCK',
+                    ),
+                    const SizedBox(height: 12),
+                    _CatalogDropdownField(
+                      label: 'Tipo de producto',
+                      controller: _productTypeCtrl,
+                      options: productTypesAsync,
+                      fallbackHint: 'GENERIC',
                     ),
                     const SizedBox(height: 12),
                     AppTextField(

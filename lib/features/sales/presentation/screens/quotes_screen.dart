@@ -291,6 +291,8 @@ class _QuoteProductOption {
   final double basePrice;
   final double discountPercent;
   final double suggestedPrice;
+  final List<String> colors;
+  final List<String> presentations;
 
   const _QuoteProductOption({
     required this.id,
@@ -299,6 +301,8 @@ class _QuoteProductOption {
     required this.basePrice,
     required this.discountPercent,
     required this.suggestedPrice,
+    this.colors = const [],
+    this.presentations = const [],
   });
 
   factory _QuoteProductOption.fromJson(Map<String, dynamic> json) {
@@ -321,10 +325,42 @@ class _QuoteProductOption {
       basePrice: basePrice,
       discountPercent: discount,
       suggestedPrice: explicitSuggested > 0 ? explicitSuggested : calculated,
+      colors: _readOptionList(json, const ['colors', 'colorOptions', 'availableColors']),
+      presentations: _readOptionList(json, const ['presentations', 'presentationOptions', 'availablePresentations']),
     );
   }
 
   String get label => sku.trim().isEmpty ? name : '$name · $sku';
+}
+
+List<String> _readOptionList(Map<String, dynamic> json, List<String> keys) {
+  final values = <String>{};
+  for (final key in keys) {
+    final raw = json[key];
+    if (raw is List) {
+      for (final item in raw) {
+        if (item is Map) {
+          final text = (item['name'] ??
+                  item['code'] ??
+                  item['presentationTypeCode'] ??
+                  item['unitCode'] ??
+                  item['value'])
+              ?.toString()
+              .trim();
+          if (text != null && text.isNotEmpty) values.add(text.toUpperCase());
+        } else {
+          final text = item.toString().trim();
+          if (text.isNotEmpty) values.add(text.toUpperCase());
+        }
+      }
+    } else if (raw is String) {
+      for (final part in raw.split(',')) {
+        final text = part.trim();
+        if (text.isNotEmpty) values.add(text.toUpperCase());
+      }
+    }
+  }
+  return values.toList();
 }
 
 final _quoteTenantsProvider = FutureProvider.autoDispose<List<_LookupOption>>((ref) async {
@@ -404,6 +440,10 @@ class _QuoteCreateSheetState extends ConsumerState<_QuoteCreateSheet> {
     final productsAsync = _sellerId == null || _sellerId!.trim().isEmpty
         ? const AsyncData<List<_QuoteProductOption>>([])
         : ref.watch(_quoteProductsProvider(_sellerId));
+    final selectedProduct = _findQuoteProduct(
+      productsAsync.asData?.value ?? const [],
+      _productId,
+    );
 
     return DraggableScrollableSheet(
       expand: false,
@@ -489,6 +529,12 @@ class _QuoteCreateSheetState extends ConsumerState<_QuoteCreateSheet> {
                                 _sku.text = selected.sku;
                                 _suggestedPrice.text = _plainNumber(selected.suggestedPrice);
                                 _price.text = _plainNumber(selected.suggestedPrice);
+                                if (selected.colors.isNotEmpty && _color.text.trim().isEmpty) {
+                                  _color.text = selected.colors.first;
+                                }
+                                if (selected.presentations.isNotEmpty && _presentation.text.trim().isEmpty) {
+                                  _presentation.text = selected.presentations.first;
+                                }
                               }),
                     ),
             ),
@@ -516,9 +562,21 @@ class _QuoteCreateSheetState extends ConsumerState<_QuoteCreateSheet> {
             const SizedBox(height: 10),
             Row(
               children: [
-                Expanded(child: AppTextField(label: 'Color', controller: _color)),
+                Expanded(
+                  child: _QuoteOptionField(
+                    label: 'Color',
+                    controller: _color,
+                    options: selectedProduct?.colors ?? const [],
+                  ),
+                ),
                 const SizedBox(width: 10),
-                Expanded(child: AppTextField(label: 'Presentación', controller: _presentation)),
+                Expanded(
+                  child: _QuoteOptionField(
+                    label: 'Presentación',
+                    controller: _presentation,
+                    options: selectedProduct?.presentations ?? const [],
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 10),
@@ -1266,6 +1324,12 @@ class _EditableQuoteItemCard extends StatelessWidget {
                 item.productSku.text = selected.sku;
                 item.suggestedPrice.text = _plainNumber(selected.suggestedPrice);
                 item.unitPrice.text = _plainNumber(selected.suggestedPrice);
+                if (selected.colors.isNotEmpty && item.color.text.trim().isEmpty) {
+                  item.color.text = selected.colors.first;
+                }
+                if (selected.presentations.isNotEmpty && item.presentation.text.trim().isEmpty) {
+                  item.presentation.text = selected.presentations.first;
+                }
               },
             ),
             const SizedBox(height: 10),
@@ -1297,9 +1361,21 @@ class _EditableQuoteItemCard extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: AppTextField(label: 'Color', controller: item.color)),
+              Expanded(
+                child: _QuoteOptionField(
+                  label: 'Color',
+                  controller: item.color,
+                  options: selectedProduct?.colors ?? const [],
+                ),
+              ),
               const SizedBox(width: 10),
-              Expanded(child: AppTextField(label: 'Presentación', controller: item.presentation)),
+              Expanded(
+                child: _QuoteOptionField(
+                  label: 'Presentación',
+                  controller: item.presentation,
+                  options: selectedProduct?.presentations ?? const [],
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -1332,6 +1408,41 @@ class _EditableQuoteItemCard extends StatelessWidget {
 
   String? _required(String? value) =>
       value == null || value.trim().isEmpty ? 'Requerido' : null;
+}
+
+class _QuoteOptionField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final List<String> options;
+
+  const _QuoteOptionField({
+    required this.label,
+    required this.controller,
+    required this.options,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cleanOptions = options
+        .map((option) => option.trim().toUpperCase())
+        .where((option) => option.isNotEmpty)
+        .toSet()
+        .toList();
+    if (cleanOptions.isEmpty) {
+      return AppTextField(label: label, controller: controller);
+    }
+
+    final current = controller.text.trim().toUpperCase();
+    final value = cleanOptions.contains(current) ? current : null;
+    return DropdownButtonFormField<String>(
+      value: value,
+      decoration: InputDecoration(labelText: label),
+      items: cleanOptions
+          .map((option) => DropdownMenuItem(value: option, child: Text(option)))
+          .toList(),
+      onChanged: (next) => controller.text = next ?? '',
+    );
+  }
 }
 
 class _QuoteItemEditControllers {
@@ -1592,6 +1703,7 @@ class _QuoteDeliveryActions extends StatelessWidget {
     final whatsappEnabled = _normalizeWhatsappPhone(quote.customerPhone).isNotEmpty;
     final pdfEnabled = quote.pdfUrl != null;
     final isDraft = quote.status == 'DRAFT';
+    final invalidPrice = _quoteHasInvalidQuotedPrice(quote);
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -1619,36 +1731,40 @@ class _QuoteDeliveryActions extends StatelessWidget {
             style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: AppButton.secondary(
-                  label: 'PDF',
-                  icon: Icons.picture_as_pdf_rounded,
-                  onPressed: () => _openPdf(context),
+          if (!isDraft) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: AppButton.secondary(
+                    label: 'PDF',
+                    icon: Icons.picture_as_pdf_rounded,
+                    onPressed: () => _openPdf(context),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: AppButton(
-                  label: 'Email',
-                  icon: Icons.mail_outline_rounded,
-                  onPressed: emailEnabled ? () => _openEmail(context) : null,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: AppButton(
+                    label: 'Email',
+                    icon: Icons.mail_outline_rounded,
+                    onPressed: emailEnabled && !invalidPrice
+                        ? () => _openEmail(context)
+                        : null,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
           AppButton(
-            label: 'WhatsApp',
+            label: isDraft ? 'Contactar' : 'WhatsApp',
             icon: Icons.chat_bubble_outline_rounded,
             fullWidth: true,
             onPressed: whatsappEnabled ? () => _openWhatsapp(context) : null,
           ),
-          if (!emailEnabled || !whatsappEnabled || !pdfEnabled) ...[
+          if (!isDraft && (!emailEnabled || !whatsappEnabled || !pdfEnabled || invalidPrice)) ...[
             const SizedBox(height: 8),
             Text(
-              _missingText(emailEnabled, whatsappEnabled, pdfEnabled),
+              _missingText(emailEnabled, whatsappEnabled, pdfEnabled, invalidPrice),
               style: TextStyle(color: AppColors.textMuted, fontSize: 11.5),
             ),
           ],
@@ -1658,6 +1774,10 @@ class _QuoteDeliveryActions extends StatelessWidget {
   }
 
   Future<void> _openPdf(BuildContext context) async {
+    if (_quoteHasInvalidQuotedPrice(quote)) {
+      _showSnack(context, 'Cargá precio cotizado mayor a 0 en todos los productos.');
+      return;
+    }
     final url = quote.pdfUrl;
     if (url == null) {
       _showSnack(context, 'El PDF todavía no fue generado por backend.');
@@ -1667,6 +1787,10 @@ class _QuoteDeliveryActions extends StatelessWidget {
   }
 
   Future<void> _openEmail(BuildContext context) async {
+    if (_quoteHasInvalidQuotedPrice(quote)) {
+      _showSnack(context, 'Cargá precio cotizado mayor a 0 en todos los productos.');
+      return;
+    }
     final email = quote.customerEmail;
     if (email == null) return;
     final uri = Uri(
@@ -1684,13 +1808,14 @@ class _QuoteDeliveryActions extends StatelessWidget {
     final phone = _normalizeWhatsappPhone(quote.customerPhone);
     if (phone.isEmpty) return;
     final uri = Uri.parse(
-      'https://wa.me/$phone?text=${Uri.encodeComponent(_quoteWhatsappText(quote))}',
+      'https://api.whatsapp.com/send/?phone=$phone&text=${Uri.encodeComponent(_quoteWhatsappText(quote))}&type=phone_number&app_absent=0',
     );
     await _launchExternal(context, uri, 'No se pudo abrir WhatsApp.');
   }
 
-  String _missingText(bool email, bool whatsapp, bool pdf) {
+  String _missingText(bool email, bool whatsapp, bool pdf, bool invalidPrice) {
     final missing = <String>[
+      if (invalidPrice) 'precio cotizado pendiente',
       if (!pdf) 'PDF pendiente',
       if (!email) 'sin email',
       if (!whatsapp) 'sin teléfono',
@@ -1698,6 +1823,9 @@ class _QuoteDeliveryActions extends StatelessWidget {
     return missing.join(' · ');
   }
 }
+
+bool _quoteHasInvalidQuotedPrice(QuoteDto quote) =>
+    quote.items.any((item) => item.unitPrice <= 0);
 
 class _PublicQrPanel extends StatelessWidget {
   final String url;
