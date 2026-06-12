@@ -418,6 +418,15 @@ class _SellerFormScreenState extends ConsumerState<SellerFormScreen> {
               label: 'Teléfono',
               hint: '+54 11 1234-5678',
               keyboardType: TextInputType.phone,
+              prefixIcon: _dialCodeForCountry(_countryCtrl.text).isEmpty
+                  ? null
+                  : Padding(
+                      padding: const EdgeInsets.only(left: 12, right: 8),
+                      child: Center(
+                        widthFactor: 1,
+                        child: Text(_dialCodeForCountry(_countryCtrl.text)),
+                      ),
+                    ),
             ),
             const SizedBox(height: 12),
             AppTextField(
@@ -465,7 +474,14 @@ class _SellerFormScreenState extends ConsumerState<SellerFormScreen> {
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(child: AppTextField(controller: _countryCtrl, label: 'País')),
+                Expanded(
+                  child: AppTextField(
+                    controller: _countryCtrl,
+                    label: 'País',
+                    hint: 'Argentina',
+                    onChanged: (_) => _applyDialCodeFromCountry(),
+                  ),
+                ),
                 const SizedBox(width: 10),
                 Expanded(child: AppTextField(controller: _postalCodeCtrl, label: 'CP')),
               ],
@@ -523,6 +539,76 @@ class _SellerFormScreenState extends ConsumerState<SellerFormScreen> {
   String? _emptyToNull(String value) {
     final text = value.trim();
     return text.isEmpty ? null : text;
+  }
+
+  void _applyDialCodeFromCountry() {
+    final dialCode = _dialCodeForCountry(_countryCtrl.text);
+    setState(() {});
+    if (dialCode.isEmpty) return;
+
+    final phone = _phoneCtrl.text.trim();
+    if (phone.startsWith('+')) return;
+
+    final nextValue = phone.isEmpty ? '$dialCode ' : '$dialCode $phone';
+    _phoneCtrl.text = nextValue;
+    _phoneCtrl.selection = TextSelection.collapsed(offset: nextValue.length);
+  }
+
+  String _dialCodeForCountry(String country) {
+    switch (_normalizeCountry(country)) {
+      case 'argentina':
+      case 'ar':
+        return '+54';
+      case 'uruguay':
+      case 'uy':
+        return '+598';
+      case 'chile':
+      case 'cl':
+        return '+56';
+      case 'paraguay':
+      case 'py':
+        return '+595';
+      case 'brasil':
+      case 'brazil':
+      case 'br':
+        return '+55';
+      case 'bolivia':
+      case 'bo':
+        return '+591';
+      case 'peru':
+      case 'pe':
+        return '+51';
+      case 'colombia':
+      case 'co':
+        return '+57';
+      case 'mexico':
+      case 'mx':
+        return '+52';
+      case 'estados unidos':
+      case 'united states':
+      case 'usa':
+      case 'us':
+        return '+1';
+      case 'espana':
+      case 'spain':
+      case 'es':
+        return '+34';
+      default:
+        return '';
+    }
+  }
+
+  String _normalizeCountry(String country) {
+    return country
+        .trim()
+        .toLowerCase()
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll('ü', 'u')
+        .replaceAll('ñ', 'n');
   }
 
 }

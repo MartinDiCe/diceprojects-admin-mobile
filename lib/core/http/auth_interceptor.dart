@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:app_diceprojects_admin/core/config/app_config.dart';
@@ -6,8 +7,9 @@ import 'package:dio/dio.dart';
 
 class AuthInterceptor extends Interceptor {
   final SecureStorageService _storage;
+  final FutureOr<void> Function()? onTokenExpired;
 
-  AuthInterceptor(this._storage);
+  AuthInterceptor(this._storage, {this.onTokenExpired});
 
   bool _isPublicAuthPath(String path) {
     // NOTE: baseUrl already includes `/api`, so Dio paths here are usually like `/auth/login`.
@@ -31,6 +33,23 @@ class AuthInterceptor extends Interceptor {
 
     final token = await _storage.read(AppConfig.tokenKey);
     if (token != null && token.isNotEmpty) {
+      if (_isExpired(token)) {
+        await _storage.delete(AppConfig.tokenKey);
+        await onTokenExpired?.call();
+        handler.reject(
+          DioException(
+            requestOptions: options,
+            response: Response(
+              requestOptions: options,
+              statusCode: 401,
+              data: const {'message': 'Sesión expirada'},
+            ),
+            type: DioExceptionType.badResponse,
+            message: 'Sesión expirada',
+          ),
+        );
+        return;
+      }
       options.headers['Authorization'] = 'Bearer $token';
 
       // Inject tenantId for multi-tenant scope (mirrors web buildParams logic)
@@ -47,7 +66,10 @@ class AuthInterceptor extends Interceptor {
         options.queryParameters.putIfAbsent('sellerId', () => sellerId.trim());
         options.headers['X-Seller-Id'] = sellerId.trim();
       } else if (sellerIds is List && sellerIds.isNotEmpty) {
-        final csv = sellerIds.map((id) => id.toString().trim()).where((id) => id.isNotEmpty).join(',');
+        final csv = sellerIds
+            .map((id) => id.toString().trim())
+            .where((id) => id.isNotEmpty)
+            .join(',');
         if (csv.isNotEmpty) {
           options.queryParameters.putIfAbsent('sellerIds', () => csv);
           options.headers['X-Seller-Ids'] = csv;
@@ -56,6 +78,16 @@ class AuthInterceptor extends Interceptor {
     }
     handler.next(options);
   }
+}
+
+bool _isExpired(String token) {
+  final claims = _decodeJwt(token);
+  final exp = claims['exp'];
+  final expSeconds =
+      exp is num ? exp.toInt() : int.tryParse(exp?.toString() ?? '');
+  if (expSeconds == null) return true;
+  final expiresAt = DateTime.fromMillisecondsSinceEpoch(expSeconds * 1000);
+  return !expiresAt.isAfter(DateTime.now());
 }
 
 Map<String, dynamic> _decodeJwt(String token) {

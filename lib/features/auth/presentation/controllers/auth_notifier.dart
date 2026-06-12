@@ -93,7 +93,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true);
     try {
       final token = await _storage.read(AppConfig.tokenKey);
-      if (token == null || token.trim().isEmpty) {
+      if (token == null ||
+          token.trim().isEmpty ||
+          JwtDecoder.isExpired(token)) {
+        await _storage.delete(AppConfig.tokenKey);
         state = state.copyWith(
             isLoading: false,
             isInitialized: true,
@@ -166,7 +169,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> loginWithToken(String token) async {
     final safeToken = token.trim();
-    if (safeToken.isEmpty) {
+    if (safeToken.isEmpty || JwtDecoder.isExpired(safeToken)) {
       state = state.copyWith(
         isLoading: false,
         error: 'Token de Google inválido.',
@@ -179,6 +182,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> _buildStateFromToken(String token) async {
+    if (JwtDecoder.isExpired(token)) {
+      await expireSession();
+      return;
+    }
     final username = JwtDecoder.getUsername(token);
     final roles = JwtDecoder.getRoles(token);
     final tenantId = JwtDecoder.getTenantId(token);
@@ -253,6 +260,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> logout() async {
     await _storage.delete(AppConfig.tokenKey);
     state = const AuthState(isInitialized: true);
+  }
+
+  Future<void> expireSession() async {
+    await _storage.delete(AppConfig.tokenKey);
+    state = const AuthState(
+      isInitialized: true,
+      error: 'Sesión expirada. Iniciá sesión nuevamente.',
+    );
   }
 }
 

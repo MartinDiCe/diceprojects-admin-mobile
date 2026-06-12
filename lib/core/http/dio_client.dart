@@ -4,6 +4,7 @@ import 'package:app_diceprojects_admin/core/http/correlation_interceptor.dart';
 import 'package:app_diceprojects_admin/core/http/error_interceptor.dart';
 import 'package:app_diceprojects_admin/core/http/logging_interceptor.dart';
 import 'package:app_diceprojects_admin/core/storage/secure_storage.dart';
+import 'package:app_diceprojects_admin/features/auth/presentation/controllers/session_expiration_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -28,9 +29,19 @@ final dioProvider = Provider<Dio>((ref) {
 
   dio.interceptors.addAll([
     CorrelationInterceptor(),
-    AuthInterceptor(storage),
+    AuthInterceptor(
+      storage,
+      onTokenExpired: () {
+        ref.read(sessionExpirationProvider.notifier).state++;
+      },
+    ),
     LoggingInterceptor(),
-    ErrorInterceptor(), // último: convierte errores HTTP en AppError estructurado
+    ErrorInterceptor(
+      onUnauthorized: () async {
+        await storage.delete(AppConfig.tokenKey);
+        ref.read(sessionExpirationProvider.notifier).state++;
+      },
+    ), // último: convierte errores HTTP en AppError estructurado
   ]);
 
   return dio;

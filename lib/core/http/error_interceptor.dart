@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:app_diceprojects_admin/core/errors/app_error.dart';
 import 'package:dio/dio.dart';
 
@@ -10,6 +12,10 @@ import 'package:dio/dio.dart';
 /// El [AppError] resultante se coloca en [DioException.error] para que
 /// [ErrorHandler.handle] lo detecte y lo devuelva directamente.
 class ErrorInterceptor extends Interceptor {
+  final FutureOr<void> Function()? onUnauthorized;
+
+  ErrorInterceptor({this.onUnauthorized});
+
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
     // Solo enriquecemos si no es ya un AppError envuelto
@@ -65,7 +71,10 @@ class ErrorInterceptor extends Interceptor {
     if (response == null) return AppError.unknown();
 
     final status = response.statusCode ?? 500;
-    if (status == 401) return AppError.unauthorized();
+    if (status == 401) {
+      unawaited(Future.sync(() => onUnauthorized?.call()));
+      return AppError.unauthorized();
+    }
     if (status == 403) return AppError.forbidden();
 
     final data = response.data;

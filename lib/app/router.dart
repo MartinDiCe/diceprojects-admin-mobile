@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:app_diceprojects_admin/core/ui/layout/app_shell.dart';
 import 'package:app_diceprojects_admin/features/api_traces/presentation/screens/api_traces_screen.dart';
 import 'package:app_diceprojects_admin/features/audit/presentation/screens/audit_list_screen.dart';
 import 'package:app_diceprojects_admin/features/auth/presentation/controllers/auth_notifier.dart';
+import 'package:app_diceprojects_admin/features/auth/presentation/controllers/session_expiration_provider.dart';
 import 'package:app_diceprojects_admin/features/auth/presentation/screens/login_screen.dart';
 import 'package:app_diceprojects_admin/features/auth/presentation/screens/splash_screen.dart';
 import 'package:app_diceprojects_admin/features/core_masters/presentation/screens/currencies_screen.dart';
@@ -57,17 +60,26 @@ import 'package:go_router/go_router.dart';
 class _RouterNotifier extends ChangeNotifier {
   final Ref _ref;
   late final ProviderSubscription<AuthState> _sub;
+  late final ProviderSubscription<int> _sessionSub;
 
   _RouterNotifier(this._ref) {
     _sub = _ref.listen<AuthState>(
       authNotifierProvider,
       (_, __) => notifyListeners(),
     );
+    _sessionSub = _ref.listen<int>(
+      sessionExpirationProvider,
+      (_, __) {
+        unawaited(_ref.read(authNotifierProvider.notifier).expireSession());
+        notifyListeners();
+      },
+    );
   }
 
   @override
   void dispose() {
     _sub.close();
+    _sessionSub.close();
     super.dispose();
   }
 

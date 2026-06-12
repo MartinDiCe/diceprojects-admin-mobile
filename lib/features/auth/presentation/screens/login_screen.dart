@@ -28,6 +28,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _rememberLogin = false;
   bool _biometricAvailable = false;
   bool _loadingBiometric = false;
+  bool _autoPromptedBiometric = false;
   StreamSubscription<Uri>? _appLinkSub;
 
   @override
@@ -323,6 +324,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authNotifierProvider);
+    _maybePromptBiometricAfterExpiration(auth);
     final themeMode = ref.watch(themeModeProvider);
     final padding = MediaQuery.of(context).padding;
     final isDarkTheme = themeMode == ThemeMode.dark;
@@ -632,6 +634,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
       ),
     );
+  }
+
+  void _maybePromptBiometricAfterExpiration(AuthState auth) {
+    final expired = auth.error?.contains('Sesión expirada') == true;
+    if (_autoPromptedBiometric ||
+        !_biometricAvailable ||
+        !expired ||
+        auth.isLoading ||
+        _loadingBiometric) {
+      return;
+    }
+    _autoPromptedBiometric = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loginWithBiometric();
+    });
   }
 }
 
