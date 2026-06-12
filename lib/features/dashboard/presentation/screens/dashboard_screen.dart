@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:app_diceprojects_admin/core/http/dio_client.dart';
@@ -35,6 +36,17 @@ final dashboardSellerFilterProvider = StateProvider.autoDispose<String?>((ref) {
 
 final marketingTenantFilterProvider = dashboardTenantFilterProvider;
 final marketingSellerFilterProvider = dashboardSellerFilterProvider;
+
+void _cacheDashboardProvider(Ref ref, [Duration duration = const Duration(minutes: 3)]) {
+  final link = ref.keepAlive();
+  Timer? timer;
+  ref.onCancel(() => timer = Timer(duration, link.close));
+  ref.onResume(() {
+    timer?.cancel();
+    timer = null;
+  });
+  ref.onDispose(() => timer?.cancel());
+}
 
 class _DashboardLookupOption {
   final String id;
@@ -274,18 +286,24 @@ class MarketingFunnelMetric {
 
 class MarketingProductMetric {
   final String productId;
+  final String productName;
+  final String sku;
   final int impressions;
   final int views;
   final int likes;
   final int quoteRequests;
+  final int whatsappClicks;
   final int featuredViews;
 
   const MarketingProductMetric({
     required this.productId,
+    required this.productName,
+    required this.sku,
     required this.impressions,
     required this.views,
     required this.likes,
     required this.quoteRequests,
+    required this.whatsappClicks,
     required this.featuredViews,
   });
 }
@@ -405,6 +423,7 @@ class RecentQuote {
 }
 
 final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) async {
+  _cacheDashboardProvider(ref);
   final dio = ref.watch(dioProvider);
   final auth = ref.watch(authNotifierProvider);
   final period = ref.watch(dashboardPeriodProvider(DashboardScope.general));
@@ -503,6 +522,7 @@ final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) as
 
 final productDashboardDetailsProvider =
     FutureProvider.autoDispose.family<ProductDashboardDetails, DashboardPeriod>((ref, period) async {
+  _cacheDashboardProvider(ref);
   final dio = ref.watch(dioProvider);
   final auth = ref.watch(authNotifierProvider);
   final scope = _dashboardScope(
@@ -538,6 +558,7 @@ final productDashboardDetailsProvider =
 
 final salesDashboardDetailsProvider =
     FutureProvider.autoDispose.family<SalesDashboardDetails, DashboardPeriod>((ref, period) async {
+  _cacheDashboardProvider(ref);
   final dio = ref.watch(dioProvider);
   final auth = ref.watch(authNotifierProvider);
   final scope = _dashboardScope(
@@ -578,6 +599,7 @@ final salesDashboardDetailsProvider =
 
 final warehouseDashboardDetailsProvider =
     FutureProvider.autoDispose.family<WarehouseDashboardDetails, DashboardPeriod>((ref, period) async {
+  _cacheDashboardProvider(ref);
   final dio = ref.watch(dioProvider);
   final auth = ref.watch(authNotifierProvider);
   final scope = _dashboardScope(
@@ -614,6 +636,7 @@ final warehouseDashboardDetailsProvider =
 
 final purchasesDashboardDetailsProvider =
     FutureProvider.autoDispose.family<PurchasesDashboardDetails, DashboardPeriod>((ref, period) async {
+  _cacheDashboardProvider(ref);
   final dio = ref.watch(dioProvider);
   final auth = ref.watch(authNotifierProvider);
   final scope = _dashboardScope(
@@ -658,6 +681,7 @@ final purchasesDashboardDetailsProvider =
 
 final projectsDashboardDetailsProvider =
     FutureProvider.autoDispose.family<ProjectsDashboardDetails, DashboardPeriod>((ref, period) async {
+  _cacheDashboardProvider(ref);
   final dio = ref.watch(dioProvider);
   final auth = ref.watch(authNotifierProvider);
   final scope = _dashboardScope(
@@ -706,6 +730,7 @@ final projectsDashboardDetailsProvider =
 
 final marketingDashboardDetailsProvider =
     FutureProvider.autoDispose.family<MarketingDashboardDetails, DashboardPeriod>((ref, period) async {
+  _cacheDashboardProvider(ref);
   final dio = ref.watch(dioProvider);
   final auth = ref.watch(authNotifierProvider);
   final selectedTenantId = ref.watch(marketingTenantFilterProvider);
@@ -771,6 +796,7 @@ final marketingDashboardDetailsProvider =
   final productViews = topProducts.fold<int>(0, (sum, item) => sum + _intAny(item, ['productViews', 'views']));
   final productLikes = topProducts.fold<int>(0, (sum, item) => sum + _intAny(item, ['likes']));
   final productQuotes = topProducts.fold<int>(0, (sum, item) => sum + _intAny(item, ['quoteRequests']));
+  final productWhatsapp = topProducts.fold<int>(0, (sum, item) => sum + _intAny(item, ['whatsappClicks', 'whatsapp_clicks']));
   final productFeaturedViews = topProducts.fold<int>(0, (sum, item) => sum + _intAny(item, ['featuredViews', 'impressions']));
 
   final events = _firstPositive([_intAny(summary, ['events', 'totalEvents', 'eventCount']), actionEvents]);
@@ -795,7 +821,11 @@ final marketingDashboardDetailsProvider =
     productLikes: _firstPositive([_intAny(summary, ['productLikes', 'likes']), productLikes]),
     featuredViews: _firstPositive([_intAny(summary, ['featuredViews', 'impressions']), productFeaturedViews]),
     featuredClicks: _intAny(summary, ['featuredClicks']),
-    whatsappClicks: _intAny(summary, ['whatsappClicks']),
+    whatsappClicks: _firstPositive([
+      _intAny(summary, ['whatsappClicks', 'whatsapp_clicks']),
+      productWhatsapp,
+      _actionCount(effectiveActions, ['whatsapp', 'contact', 'call', 'telefono']),
+    ]),
     quoteRequests: _firstPositive([_intAny(summary, ['quoteRequests']), productQuotes]),
     conversions: _intAny(summary, ['conversions']),
     leads: _intAny(summary, ['leads']),
@@ -805,10 +835,13 @@ final marketingDashboardDetailsProvider =
     }),
     topProducts: topProducts.map((item) => MarketingProductMetric(
       productId: _stringAny(item, ['productId', 'id']),
+      productName: _stringAny(item, ['productName', 'name', 'title'], fallback: ''),
+      sku: _stringAny(item, ['sku', 'productSku', 'code'], fallback: ''),
       impressions: _intAny(item, ['impressions']),
       views: _intAny(item, ['productViews', 'views']),
       likes: _intAny(item, ['likes']),
       quoteRequests: _intAny(item, ['quoteRequests']),
+      whatsappClicks: _intAny(item, ['whatsappClicks', 'whatsapp_clicks']),
       featuredViews: _intAny(item, ['featuredViews']),
     )).toList(),
   );
@@ -1717,14 +1750,14 @@ class _MarketingDashboardContent extends ConsumerWidget {
           data: (value) => _KpiGrid(cards: [
             _KpiData('Campañas', _n(value.campaigns), 'Configuradas', Icons.campaign_rounded, const Color(0xFFFF5A1F)),
             _KpiData('Eventos', _n(value.events), _periodLabel(period), Icons.leaderboard_rounded, const Color(0xFF2563EB)),
-            _KpiData('Leads', _n(value.leads), 'Capturas comerciales', Icons.person_add_alt_1_rounded, const Color(0xFF00A676)),
-            _KpiData('Conversiones', _n(value.conversions), 'Cierre medido', Icons.trending_up_rounded, const Color(0xFF0F172A)),
+            _KpiData('WhatsApp', _n(value.whatsappClicks), 'Intentos de contacto', Icons.chat_rounded, const Color(0xFF00A676)),
+            _KpiData('Presupuestos', _n(value.quoteRequests), 'Intención comercial', Icons.request_quote_rounded, const Color(0xFF0F172A)),
           ]),
           loading: () => _KpiGrid(cards: [
             _KpiData('Campañas', _n(data.campaigns), 'Configuradas', Icons.campaign_rounded, const Color(0xFFFF5A1F)),
             _KpiData('Eventos', '...', _periodLabel(period), Icons.leaderboard_rounded, const Color(0xFF2563EB)),
-            _KpiData('Leads', '...', 'Capturas comerciales', Icons.person_add_alt_1_rounded, const Color(0xFF00A676)),
-            _KpiData('Conversiones', '...', 'Cierre medido', Icons.trending_up_rounded, const Color(0xFF0F172A)),
+            _KpiData('WhatsApp', '...', 'Intentos de contacto', Icons.chat_rounded, const Color(0xFF00A676)),
+            _KpiData('Presupuestos', '...', 'Intención comercial', Icons.request_quote_rounded, const Color(0xFF0F172A)),
           ]),
           error: (_, __) => _KpiGrid(cards: [
             _KpiData('Campañas', _n(data.campaigns), 'Configuradas', Icons.campaign_rounded, const Color(0xFFFF5A1F)),
@@ -2480,8 +2513,8 @@ class _MarketingTopProductsPanel extends StatelessWidget {
               return _MarketingProductTile(
                 rank: entry.key + 1,
                 product: product,
-                name: info?.name ?? 'Producto',
-                sku: info?.sku ?? '',
+                name: product.productName.isNotEmpty ? product.productName : (info?.name ?? 'Producto'),
+                sku: product.sku.isNotEmpty ? product.sku : (info?.sku ?? ''),
                 maxImpressions: maxImpressions,
               );
             }),
@@ -2565,7 +2598,7 @@ class _MarketingProductTile extends StatelessWidget {
             children: [
               _TinyMetric('Vistas', product.views),
               _TinyMetric('Likes', product.likes),
-              _TinyMetric('Intento', product.quoteRequests),
+              _TinyMetric('Contacto', product.quoteRequests + product.whatsappClicks),
               _TinyMetric('Dest.', product.featuredViews),
             ],
           ),
@@ -2651,20 +2684,21 @@ class _HeroHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.ink,
+        color: AppColors.surfaceVariant,
         borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Hola, ${_friendlyFirstName(username)}',
-              style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w700)),
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
-          const Text('Centro operativo',
-              style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900)),
+          Text('Centro operativo',
+              style: TextStyle(color: AppColors.ink, fontSize: 28, fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
-          const Text('Productos, ventas, marketing, depósito y seguridad en una sola lectura.',
-              style: TextStyle(color: Colors.white70, height: 1.35, fontWeight: FontWeight.w600)),
+          Text('Productos, ventas, marketing, depósito y seguridad en una sola lectura.',
+              style: TextStyle(color: AppColors.textSecondary, height: 1.35, fontWeight: FontWeight.w600)),
         ],
       ),
     );

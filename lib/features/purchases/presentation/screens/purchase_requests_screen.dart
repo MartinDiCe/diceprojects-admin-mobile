@@ -13,6 +13,7 @@ import 'package:app_diceprojects_admin/features/auth/presentation/controllers/au
 import 'package:app_diceprojects_admin/features/permissions/permissions_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 final _purchaseSearchProvider = StateProvider.autoDispose<String>((_) => '');
 final _purchaseSourceProvider = StateProvider.autoDispose<String?>((_) => null);
@@ -49,6 +50,20 @@ final _purchaseSuppliersProvider = FutureProvider.autoDispose<List<_LookupOption
   );
   return PaginatedResponse.fromJson(response.data, _LookupOption.supplier).items;
 });
+
+final _purchaseProductsProvider = FutureProvider.autoDispose<List<_ProductOption>>((ref) async {
+  final response = await ref.watch(dioProvider).get(
+    '/v1/products',
+    queryParameters: const {'page': 0, 'size': 300, 'pageSize': 300},
+  );
+  return PaginatedResponse.fromJson(response.data, _ProductOption.fromJson)
+      .items
+      .where((item) => item.id.isNotEmpty && item.name.isNotEmpty)
+      .toList();
+});
+
+const _currencyOptions = ['ARS', 'USD', 'EUR', 'BRL'];
+const _unitOptions = ['UN', 'KG', 'GR', 'LT', 'ML', 'M', 'CM', 'M2', 'M3', 'CAJA', 'BOLSA', 'ROLLO'];
 
 class PurchaseRequestsScreen extends ConsumerWidget {
   const PurchaseRequestsScreen({super.key});
@@ -258,6 +273,7 @@ class _PurchaseRequestDetailDialog extends ConsumerWidget {
             final awards = _list(data['awards']);
             final number = request['number']?.toString() ?? requestId;
             final title = request['title']?.toString() ?? '';
+            final suppliersById = {for (final supplier in suppliers) supplier.id: supplier};
 
             return Column(
               children: [
@@ -317,12 +333,14 @@ class _PurchaseRequestDetailDialog extends ConsumerWidget {
                         ),
                         children: requestSuppliers
                             .map((item) => _InfoLine(
-                                  title: _supplierLabel(
-                                    item['supplier_id']?.toString() ?? item['supplierId']?.toString(),
-                                    suppliers,
-                                  ),
+                                  title: _supplierLabel(item['supplier_id']?.toString() ?? item['supplierId']?.toString(), suppliers),
                                   subtitle: item['status']?.toString() ?? 'DRAFT',
                                   icon: Icons.local_shipping_outlined,
+                                  trailing: _SupplierContactActions(
+                                    supplier: suppliersById[item['supplier_id']?.toString() ?? item['supplierId']?.toString()],
+                                    publicToken: item['public_token']?.toString() ?? item['publicToken']?.toString(),
+                                    number: number,
+                                  ),
                                 ))
                             .toList(),
                       ),
@@ -466,6 +484,70 @@ class _PurchaseRequestDetailDialog extends ConsumerWidget {
     );
     ref.invalidate(_purchaseRequestDetailProvider(requestId));
   }
+
+  static String _publicSupplierUrl(String token) => 'https://backoffice.diceprojects.com/public/purchases/$token';
+
+  static String _supplierMessage(String number, String token) =>
+      'Hola, te enviamos la solicitud de presupuesto $number. Podés completar precios acá: ${_publicSupplierUrl(token)}';
+}
+
+class _SupplierContactActions extends StatelessWidget {
+  final _LookupOption? supplier;
+  final String? publicToken;
+  final String number;
+
+  const _SupplierContactActions({
+    required this.supplier,
+    required this.publicToken,
+    required this.number,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final token = publicToken?.trim() ?? '';
+    if (token.isEmpty) return const SizedBox.shrink();
+    final phone = _normalizeWhatsappPhone(supplier?.phone);
+    final email = supplier?.email?.trim() ?? '';
+    return Wrap(
+      spacing: 2,
+      children: [
+        IconButton(
+          tooltip: 'Abrir link',
+          icon: const Icon(Icons.link_rounded),
+          onPressed: () => _launchExternal(context, Uri.parse(_PurchaseRequestDetailDialog._publicSupplierUrl(token)), 'No se pudo abrir el link.'),
+        ),
+        IconButton(
+          tooltip: phone.isEmpty ? 'Proveedor sin teléfono' : 'WhatsApp',
+          icon: const Icon(Icons.chat_rounded),
+          onPressed: phone.isEmpty
+              ? null
+              : () => _launchExternal(
+                    context,
+                    Uri.parse('https://api.whatsapp.com/send/?phone=$phone&text=${Uri.encodeComponent(_PurchaseRequestDetailDialog._supplierMessage(number, token))}&type=phone_number&app_absent=0'),
+                    'No se pudo abrir WhatsApp.',
+                  ),
+        ),
+        IconButton(
+          tooltip: email.isEmpty ? 'Proveedor sin email' : 'Email',
+          icon: const Icon(Icons.mail_outline_rounded),
+          onPressed: email.isEmpty
+              ? null
+              : () => _launchExternal(
+                    context,
+                    Uri(
+                      scheme: 'mailto',
+                      path: email,
+                      queryParameters: {
+                        'subject': 'Solicitud de presupuesto $number',
+                        'body': _PurchaseRequestDetailDialog._supplierMessage(number, token),
+                      },
+                    ),
+                    'No se pudo abrir el email.',
+                  ),
+        ),
+      ],
+    );
+  }
 }
 
 class _PurchaseRequestCreateSheet extends ConsumerStatefulWidget {
@@ -479,7 +561,7 @@ class _PurchaseRequestCreateSheetState extends ConsumerState<_PurchaseRequestCre
   final _formKey = GlobalKey<FormState>();
   final _title = TextEditingController();
   final _description = TextEditingController();
-  final _currency = TextEditingController(text: 'ARS');
+  String _currency = 'ARS';
   final _items = <_RequestItemDraft>[_RequestItemDraft()];
   final _supplierIds = <String>{};
   bool _saving = false;
@@ -488,7 +570,6 @@ class _PurchaseRequestCreateSheetState extends ConsumerState<_PurchaseRequestCre
   void dispose() {
     _title.dispose();
     _description.dispose();
-    _currency.dispose();
     for (final item in _items) {
       item.dispose();
     }
@@ -498,6 +579,7 @@ class _PurchaseRequestCreateSheetState extends ConsumerState<_PurchaseRequestCre
   @override
   Widget build(BuildContext context) {
     final suppliersAsync = ref.watch(_purchaseSuppliersProvider);
+    final productsAsync = ref.watch(_purchaseProductsProvider);
 
     return DraggableScrollableSheet(
       expand: false,
@@ -518,7 +600,15 @@ class _PurchaseRequestCreateSheetState extends ConsumerState<_PurchaseRequestCre
             const SizedBox(height: 10),
             Row(
               children: [
-                Expanded(child: AppTextField(label: 'Moneda', controller: _currency, validator: _required)),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _currency,
+                    decoration: const InputDecoration(labelText: 'Moneda'),
+                    items: _currencyOptions.map((code) => DropdownMenuItem(value: code, child: Text(code))).toList(),
+                    onChanged: _saving ? null : (value) => setState(() => _currency = value ?? 'ARS'),
+                    validator: (value) => value == null || value.isEmpty ? 'Requerido' : null,
+                  ),
+                ),
                 const SizedBox(width: 10),
                 const Expanded(child: _DocumentTypeField()),
               ],
@@ -553,11 +643,24 @@ class _PurchaseRequestCreateSheetState extends ConsumerState<_PurchaseRequestCre
               ),
             ),
             for (var i = 0; i < _items.length; i++) ...[
-              _RequestItemEditor(
-                item: _items[i],
-                index: i,
-                canRemove: _items.length > 1,
-                onRemove: () => setState(() => _items.removeAt(i).dispose()),
+              productsAsync.when(
+                loading: () => const LinearProgressIndicator(),
+                error: (_, __) => _RequestItemEditor(
+                  item: _items[i],
+                  products: const [],
+                  index: i,
+                  canRemove: _items.length > 1,
+                  onChanged: () => setState(() {}),
+                  onRemove: () => setState(() => _items.removeAt(i).dispose()),
+                ),
+                data: (products) => _RequestItemEditor(
+                  item: _items[i],
+                  products: products,
+                  index: i,
+                  canRemove: _items.length > 1,
+                  onChanged: () => setState(() {}),
+                  onRemove: () => setState(() => _items.removeAt(i).dispose()),
+                ),
               ),
               const SizedBox(height: 10),
             ],
@@ -590,7 +693,7 @@ class _PurchaseRequestCreateSheetState extends ConsumerState<_PurchaseRequestCre
           'documentType': 'PRESUPUESTO',
           'title': _title.text.trim(),
           'description': _emptyToNull(_description.text),
-          'currency': _currency.text.trim().isEmpty ? 'ARS' : _currency.text.trim().toUpperCase(),
+          'currency': _currency,
           'items': _items.map((item) => item.toJson()).toList(),
           'supplierIds': _supplierIds.toList(),
         },
@@ -816,14 +919,18 @@ class _SupplierMultiSelector extends StatelessWidget {
 
 class _RequestItemEditor extends StatelessWidget {
   final _RequestItemDraft item;
+  final List<_ProductOption> products;
   final int index;
   final bool canRemove;
+  final VoidCallback onChanged;
   final VoidCallback onRemove;
 
   const _RequestItemEditor({
     required this.item,
+    required this.products,
     required this.index,
     required this.canRemove,
+    required this.onChanged,
     required this.onRemove,
   });
 
@@ -849,13 +956,47 @@ class _RequestItemEditor extends StatelessWidget {
                 ),
             ],
           ),
-          AppTextField(label: 'Descripcion *', controller: item.description, validator: _required),
+          DropdownButtonFormField<String>(
+            initialValue: products.any((product) => product.id == item.productId) ? item.productId : null,
+            decoration: const InputDecoration(labelText: 'Artículo *'),
+            items: products
+                .map((product) => DropdownMenuItem(
+                      value: product.id,
+                      child: Text(product.label, overflow: TextOverflow.ellipsis),
+                    ))
+                .toList(),
+            onChanged: (value) {
+              _ProductOption? selected;
+              for (final product in products) {
+                if (product.id == value) {
+                  selected = product;
+                  break;
+                }
+              }
+              item.productId = selected?.id;
+              if (selected != null) item.description.text = selected.name;
+              onChanged();
+            },
+            validator: (value) => value == null || value.isEmpty ? 'Requerido' : null,
+          ),
+          const SizedBox(height: 10),
+          AppTextField(label: 'Nombre para proveedor *', controller: item.description, validator: _required),
           const SizedBox(height: 10),
           Row(
             children: [
               Expanded(child: AppTextField(label: 'Cantidad *', controller: item.quantity, keyboardType: TextInputType.number, validator: _requiredNumber)),
               const SizedBox(width: 10),
-              Expanded(child: AppTextField(label: 'Unidad', controller: item.unit)),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue: _unitOptions.contains(item.unit) ? item.unit : 'UN',
+                  decoration: const InputDecoration(labelText: 'Unidad'),
+                  items: _unitOptions.map((unit) => DropdownMenuItem(value: unit, child: Text(unit))).toList(),
+                  onChanged: (value) {
+                    item.unit = value ?? 'UN';
+                    onChanged();
+                  },
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -996,8 +1137,10 @@ class _PurchaseRequestDto {
 class _LookupOption {
   final String id;
   final String label;
+  final String? phone;
+  final String? email;
 
-  const _LookupOption({required this.id, required this.label});
+  const _LookupOption({required this.id, required this.label, this.phone, this.email});
 
   factory _LookupOption.supplier(Map<String, dynamic> json) {
     final name = json['businessName']?.toString() ?? json['tradeName']?.toString() ?? 'Proveedor';
@@ -1005,28 +1148,47 @@ class _LookupOption {
     return _LookupOption(
       id: (json['supplierId'] ?? json['id'])?.toString() ?? '',
       label: code.isEmpty ? name : '$code · $name',
+      phone: (json['phone'] ?? json['contactPhone'])?.toString(),
+      email: (json['email'] ?? json['contactEmail'])?.toString(),
     );
   }
 }
 
+class _ProductOption {
+  final String id;
+  final String name;
+  final String sku;
+
+  const _ProductOption({required this.id, required this.name, required this.sku});
+
+  String get label => sku.isEmpty ? name : '$name · $sku';
+
+  factory _ProductOption.fromJson(Map<String, dynamic> json) => _ProductOption(
+        id: (json['productId'] ?? json['id'])?.toString() ?? '',
+        name: (json['name'] ?? json['productName'])?.toString() ?? '',
+        sku: (json['sku'] ?? json['code'])?.toString() ?? '',
+      );
+}
+
 class _RequestItemDraft {
+  String? productId;
   final description = TextEditingController();
   final quantity = TextEditingController(text: '1');
-  final unit = TextEditingController(text: 'u');
+  String unit = 'UN';
   final notes = TextEditingController();
 
   void dispose() {
     description.dispose();
     quantity.dispose();
-    unit.dispose();
     notes.dispose();
   }
 
   Map<String, dynamic> toJson() {
     return {
+      'productId': _emptyToNull(productId ?? ''),
       'description': description.text.trim(),
       'quantity': _num(quantity.text) ?? 1,
-      'unitId': _emptyToNull(unit.text),
+      'unitId': unit,
       'notes': _emptyToNull(notes.text),
     };
   }
@@ -1053,6 +1215,22 @@ String _supplierLabel(String? id, List<_LookupOption> suppliers) {
 String? _emptyToNull(String value) {
   final text = value.trim();
   return text.isEmpty ? null : text;
+}
+
+String _normalizeWhatsappPhone(String? value, {String defaultCountryCode = '54'}) {
+  var digits = (value ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits.isEmpty) return '';
+  if (digits.startsWith('00')) digits = digits.substring(2);
+  if (digits.startsWith(defaultCountryCode)) return digits;
+  digits = digits.replaceFirst(RegExp(r'^0+'), '');
+  return '$defaultCountryCode$digits';
+}
+
+Future<void> _launchExternal(BuildContext context, Uri uri, String errorMessage) async {
+  final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (!opened && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMessage)));
+  }
 }
 
 double? _num(Object? value) {
