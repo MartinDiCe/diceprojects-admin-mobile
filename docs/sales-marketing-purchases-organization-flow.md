@@ -84,11 +84,10 @@ El backoffice debe tener:
 
 - Organization: ABM de proveedores y clientes.
 - Purchases: lista, detalle, carga de presupuesto, comparacion y adjudicacion.
-- Projects: entrada de modulo para presupuestos/obras.
+- Projects: lista y alta de proyectos, tipos, detalle, tareas y avances.
 
 ## Pendientes
 
 - Boton en detalle de cotizacion para crear `PurchaseRequest` desde items seleccionados.
 - Costo sugerido desde costos historicos/proveedor.
-- Conversion automatica de lead a customer al ganar cotizacion.
 - Tests de contrato entre Sales, Marketing, Purchases y Organization.
