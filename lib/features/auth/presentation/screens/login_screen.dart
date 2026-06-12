@@ -222,6 +222,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
       if (!authenticated) return;
       final storage = ref.read(secureStorageProvider);
+      final refreshed =
+          await ref.read(authNotifierProvider.notifier).refreshMobileSession();
+      if (refreshed) return;
       final username = await storage.read(AppConfig.rememberedUsernameKey);
       final password = await storage.read(AppConfig.rememberedPasswordKey);
       if (username == null || password == null) return;

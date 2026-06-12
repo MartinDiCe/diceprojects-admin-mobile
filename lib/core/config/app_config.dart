@@ -20,6 +20,8 @@ class AppConfig {
   static const Duration receiveTimeout = Duration(seconds: 30);
 
   static const String tokenKey = 'access_token';
+  static const String refreshTokenKey = 'mobile_refresh_token';
+  static const String refreshDeviceIdKey = 'mobile_refresh_device_id';
   static const String rememberLoginKey = 'auth_remember_login';
   static const String biometricLoginKey = 'auth_biometric_login';
   static const String rememberedUsernameKey = 'auth_remembered_username';

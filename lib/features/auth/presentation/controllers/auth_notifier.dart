@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:app_diceprojects_admin/core/config/app_config.dart';
 import 'package:app_diceprojects_admin/core/errors/error_handler.dart';
@@ -115,7 +116,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       final response = await _dio.post(
         '/auth/login',
-        data: {'username': username, 'password': password},
+        data: {
+          'username': username,
+          'password': password,
+          'clientType': 'mobile',
+          'deviceId': await _getOrCreateDeviceId(),
+          'deviceName': 'DiceProjects mobile',
+        },
       );
 
       debugPrint('[AUTH] login response: status=${response.statusCode}');
@@ -133,6 +140,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
 
       await _storage.write(AppConfig.tokenKey, token);
+      await _storeRefreshTokenIfPresent(data);
       await _buildStateFromToken(token);
       return true;
     } on DioException catch (e) {
@@ -179,6 +187,64 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true, clearError: true);
     await _storage.write(AppConfig.tokenKey, safeToken);
     await _buildStateFromToken(safeToken);
+  }
+
+  Future<bool> refreshMobileSession() async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final refreshToken = await _storage.read(AppConfig.refreshTokenKey);
+      final deviceId = await _storage.read(AppConfig.refreshDeviceIdKey);
+      if (refreshToken == null ||
+          refreshToken.trim().isEmpty ||
+          deviceId == null ||
+          deviceId.trim().isEmpty) {
+        state = const AuthState(
+          isInitialized: true,
+          error: 'Sesión expirada. Iniciá sesión nuevamente.',
+        );
+        return false;
+      }
+
+      final response = await _dio.post(
+        '/auth/mobile/refresh',
+        data: {
+          'refreshToken': refreshToken,
+          'deviceId': deviceId,
+        },
+      );
+      final data = response.data;
+      final token = data is Map ? data['token']?.toString() : null;
+      if (token == null || token.isEmpty || JwtDecoder.isExpired(token)) {
+        await _storage.delete(AppConfig.tokenKey);
+        state = const AuthState(
+          isInitialized: true,
+          error: 'Sesión expirada. Iniciá sesión nuevamente.',
+        );
+        return false;
+      }
+
+      await _storage.write(AppConfig.tokenKey, token);
+      await _storeRefreshTokenIfPresent(data);
+      await _buildStateFromToken(token);
+      return true;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 401) {
+        await _storage.delete(AppConfig.refreshTokenKey);
+      }
+      await _storage.delete(AppConfig.tokenKey);
+      state = const AuthState(
+        isInitialized: true,
+        error: 'Sesión expirada. Iniciá sesión nuevamente.',
+      );
+      return false;
+    } catch (_) {
+      await _storage.delete(AppConfig.tokenKey);
+      state = const AuthState(
+        isInitialized: true,
+        error: 'Sesión expirada. Iniciá sesión nuevamente.',
+      );
+      return false;
+    }
   }
 
   Future<void> _buildStateFromToken(String token) async {
@@ -259,6 +325,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     await _storage.delete(AppConfig.tokenKey);
+    await _storage.delete(AppConfig.refreshTokenKey);
     state = const AuthState(isInitialized: true);
   }
 
@@ -268,6 +335,27 @@ class AuthNotifier extends StateNotifier<AuthState> {
       isInitialized: true,
       error: 'Sesión expirada. Iniciá sesión nuevamente.',
     );
+  }
+
+  Future<void> _storeRefreshTokenIfPresent(dynamic data) async {
+    if (data is! Map) return;
+    final refreshToken = data['refreshToken']?.toString();
+    if (refreshToken == null || refreshToken.isEmpty) return;
+    await _storage.write(AppConfig.refreshTokenKey, refreshToken);
+  }
+
+  Future<String> _getOrCreateDeviceId() async {
+    final existing = await _storage.read(AppConfig.refreshDeviceIdKey);
+    if (existing != null && existing.trim().isNotEmpty) {
+      return existing;
+    }
+    final random = Random.secure();
+    final suffix = List<int>.generate(8, (_) => random.nextInt(256))
+        .map((v) => v.toRadixString(16).padLeft(2, '0'))
+        .join();
+    final deviceId = 'mobile-${DateTime.now().microsecondsSinceEpoch}-$suffix';
+    await _storage.write(AppConfig.refreshDeviceIdKey, deviceId);
+    return deviceId;
   }
 }
 
