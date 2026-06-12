@@ -1,6 +1,8 @@
 import 'package:app_diceprojects_admin/core/http/dio_client.dart';
 import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
 import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
+import 'package:app_diceprojects_admin/core/ui/widgets/app_button.dart';
+import 'package:app_diceprojects_admin/core/ui/widgets/app_text_field.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/create_fab.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/empty_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
@@ -388,57 +390,60 @@ class _PartyFormScreenState extends ConsumerState<PartyFormScreen> {
                 constraints: const BoxConstraints(maxWidth: 760),
                 child: Form(
                   key: _formKey,
-                  child: Wrap(
-                    runSpacing: 12,
-                    spacing: 12,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _field(_tenantId, 'Tenant', required: true),
-                      _field(_sellerId, 'Seller'),
-                      _field(_code, 'Código', required: true),
-                      _field(_businessName, 'Razón social / nombre', required: true),
-                      _field(_taxId, 'CUIT / documento'),
-                      _field(_email, 'Email'),
-                      _field(_phone, 'Teléfono'),
-                      SizedBox(
-                        width: 360,
-                        child: SwitchListTile(
-                          value: _active,
-                          onChanged: (value) => setState(() => _active = value),
-                          title: const Text('Activo'),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                      SizedBox(
-                        width: 732,
-                        child: TextFormField(
-                          controller: _notes,
-                          maxLines: 3,
-                          decoration: const InputDecoration(labelText: 'Notas'),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 732,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            TextButton(
-                              onPressed: _saving ? null : () => context.go(widget.kind.listRoute),
-                              child: const Text('Cancelar'),
+                      Wrap(
+                        runSpacing: 12,
+                        spacing: 12,
+                        children: [
+                          _field(_tenantId, 'Tenant', required: true),
+                          _field(_sellerId, 'Seller'),
+                          _field(_code, 'Código', required: true),
+                          _field(_businessName, 'Razón social / nombre', required: true),
+                          _field(_taxId, 'CUIT / documento'),
+                          _field(_email, 'Email', keyboardType: TextInputType.emailAddress),
+                          _field(_phone, 'Teléfono', keyboardType: TextInputType.phone),
+                          SizedBox(
+                            width: 360,
+                            child: SwitchListTile(
+                              value: _active,
+                              onChanged: (value) => setState(() => _active = value),
+                              title: const Text('Activo'),
+                              contentPadding: EdgeInsets.zero,
                             ),
-                            const SizedBox(width: 8),
-                            FilledButton.icon(
-                              onPressed: _saving ? null : _save,
-                              icon: _saving
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    )
-                                  : const Icon(Icons.save_rounded),
-                              label: const Text('Guardar'),
+                          ),
+                          SizedBox(
+                            width: 732,
+                            child: AppTextField(
+                              controller: _notes,
+                              maxLines: 3,
+                              label: 'Notas',
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
+                      ),
+                      if (widget.id != null) ...[
+                        const SizedBox(height: 20),
+                        _PartyRelationsSection(kind: widget.kind, partyId: widget.id!),
+                      ],
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          AppButton.secondary(
+                            label: 'Cancelar',
+                            icon: Icons.close_rounded,
+                            onPressed: _saving ? null : () => context.go(widget.kind.listRoute),
+                          ),
+                          const SizedBox(width: 8),
+                          AppButton(
+                            label: 'Guardar',
+                            icon: Icons.save_rounded,
+                            isLoading: _saving,
+                            onPressed: _save,
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -448,16 +453,425 @@ class _PartyFormScreenState extends ConsumerState<PartyFormScreen> {
     );
   }
 
-  Widget _field(TextEditingController controller, String label, {bool required = false}) {
+  Widget _field(
+    TextEditingController controller,
+    String label, {
+    bool required = false,
+    TextInputType? keyboardType,
+  }) {
     return SizedBox(
       width: 360,
-      child: TextFormField(
+      child: AppTextField(
         controller: controller,
-        decoration: InputDecoration(labelText: label),
+        label: label,
+        keyboardType: keyboardType,
         validator: required
             ? (value) => (value == null || value.trim().isEmpty) ? 'Requerido' : null
             : null,
       ),
     );
   }
+}
+
+final _partyContactsProvider = FutureProvider.autoDispose
+    .family<List<Map<String, dynamic>>, _PartyRelationKey>((ref, key) async {
+  final response = await ref.watch(dioProvider).get('${key.kind.endpoint}/${key.partyId}/contacts');
+  return _relationList(response.data);
+});
+
+final _partyAddressesProvider = FutureProvider.autoDispose
+    .family<List<Map<String, dynamic>>, _PartyRelationKey>((ref, key) async {
+  final response = await ref.watch(dioProvider).get('${key.kind.endpoint}/${key.partyId}/addresses');
+  return _relationList(response.data);
+});
+
+class _PartyRelationsSection extends ConsumerWidget {
+  final PartyKind kind;
+  final String partyId;
+
+  const _PartyRelationsSection({required this.kind, required this.partyId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final key = _PartyRelationKey(kind, partyId);
+    final contacts = ref.watch(_partyContactsProvider(key));
+    final addresses = ref.watch(_partyAddressesProvider(key));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _RelationHeader(
+          title: 'Contactos',
+          onAdd: () async {
+            await showModalBottomSheet<void>(
+              context: context,
+              isScrollControlled: true,
+              useSafeArea: true,
+              builder: (_) => _ContactSheet(kind: kind, partyId: partyId),
+            );
+            ref.invalidate(_partyContactsProvider(key));
+          },
+        ),
+        contacts.when(
+          loading: () => const LinearProgressIndicator(),
+          error: (_, __) => const Text('No se pudieron cargar contactos.'),
+          data: (items) => _RelationList(
+            items: items,
+            icon: Icons.person_outline_rounded,
+            empty: 'Sin contactos cargados.',
+            titleOf: (item) => [item['name'], item['lastName']]
+                .where((value) => value != null && value.toString().trim().isNotEmpty)
+                .join(' '),
+            subtitleOf: (item) => [item['role'], item['email'], item['phone']]
+                .where((value) => value != null && value.toString().trim().isNotEmpty)
+                .join(' · '),
+            onDelete: (item) async {
+              final id = (item['supplierContactId'] ?? item['customerContactId'])?.toString();
+              if (id == null || id.isEmpty) return;
+              await ref.read(dioProvider).patch('${kind.endpoint}/$partyId/contacts/$id/delete');
+              ref.invalidate(_partyContactsProvider(key));
+            },
+          ),
+        ),
+        const SizedBox(height: 18),
+        _RelationHeader(
+          title: 'Direcciones',
+          onAdd: () async {
+            await showModalBottomSheet<void>(
+              context: context,
+              isScrollControlled: true,
+              useSafeArea: true,
+              builder: (_) => _AddressSheet(kind: kind, partyId: partyId),
+            );
+            ref.invalidate(_partyAddressesProvider(key));
+          },
+        ),
+        addresses.when(
+          loading: () => const LinearProgressIndicator(),
+          error: (_, __) => const Text('No se pudieron cargar direcciones.'),
+          data: (items) => _RelationList(
+            items: items,
+            icon: Icons.location_on_outlined,
+            empty: 'Sin direcciones cargadas.',
+            titleOf: (item) => '${item['type'] ?? 'Direccion'} · ${item['addressLine1'] ?? ''}',
+            subtitleOf: (item) => [item['city'], item['province'], item['country'], item['postalCode']]
+                .where((value) => value != null && value.toString().trim().isNotEmpty)
+                .join(' · '),
+            onDelete: (item) async {
+              final id = (item['supplierAddressId'] ?? item['customerAddressId'])?.toString();
+              if (id == null || id.isEmpty) return;
+              await ref.read(dioProvider).patch('${kind.endpoint}/$partyId/addresses/$id/delete');
+              ref.invalidate(_partyAddressesProvider(key));
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ContactSheet extends ConsumerStatefulWidget {
+  final PartyKind kind;
+  final String partyId;
+
+  const _ContactSheet({required this.kind, required this.partyId});
+
+  @override
+  ConsumerState<_ContactSheet> createState() => _ContactSheetState();
+}
+
+class _ContactSheetState extends ConsumerState<_ContactSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _name = TextEditingController();
+  final _lastName = TextEditingController();
+  final _email = TextEditingController();
+  final _phone = TextEditingController();
+  final _role = TextEditingController();
+  bool _primary = false;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _lastName.dispose();
+    _email.dispose();
+    _phone.dispose();
+    _role.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.72,
+      minChildSize: 0.45,
+      maxChildSize: 0.92,
+      builder: (_, controller) => Form(
+        key: _formKey,
+        child: ListView(
+          controller: controller,
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+          children: [
+            Text('Nuevo contacto', style: TextStyle(color: AppColors.ink, fontSize: 22, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 16),
+            AppTextField(label: 'Nombre *', controller: _name, validator: _required),
+            const SizedBox(height: 10),
+            AppTextField(label: 'Apellido', controller: _lastName),
+            const SizedBox(height: 10),
+            AppTextField(label: 'Email', controller: _email, keyboardType: TextInputType.emailAddress),
+            const SizedBox(height: 10),
+            AppTextField(label: 'Telefono', controller: _phone, keyboardType: TextInputType.phone),
+            const SizedBox(height: 10),
+            AppTextField(label: 'Rol', controller: _role),
+            SwitchListTile(
+              value: _primary,
+              onChanged: _saving ? null : (value) => setState(() => _primary = value),
+              title: const Text('Contacto principal'),
+              contentPadding: EdgeInsets.zero,
+            ),
+            AppButton(
+              label: 'Guardar contacto',
+              icon: Icons.save_rounded,
+              isLoading: _saving,
+              fullWidth: true,
+              onPressed: _save,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String? _required(String? value) => value == null || value.trim().isEmpty ? 'Requerido' : null;
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    try {
+      await ref.read(dioProvider).post(
+        '${widget.kind.endpoint}/${widget.partyId}/contacts',
+        data: {
+          'name': _name.text.trim(),
+          'lastName': _emptyToNull(_lastName.text),
+          'email': _emptyToNull(_email.text),
+          'phone': _emptyToNull(_phone.text),
+          'role': _emptyToNull(_role.text),
+          'isPrimary': _primary,
+        },
+      );
+      if (mounted) Navigator.of(context).pop();
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+}
+
+class _AddressSheet extends ConsumerStatefulWidget {
+  final PartyKind kind;
+  final String partyId;
+
+  const _AddressSheet({required this.kind, required this.partyId});
+
+  @override
+  ConsumerState<_AddressSheet> createState() => _AddressSheetState();
+}
+
+class _AddressSheetState extends ConsumerState<_AddressSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _type = TextEditingController(text: 'COMERCIAL');
+  final _addressLine1 = TextEditingController();
+  final _addressLine2 = TextEditingController();
+  final _city = TextEditingController();
+  final _province = TextEditingController();
+  final _country = TextEditingController(text: 'Argentina');
+  final _postalCode = TextEditingController();
+  bool _default = false;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _type.dispose();
+    _addressLine1.dispose();
+    _addressLine2.dispose();
+    _city.dispose();
+    _province.dispose();
+    _country.dispose();
+    _postalCode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.78,
+      minChildSize: 0.50,
+      maxChildSize: 0.94,
+      builder: (_, controller) => Form(
+        key: _formKey,
+        child: ListView(
+          controller: controller,
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+          children: [
+            Text('Nueva direccion', style: TextStyle(color: AppColors.ink, fontSize: 22, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              initialValue: _type.text,
+              decoration: const InputDecoration(labelText: 'Tipo *'),
+              items: const [
+                DropdownMenuItem(value: 'COMERCIAL', child: Text('Comercial')),
+                DropdownMenuItem(value: 'FACTURACION', child: Text('Facturacion')),
+                DropdownMenuItem(value: 'ENTREGA', child: Text('Entrega')),
+              ],
+              onChanged: _saving ? null : (value) => _type.text = value ?? 'COMERCIAL',
+            ),
+            const SizedBox(height: 10),
+            AppTextField(label: 'Direccion *', controller: _addressLine1, validator: _required),
+            const SizedBox(height: 10),
+            AppTextField(label: 'Detalle', controller: _addressLine2),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: AppTextField(label: 'Ciudad', controller: _city)),
+                const SizedBox(width: 10),
+                Expanded(child: AppTextField(label: 'Provincia', controller: _province)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: AppTextField(label: 'Pais', controller: _country)),
+                const SizedBox(width: 10),
+                Expanded(child: AppTextField(label: 'CP', controller: _postalCode)),
+              ],
+            ),
+            SwitchListTile(
+              value: _default,
+              onChanged: _saving ? null : (value) => setState(() => _default = value),
+              title: const Text('Direccion principal'),
+              contentPadding: EdgeInsets.zero,
+            ),
+            AppButton(
+              label: 'Guardar direccion',
+              icon: Icons.save_rounded,
+              isLoading: _saving,
+              fullWidth: true,
+              onPressed: _save,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String? _required(String? value) => value == null || value.trim().isEmpty ? 'Requerido' : null;
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    try {
+      await ref.read(dioProvider).post(
+        '${widget.kind.endpoint}/${widget.partyId}/addresses',
+        data: {
+          'type': _type.text.trim(),
+          'addressLine1': _addressLine1.text.trim(),
+          'addressLine2': _emptyToNull(_addressLine2.text),
+          'city': _emptyToNull(_city.text),
+          'province': _emptyToNull(_province.text),
+          'country': _emptyToNull(_country.text),
+          'postalCode': _emptyToNull(_postalCode.text),
+          'isDefault': _default,
+        },
+      );
+      if (mounted) Navigator.of(context).pop();
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+}
+
+class _RelationHeader extends StatelessWidget {
+  final String title;
+  final VoidCallback onAdd;
+
+  const _RelationHeader({required this.title, required this.onAdd});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900))),
+        AppButton.secondary(label: 'Agregar', icon: Icons.add_rounded, onPressed: onAdd),
+      ],
+    );
+  }
+}
+
+class _RelationList extends StatelessWidget {
+  final List<Map<String, dynamic>> items;
+  final IconData icon;
+  final String empty;
+  final String Function(Map<String, dynamic>) titleOf;
+  final String Function(Map<String, dynamic>) subtitleOf;
+  final Future<void> Function(Map<String, dynamic>) onDelete;
+
+  const _RelationList({
+    required this.items,
+    required this.icon,
+    required this.empty,
+    required this.titleOf,
+    required this.subtitleOf,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(empty, style: TextStyle(color: AppColors.textSecondary)),
+      );
+    }
+    return Column(
+      children: items
+          .map((item) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(icon, color: AppColors.accent),
+                title: Text(titleOf(item), maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(subtitleOf(item), maxLines: 1, overflow: TextOverflow.ellipsis),
+                trailing: IconButton(
+                  tooltip: 'Eliminar',
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  onPressed: () => onDelete(item),
+                ),
+              ))
+          .toList(),
+    );
+  }
+}
+
+class _PartyRelationKey {
+  final PartyKind kind;
+  final String partyId;
+
+  const _PartyRelationKey(this.kind, this.partyId);
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _PartyRelationKey && other.kind == kind && other.partyId == partyId;
+
+  @override
+  int get hashCode => Object.hash(kind, partyId);
+}
+
+List<Map<String, dynamic>> _relationList(Object? raw) {
+  if (raw is! List) return const [];
+  return raw.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
+}
+
+String? _emptyToNull(String value) {
+  final text = value.trim();
+  return text.isEmpty ? null : text;
 }
