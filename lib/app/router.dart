@@ -162,6 +162,16 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (_, __) =>
                 const DashboardScreen(scope: DashboardScope.warehouse),
           ),
+          GoRoute(
+            path: '/dashboard/purchases',
+            builder: (_, __) =>
+                const DashboardScreen(scope: DashboardScope.purchases),
+          ),
+          GoRoute(
+            path: '/dashboard/projects',
+            builder: (_, __) =>
+                const DashboardScreen(scope: DashboardScope.projects),
+          ),
           // IAM
           GoRoute(
             path: '/iam/users',

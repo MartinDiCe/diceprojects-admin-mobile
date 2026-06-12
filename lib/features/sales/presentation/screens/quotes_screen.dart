@@ -1109,7 +1109,6 @@ class _QuotePurchaseRequestDialog extends ConsumerStatefulWidget {
 class _QuotePurchaseRequestDialogState
     extends ConsumerState<_QuotePurchaseRequestDialog> {
   final _title = TextEditingController();
-  final _supplierIds = TextEditingController();
   final _validUntil = TextEditingController();
   late final Set<String> _selectedItemIds;
   bool _saving = false;
@@ -1128,7 +1127,6 @@ class _QuotePurchaseRequestDialogState
   @override
   void dispose() {
     _title.dispose();
-    _supplierIds.dispose();
     _validUntil.dispose();
     super.dispose();
   }
@@ -1148,17 +1146,27 @@ class _QuotePurchaseRequestDialogState
                 decoration: const InputDecoration(labelText: 'Título'),
               ),
               TextField(
-                controller: _supplierIds,
-                decoration: const InputDecoration(
-                  labelText: 'Proveedores',
-                  helperText: 'Separá los IDs por coma',
-                ),
-              ),
-              TextField(
                 controller: _validUntil,
                 decoration: const InputDecoration(
                   labelText: 'Válido hasta',
                   helperText: 'Formato opcional: 2026-06-30T18:00:00',
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.accentLight,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'Se crea como borrador en Compras. Revisá la solicitud, asociá proveedor y enviá desde el módulo de Compras.',
+                  style: TextStyle(
+                    color: AppColors.ink,
+                    fontWeight: FontWeight.w700,
+                    height: 1.25,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
@@ -1207,13 +1215,8 @@ class _QuotePurchaseRequestDialogState
   }
 
   Future<void> _save() async {
-    final suppliers = _supplierIds.text
-        .split(',')
-        .map((value) => value.trim())
-        .where((value) => value.isNotEmpty)
-        .toList();
-    if (suppliers.isEmpty || _selectedItemIds.isEmpty) {
-      _showSnack(context, 'Seleccioná proveedores e items.');
+    if (_selectedItemIds.isEmpty) {
+      _showSnack(context, 'Seleccioná al menos un item.');
       return;
     }
     setState(() => _saving = true);
@@ -1222,9 +1225,10 @@ class _QuotePurchaseRequestDialogState
       widget.quote,
       {
         'title': _title.text.trim(),
+        'description': 'Generado desde cotización ${widget.quote.number}. Completar proveedor y envío desde Compras.',
         'validUntil': validUntilText.isEmpty ? null : validUntilText,
         'quoteItemIds': _selectedItemIds.toList(),
-        'supplierIds': suppliers,
+        'supplierIds': const <String>[],
       },
     );
     if (mounted) Navigator.of(context).pop(true);

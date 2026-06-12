@@ -15,10 +15,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final _purchaseSearchProvider = StateProvider.autoDispose<String>((_) => '');
+final _purchaseSourceProvider = StateProvider.autoDispose<String?>((_) => null);
 
 final _purchaseRequestsProvider = FutureProvider.autoDispose<List<_PurchaseRequestDto>>((ref) async {
   final search = ref.watch(_purchaseSearchProvider).trim().toLowerCase();
-  final response = await ref.watch(dioProvider).get('/v1/purchase-requests');
+  final sourceType = ref.watch(_purchaseSourceProvider);
+  final response = await ref.watch(dioProvider).get(
+    '/v1/purchase-requests',
+    queryParameters: {
+      if (sourceType != null && sourceType.isNotEmpty) 'sourceType': sourceType,
+    },
+  );
   final items = _list(response.data).map(_PurchaseRequestDto.fromJson).toList();
   if (search.isEmpty) return items;
   return items
@@ -72,13 +79,23 @@ class PurchaseRequestsScreen extends ConsumerWidget {
               },
             )
           : null,
-      body: requests.when(
+      body: Column(
+        children: [
+          _SourceFilters(
+            selected: ref.watch(_purchaseSourceProvider),
+            onChanged: (value) => ref.read(_purchaseSourceProvider.notifier).state = value,
+          ),
+          Expanded(
+            child: requests.when(
         loading: () => const LoadingState(),
         error: (error, _) => ErrorState(
           message: 'No se pudieron cargar las solicitudes.',
           onRetry: () => ref.invalidate(_purchaseRequestsProvider),
         ),
         data: (items) => _PurchaseRequestsList(items: items),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -89,6 +106,40 @@ class PurchaseRequestsScreen extends ConsumerWidget {
       isScrollControlled: true,
       useSafeArea: true,
       builder: (_) => const _PurchaseRequestCreateSheet(),
+    );
+  }
+}
+
+class _SourceFilters extends StatelessWidget {
+  final String? selected;
+  final ValueChanged<String?> onChanged;
+
+  const _SourceFilters({required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    const items = <String?, String>{
+      null: 'Todas',
+      'SALES_QUOTE': 'Cotización ventas',
+      'PROJECT_WORK': 'Obra',
+      'MANUAL': 'Manual',
+    };
+    return SizedBox(
+      height: 58,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+        scrollDirection: Axis.horizontal,
+        itemBuilder: (_, index) {
+          final value = items.keys.elementAt(index);
+          return ChoiceChip(
+            selected: selected == value,
+            label: Text(items[value]!),
+            onSelected: (_) => onChanged(value),
+          );
+        },
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemCount: items.length,
+      ),
     );
   }
 }
@@ -258,6 +309,12 @@ class _PurchaseRequestDetailDialog extends ConsumerWidget {
                       ),
                       _DetailSection(
                         title: 'Proveedores invitados',
+                        emptyText: 'Sin proveedores. Agregá uno antes de enviar.',
+                        headerAction: AppButton.secondary(
+                          label: 'Agregar proveedor',
+                          icon: Icons.add_rounded,
+                          onPressed: suppliers.isEmpty ? null : () => _addSupplier(context, ref, requestSuppliers, suppliers),
+                        ),
                         children: requestSuppliers
                             .map((item) => _InfoLine(
                                   title: _supplierLabel(
@@ -337,6 +394,46 @@ class _PurchaseRequestDetailDialog extends ConsumerWidget {
   Future<void> _send(WidgetRef ref) async {
     await ref.read(dioProvider).post('/v1/purchase-requests/$requestId/send');
     ref.invalidate(_purchaseRequestDetailProvider(requestId));
+  }
+
+  Future<void> _addSupplier(
+    BuildContext context,
+    WidgetRef ref,
+    List<Map<String, dynamic>> requestSuppliers,
+    List<_LookupOption> suppliers,
+  ) async {
+    final linkedIds = requestSuppliers
+        .map((item) => item['supplier_id']?.toString() ?? item['supplierId']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    final available = suppliers.where((supplier) => !linkedIds.contains(supplier.id)).toList();
+    if (available.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No quedan proveedores disponibles para agregar.')));
+      return;
+    }
+    final selected = await showModalBottomSheet<_LookupOption>(
+      context: context,
+      useSafeArea: true,
+      builder: (_) => ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+        children: [
+          Text('Agregar proveedor', style: TextStyle(color: AppColors.ink, fontSize: 20, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 12),
+          ...available.map((supplier) => ListTile(
+                leading: const Icon(Icons.local_shipping_outlined),
+                title: Text(supplier.label),
+                onTap: () => Navigator.of(context).pop(supplier),
+              )),
+        ],
+      ),
+    );
+    if (selected == null) return;
+    await ref.read(dioProvider).post(
+      '/v1/purchase-requests/$requestId/suppliers',
+      data: {'supplierId': selected.id},
+    );
+    ref.invalidate(_purchaseRequestDetailProvider(requestId));
+    ref.invalidate(_purchaseRequestsProvider);
   }
 
   Future<void> _award(WidgetRef ref, Map<String, dynamic> quote) async {
@@ -482,7 +579,6 @@ class _PurchaseRequestCreateSheetState extends ConsumerState<_PurchaseRequestCre
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_supplierIds.isEmpty) return;
     setState(() => _saving = true);
     try {
       final auth = ref.read(authNotifierProvider);
@@ -796,20 +892,29 @@ class _DocumentTypeField extends StatelessWidget {
 class _DetailSection extends StatelessWidget {
   final String title;
   final List<Widget> children;
+  final Widget? headerAction;
+  final String? emptyText;
 
-  const _DetailSection({required this.title, required this.children});
+  const _DetailSection({required this.title, required this.children, this.headerAction, this.emptyText});
 
   @override
   Widget build(BuildContext context) {
-    if (children.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+          Row(
+            children: [
+              Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w900))),
+              if (headerAction != null) headerAction!,
+            ],
+          ),
           const SizedBox(height: 8),
-          ...children,
+          if (children.isEmpty)
+            Text(emptyText ?? 'Sin datos.', style: TextStyle(color: AppColors.textSecondary))
+          else
+            ...children,
         ],
       ),
     );

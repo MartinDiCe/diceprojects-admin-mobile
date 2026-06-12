@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 class AppTextField extends StatelessWidget {
   final String? label;
   final String? hint;
+  final String? helperText;
   final TextEditingController? controller;
   final String? Function(String?)? validator;
   final ValueChanged<String>? onChanged;
@@ -20,6 +21,7 @@ class AppTextField extends StatelessWidget {
     super.key,
     this.label,
     this.hint,
+    this.helperText,
     this.controller,
     this.validator,
     this.onChanged,
@@ -49,6 +51,7 @@ class AppTextField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
+        helperText: helperText,
         prefixIcon: prefixIcon,
         suffixIcon: suffixIcon,
         // Focus shadow ring

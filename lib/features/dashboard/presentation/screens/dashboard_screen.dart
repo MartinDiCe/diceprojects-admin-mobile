@@ -11,7 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-enum DashboardScope { general, products, sales, marketing, warehouse }
+enum DashboardScope { general, products, sales, marketing, warehouse, purchases, projects }
 
 enum DashboardPeriod { today, threeDays, sevenDays, all }
 
@@ -336,6 +336,58 @@ class WarehouseDashboardDetails {
   });
 }
 
+class PurchasesDashboardDetails {
+  final int totalRequests;
+  final int sentRequests;
+  final int quotedRequests;
+  final int awardedRequests;
+  final int overdueRequests;
+  final int supplierQuotes;
+  final double awardedTotal;
+  final int responseRate;
+  final int awardRate;
+
+  const PurchasesDashboardDetails({
+    required this.totalRequests,
+    required this.sentRequests,
+    required this.quotedRequests,
+    required this.awardedRequests,
+    required this.overdueRequests,
+    required this.supplierQuotes,
+    required this.awardedTotal,
+    required this.responseRate,
+    required this.awardRate,
+  });
+}
+
+class ProjectsDashboardDetails {
+  final int totalProjects;
+  final int activeProjects;
+  final int inProgressProjects;
+  final int doneProjects;
+  final int overdueProjects;
+  final int budgets;
+  final int materialResources;
+  final double budgetTotal;
+  final double realCosts;
+  final int completionRate;
+  final double averageTaskProgress;
+
+  const ProjectsDashboardDetails({
+    required this.totalProjects,
+    required this.activeProjects,
+    required this.inProgressProjects,
+    required this.doneProjects,
+    required this.overdueProjects,
+    required this.budgets,
+    required this.materialResources,
+    required this.budgetTotal,
+    required this.realCosts,
+    required this.completionRate,
+    required this.averageTaskProgress,
+  });
+}
+
 class RecentQuote {
   final String number;
   final String customer;
@@ -557,6 +609,98 @@ final warehouseDashboardDetailsProvider =
     activeWarehouses: _intAny(summary, ['activeWarehouses']),
     stockRows: _intAny(summary, ['stockItems', 'stockRows']),
     movements: _intAny(summary, ['movements']),
+  );
+});
+
+final purchasesDashboardDetailsProvider =
+    FutureProvider.autoDispose.family<PurchasesDashboardDetails, DashboardPeriod>((ref, period) async {
+  final dio = ref.watch(dioProvider);
+  final auth = ref.watch(authNotifierProvider);
+  final scope = _dashboardScope(
+    auth,
+    selectedTenantId: ref.watch(dashboardTenantFilterProvider),
+    selectedSellerId: ref.watch(dashboardSellerFilterProvider),
+  );
+  final headers = _marketingHeaders(auth, tenantId: scope['tenantId']?.toString());
+  final raw = await _getMap(
+    dio,
+    '/v1/purchase-requests/dashboard',
+    extra: {...scope, 'period': _periodCode(period)},
+    headers: headers,
+  );
+  final summary = Map<String, dynamic>.from(raw['summary'] as Map? ?? raw);
+  if (summary.isEmpty) {
+    final requests = await _getPage(dio, '/v1/purchase-requests', size: 500, extra: scope, headers: headers);
+    return PurchasesDashboardDetails(
+      totalRequests: requests.total,
+      sentRequests: requests.items.where((item) => ['SENT', 'PARTIALLY_QUOTED', 'QUOTED', 'AWARDED'].contains(_status(item))).length,
+      quotedRequests: requests.items.where((item) => ['PARTIALLY_QUOTED', 'QUOTED', 'AWARDED'].contains(_status(item))).length,
+      awardedRequests: requests.items.where((item) => _status(item) == 'AWARDED').length,
+      overdueRequests: 0,
+      supplierQuotes: 0,
+      awardedTotal: 0,
+      responseRate: 0,
+      awardRate: 0,
+    );
+  }
+  return PurchasesDashboardDetails(
+    totalRequests: _intAny(summary, ['totalRequests', 'total_requests']),
+    sentRequests: _intAny(summary, ['sentRequests', 'sent_requests']),
+    quotedRequests: _intAny(summary, ['quotedRequests', 'quoted_requests']),
+    awardedRequests: _intAny(summary, ['awardedRequests', 'awarded_requests']),
+    overdueRequests: _intAny(summary, ['overdueRequests', 'overdue_requests']),
+    supplierQuotes: _intAny(summary, ['supplierQuotes', 'supplier_quotes']),
+    awardedTotal: _doubleAny(summary, ['awardedTotal', 'awarded_total']),
+    responseRate: _intAny(summary, ['responseRate', 'response_rate']),
+    awardRate: _intAny(summary, ['awardRate', 'award_rate']),
+  );
+});
+
+final projectsDashboardDetailsProvider =
+    FutureProvider.autoDispose.family<ProjectsDashboardDetails, DashboardPeriod>((ref, period) async {
+  final dio = ref.watch(dioProvider);
+  final auth = ref.watch(authNotifierProvider);
+  final scope = _dashboardScope(
+    auth,
+    selectedTenantId: ref.watch(dashboardTenantFilterProvider),
+    selectedSellerId: ref.watch(dashboardSellerFilterProvider),
+  );
+  final headers = _marketingHeaders(auth, tenantId: scope['tenantId']?.toString());
+  final raw = await _getMap(
+    dio,
+    '/v1/project-management/dashboard',
+    extra: {...scope, 'period': _periodCode(period)},
+    headers: headers,
+  );
+  final summary = Map<String, dynamic>.from(raw['summary'] as Map? ?? raw);
+  if (summary.isEmpty) {
+    final projects = await _getPage(dio, '/v1/project-management/projects', size: 500, extra: scope, headers: headers);
+    return ProjectsDashboardDetails(
+      totalProjects: projects.total,
+      activeProjects: projects.items.where((item) => ['PLANNED', 'IN_PROGRESS', 'PAUSED'].contains(_status(item))).length,
+      inProgressProjects: projects.items.where((item) => _status(item) == 'IN_PROGRESS').length,
+      doneProjects: projects.items.where((item) => _status(item) == 'DONE').length,
+      overdueProjects: 0,
+      budgets: 0,
+      materialResources: 0,
+      budgetTotal: 0,
+      realCosts: 0,
+      completionRate: 0,
+      averageTaskProgress: 0,
+    );
+  }
+  return ProjectsDashboardDetails(
+    totalProjects: _intAny(summary, ['totalProjects', 'total_projects']),
+    activeProjects: _intAny(summary, ['activeProjects', 'active_projects']),
+    inProgressProjects: _intAny(summary, ['inProgressProjects', 'in_progress_projects']),
+    doneProjects: _intAny(summary, ['doneProjects', 'done_projects']),
+    overdueProjects: _intAny(summary, ['overdueProjects', 'overdue_projects']),
+    budgets: _intAny(summary, ['budgets']),
+    materialResources: _intAny(summary, ['materialResources', 'material_resources']),
+    budgetTotal: _doubleAny(summary, ['budgetTotal', 'budget_total']),
+    realCosts: _doubleAny(summary, ['realCosts', 'real_costs']),
+    completionRate: _intAny(summary, ['completionRate', 'completion_rate']),
+    averageTaskProgress: _doubleAny(summary, ['averageTaskProgress', 'average_task_progress']),
   );
 });
 
@@ -1117,6 +1261,8 @@ class DashboardScreen extends ConsumerWidget {
       ref.invalidate(salesDashboardDetailsProvider(ref.read(dashboardPeriodProvider(DashboardScope.sales))));
       ref.invalidate(marketingDashboardDetailsProvider(ref.read(dashboardPeriodProvider(DashboardScope.marketing))));
       ref.invalidate(warehouseDashboardDetailsProvider(ref.read(dashboardPeriodProvider(DashboardScope.warehouse))));
+      ref.invalidate(purchasesDashboardDetailsProvider(ref.read(dashboardPeriodProvider(DashboardScope.purchases))));
+      ref.invalidate(projectsDashboardDetailsProvider(ref.read(dashboardPeriodProvider(DashboardScope.projects))));
     }
 
     return AppPageScaffold(
@@ -1216,6 +1362,16 @@ class _DashboardContent extends ConsumerWidget {
         child: _WarehouseDashboardContent(data: data),
       );
     }
+    if (scope == DashboardScope.purchases) {
+      return const _ModuleDashboardShell(
+        child: _PurchasesDashboardContent(),
+      );
+    }
+    if (scope == DashboardScope.projects) {
+      return const _ModuleDashboardShell(
+        child: _ProjectsDashboardContent(),
+      );
+    }
     final period = ref.watch(dashboardPeriodProvider(DashboardScope.general));
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
@@ -1272,6 +1428,8 @@ List<_ModuleData> _modules(PermissionsService perms) => [
   _ModuleData('Productos', 'Artículos, publicación y carga', '/products', Icons.inventory_2_rounded, const Color(0xFF0EA5E9), perms.canAccessRoute('/products')),
   _ModuleData('Importación', 'Carga masiva operativa', '/products/import', Icons.upload_file_rounded, const Color(0xFF2563EB), perms.canAccessRoute('/products/import')),
   _ModuleData('Cotizaciones', 'Solicitud, QR y estados', '/sales/quotes', Icons.request_quote_rounded, const Color(0xFF00A676), perms.canAccessRoute('/sales/quotes')),
+  _ModuleData('Compras', 'Presupuestos proveedor', '/purchases/requests', Icons.assignment_turned_in_rounded, const Color(0xFF2563EB), perms.canAccessRoute('/purchases/requests')),
+  _ModuleData('Obras', 'Proyectos y avances', '/projects', Icons.engineering_rounded, const Color(0xFF7C3AED), perms.canAccessRoute('/projects')),
   _ModuleData('Depósito', 'Stock y movimientos', '/warehouse/stock', Icons.warehouse_rounded, const Color(0xFF6554F0), perms.canAccessRoute('/warehouse/stock')),
   _ModuleData('Campañas', 'Acciones y medición', '/marketing/campaigns', Icons.campaign_rounded, const Color(0xFFFF5A1F), perms.canAccessRoute('/marketing/campaigns')),
   _ModuleData('Cupones', 'Promos comerciales', '/marketing/coupons', Icons.confirmation_number_rounded, const Color(0xFFDB2777), perms.canAccessRoute('/marketing/coupons')),
@@ -1291,6 +1449,10 @@ String _dashboardTitle(DashboardScope scope) {
       return 'Dashboard Marketing';
     case DashboardScope.warehouse:
       return 'Dashboard Almacenes';
+    case DashboardScope.purchases:
+      return 'Dashboard Compras';
+    case DashboardScope.projects:
+      return 'Dashboard Proyectos';
     case DashboardScope.general:
       return 'Dashboard';
   }
@@ -1336,6 +1498,22 @@ List<_ModuleData> _dashboardCards(PermissionsService perms) => [
         Icons.warehouse_rounded,
         const Color(0xFF6554F0),
         perms.canAccessRoute('/dashboard/warehouse'),
+      ),
+      _ModuleData(
+        'Compras',
+        'Presupuestos y adjudicación',
+        '/dashboard/purchases',
+        Icons.assignment_turned_in_rounded,
+        const Color(0xFF2563EB),
+        perms.canAccessRoute('/dashboard/purchases'),
+      ),
+      _ModuleData(
+        'Proyectos',
+        'Obras, costos y materiales',
+        '/dashboard/projects',
+        Icons.engineering_rounded,
+        const Color(0xFF7C3AED),
+        perms.canAccessRoute('/dashboard/projects'),
       ),
     ];
 
@@ -1725,6 +1903,136 @@ class _SalesDashboardContent extends ConsumerWidget {
           recentQuotes: quotes,
         ));
       },
+    );
+  }
+}
+
+class _PurchasesDashboardContent extends ConsumerWidget {
+  const _PurchasesDashboardContent();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final period = ref.watch(dashboardPeriodProvider(DashboardScope.purchases));
+    final details = ref.watch(purchasesDashboardDetailsProvider(period));
+    Widget buildContent(PurchasesDashboardDetails metrics) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _DashboardIntro(
+          icon: Icons.assignment_turned_in_rounded,
+          color: const Color(0xFF2563EB),
+          title: 'Compras',
+          subtitle: 'Solicitudes de presupuesto, respuestas proveedor y adjudicación.',
+        ),
+        const SizedBox(height: 12),
+        const _DashboardScopeSelector(),
+        const SizedBox(height: 12),
+        _PeriodSelector(
+          value: period,
+          onChanged: (value) => ref
+              .read(dashboardPeriodProvider(DashboardScope.purchases).notifier)
+              .state = value,
+        ),
+        const SizedBox(height: 14),
+        _KpiGrid(cards: [
+          _KpiData('Solicitudes', _n(metrics.totalRequests), _periodLabel(period), Icons.receipt_long_rounded, const Color(0xFF2563EB)),
+          _KpiData('Recibidos', _n(metrics.supplierQuotes), 'Presupuestos proveedor', Icons.price_change_rounded, const Color(0xFF00A676)),
+          _KpiData('Adjudicadas', _n(metrics.awardedRequests), 'Tasa ${metrics.awardRate}%', Icons.verified_rounded, const Color(0xFF7C3AED)),
+          _KpiData('Monto', _money(metrics.awardedTotal), 'Adjudicado', Icons.payments_rounded, const Color(0xFF0F172A)),
+        ]),
+        const SizedBox(height: 16),
+        _InsightPanel(
+          title: 'Flujo de solicitud',
+          subtitle: 'Borrador, envío, recepción y cierre del período.',
+          rows: [
+            _InsightRow('Enviadas', metrics.sentRequests, math.max(1, metrics.totalRequests), const Color(0xFF2563EB)),
+            _InsightRow('Cotizadas', metrics.quotedRequests, math.max(1, metrics.sentRequests), const Color(0xFF00A676)),
+            _InsightRow('Adjudicadas', metrics.awardedRequests, math.max(1, metrics.totalRequests), const Color(0xFF7C3AED)),
+            _InsightRow('Vencidas', metrics.overdueRequests, math.max(1, metrics.totalRequests), const Color(0xFFEF4444)),
+          ],
+        ),
+      ],
+    );
+
+    return details.when(
+      data: buildContent,
+      loading: () => const _DashboardLoadingBlock(height: 460),
+      error: (_, __) => buildContent(const PurchasesDashboardDetails(
+        totalRequests: 0,
+        sentRequests: 0,
+        quotedRequests: 0,
+        awardedRequests: 0,
+        overdueRequests: 0,
+        supplierQuotes: 0,
+        awardedTotal: 0,
+        responseRate: 0,
+        awardRate: 0,
+      )),
+    );
+  }
+}
+
+class _ProjectsDashboardContent extends ConsumerWidget {
+  const _ProjectsDashboardContent();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final period = ref.watch(dashboardPeriodProvider(DashboardScope.projects));
+    final details = ref.watch(projectsDashboardDetailsProvider(period));
+    Widget buildContent(ProjectsDashboardDetails metrics) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _DashboardIntro(
+          icon: Icons.engineering_rounded,
+          color: const Color(0xFF7C3AED),
+          title: 'Proyectos',
+          subtitle: 'Obras, presupuestos, materiales, avances y costos reales.',
+        ),
+        const SizedBox(height: 12),
+        const _DashboardScopeSelector(),
+        const SizedBox(height: 12),
+        _PeriodSelector(
+          value: period,
+          onChanged: (value) => ref
+              .read(dashboardPeriodProvider(DashboardScope.projects).notifier)
+              .state = value,
+        ),
+        const SizedBox(height: 14),
+        _KpiGrid(cards: [
+          _KpiData('Obras', _n(metrics.totalProjects), _periodLabel(period), Icons.account_tree_rounded, const Color(0xFF7C3AED)),
+          _KpiData('En curso', _n(metrics.inProgressProjects), 'Activas ${metrics.activeProjects}', Icons.construction_rounded, const Color(0xFF2563EB)),
+          _KpiData('Presupuestos', _n(metrics.budgets), _money(metrics.budgetTotal), Icons.request_quote_rounded, const Color(0xFF00A676)),
+          _KpiData('Materiales', _n(metrics.materialResources), 'Costo real ${_money(metrics.realCosts)}', Icons.inventory_2_rounded, const Color(0xFFF59E0B)),
+        ]),
+        const SizedBox(height: 16),
+        _InsightPanel(
+          title: 'Ejecución de obra',
+          subtitle: 'Estado operativo para seguimiento de workflow.',
+          rows: [
+            _InsightRow('Activas', metrics.activeProjects, math.max(1, metrics.totalProjects), const Color(0xFF2563EB)),
+            _InsightRow('Terminadas', metrics.doneProjects, math.max(1, metrics.totalProjects), const Color(0xFF00A676)),
+            _InsightRow('Vencidas', metrics.overdueProjects, math.max(1, metrics.totalProjects), const Color(0xFFEF4444)),
+            _InsightRow('Avance tareas', metrics.averageTaskProgress.round(), 100, const Color(0xFF7C3AED)),
+          ],
+        ),
+      ],
+    );
+
+    return details.when(
+      data: buildContent,
+      loading: () => const _DashboardLoadingBlock(height: 460),
+      error: (_, __) => buildContent(const ProjectsDashboardDetails(
+        totalProjects: 0,
+        activeProjects: 0,
+        inProgressProjects: 0,
+        doneProjects: 0,
+        overdueProjects: 0,
+        budgets: 0,
+        materialResources: 0,
+        budgetTotal: 0,
+        realCosts: 0,
+        completionRate: 0,
+        averageTaskProgress: 0,
+      )),
     );
   }
 }

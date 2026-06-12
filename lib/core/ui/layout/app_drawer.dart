@@ -142,9 +142,6 @@ class AppDrawer extends ConsumerWidget {
                 // Primary: Dashboard
                 _navItem(context, '/dashboard',
                     Icons.dashboard_rounded, 'Dashboard', primary: true),
-                _navItem(context, '/notifications/center',
-                    Icons.notifications_rounded, 'Notificaciones',
-                    primary: true),
                 if (perms.canAccessRoute('/dashboard/products'))
                   _navItem(context, '/dashboard/products',
                       Icons.inventory_2_rounded, 'Dashboard Productos'),
@@ -157,6 +154,12 @@ class AppDrawer extends ConsumerWidget {
                 if (perms.canAccessRoute('/dashboard/warehouse'))
                   _navItem(context, '/dashboard/warehouse',
                       Icons.warehouse_rounded, 'Dashboard Almacenes'),
+                if (perms.canAccessRoute('/dashboard/purchases'))
+                  _navItem(context, '/dashboard/purchases',
+                      Icons.assignment_turned_in_rounded, 'Dashboard Compras'),
+                if (perms.canAccessRoute('/dashboard/projects'))
+                  _navItem(context, '/dashboard/projects',
+                      Icons.engineering_rounded, 'Dashboard Proyectos'),
 
                 // ── Seguridad ───────────────────────────────────
                 const _SectionHeader(label: 'Seguridad'),

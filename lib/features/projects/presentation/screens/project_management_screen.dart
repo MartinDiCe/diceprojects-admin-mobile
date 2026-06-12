@@ -20,6 +20,16 @@ final _projectTypesProvider = FutureProvider.autoDispose<List<_ProjectTypeDto>>(
   return _list(response.data).map(_ProjectTypeDto.fromJson).toList();
 });
 
+final _projectResourcesProvider = FutureProvider.autoDispose<List<_ProjectResourceDto>>((ref) async {
+  final response = await ref.watch(dioProvider).get('/v1/project-management/resources');
+  return _list(response.data).map(_ProjectResourceDto.fromJson).toList();
+});
+
+final _projectTemplatesProvider = FutureProvider.autoDispose<List<_ProjectTemplateDto>>((ref) async {
+  final response = await ref.watch(dioProvider).get('/v1/project-management/templates');
+  return _list(response.data).map(_ProjectTemplateDto.fromJson).toList();
+});
+
 final _projectsProvider = FutureProvider.autoDispose<List<_ProjectDto>>((ref) async {
   final auth = ref.watch(authNotifierProvider);
   final search = ref.watch(_projectSearchProvider).trim();
@@ -54,7 +64,7 @@ class ProjectManagementScreen extends ConsumerWidget {
     final canCreate = perms.hasAnyPermission(['Projects.Projects.Create', 'Projects.Admin']);
 
     return DefaultTabController(
-      length: 2,
+      length: 4,
       child: AppPageScaffold(
         title: 'Proyectos',
         searchHint: 'Buscar proyecto...',
@@ -65,6 +75,8 @@ class ProjectManagementScreen extends ConsumerWidget {
             onPressed: () {
               ref.invalidate(_projectsProvider);
               ref.invalidate(_projectTypesProvider);
+              ref.invalidate(_projectResourcesProvider);
+              ref.invalidate(_projectTemplatesProvider);
             },
             icon: const Icon(Icons.refresh_rounded),
           ),
@@ -91,6 +103,8 @@ class ProjectManagementScreen extends ConsumerWidget {
                 tabs: [
                   Tab(icon: Icon(Icons.account_tree_rounded), text: 'Proyectos'),
                   Tab(icon: Icon(Icons.tune_rounded), text: 'Tipos'),
+                  Tab(icon: Icon(Icons.inventory_2_rounded), text: 'Recursos'),
+                  Tab(icon: Icon(Icons.view_list_rounded), text: 'Templates'),
                 ],
               ),
             ),
@@ -99,12 +113,86 @@ class ProjectManagementScreen extends ConsumerWidget {
                 children: [
                   _ProjectsTab(),
                   _ProjectTypesTab(),
+                  _ProjectResourcesTab(),
+                  _ProjectTemplatesTab(),
                 ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ProjectResourcesTab extends ConsumerWidget {
+  const _ProjectResourcesTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final resources = ref.watch(_projectResourcesProvider);
+    return resources.when(
+      loading: () => const LoadingState(),
+      error: (_, __) => ErrorState(
+        message: 'No se pudieron cargar los recursos de obra.',
+        onRetry: () => ref.invalidate(_projectResourcesProvider),
+      ),
+      data: (items) => items.isEmpty
+          ? const EmptyState(
+              icon: Icons.inventory_2_rounded,
+              title: 'Sin recursos',
+              message: 'Los recursos base permiten armar presupuestos y materiales por obra.',
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: items.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (_, index) {
+                final item = items[index];
+                return ListTile(
+                  leading: const Icon(Icons.inventory_2_outlined),
+                  title: Text(item.name),
+                  subtitle: Text('${item.code} · ${item.unitCode}${item.category.isEmpty ? '' : ' · ${item.category}'}'),
+                  trailing: Text(item.defaultCost <= 0 ? '-' : _money(item.defaultCost)),
+                );
+              },
+            ),
+    );
+  }
+}
+
+class _ProjectTemplatesTab extends ConsumerWidget {
+  const _ProjectTemplatesTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final templates = ref.watch(_projectTemplatesProvider);
+    return templates.when(
+      loading: () => const LoadingState(),
+      error: (_, __) => ErrorState(
+        message: 'No se pudieron cargar los templates de obra.',
+        onRetry: () => ref.invalidate(_projectTemplatesProvider),
+      ),
+      data: (items) => items.isEmpty
+          ? const EmptyState(
+              icon: Icons.view_list_rounded,
+              title: 'Sin templates',
+              message: 'Los templates aceleran presupuestos, capítulos, partidas y recursos.',
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: items.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (_, index) {
+                final item = items[index];
+                return ListTile(
+                  leading: const Icon(Icons.view_list_outlined),
+                  title: Text(item.name),
+                  subtitle: Text('${item.code}${item.typeName == null ? '' : ' · ${item.typeName}'}'),
+                  trailing: StatusBadge(status: item.active ? 'ACTIVO' : 'INACTIVO'),
+                );
+              },
+            ),
     );
   }
 }
@@ -758,6 +846,57 @@ class _ProjectTypeDto {
       );
 }
 
+class _ProjectResourceDto {
+  final String id;
+  final String code;
+  final String name;
+  final String category;
+  final String unitCode;
+  final double defaultCost;
+
+  const _ProjectResourceDto({
+    required this.id,
+    required this.code,
+    required this.name,
+    required this.category,
+    required this.unitCode,
+    required this.defaultCost,
+  });
+
+  factory _ProjectResourceDto.fromJson(Map<String, dynamic> json) => _ProjectResourceDto(
+        id: _str(json, 'id'),
+        code: _str(json, 'code'),
+        name: _str(json, 'name'),
+        category: _str(json, 'category'),
+        unitCode: _str(json, 'unit_code', fallback: _str(json, 'unitCode', fallback: 'U')),
+        defaultCost: _num(json, 'default_cost') == 0 ? _num(json, 'defaultCost') : _num(json, 'default_cost'),
+      );
+}
+
+class _ProjectTemplateDto {
+  final String id;
+  final String code;
+  final String name;
+  final String? typeName;
+  final bool active;
+
+  const _ProjectTemplateDto({
+    required this.id,
+    required this.code,
+    required this.name,
+    this.typeName,
+    required this.active,
+  });
+
+  factory _ProjectTemplateDto.fromJson(Map<String, dynamic> json) => _ProjectTemplateDto(
+        id: _str(json, 'id'),
+        code: _str(json, 'code'),
+        name: _str(json, 'name'),
+        typeName: _nullableStr(json, 'project_type_name') ?? _nullableStr(json, 'projectTypeName'),
+        active: json['active'] != false,
+      );
+}
+
 class _ProjectTaskDto {
   final String name;
   final String status;
@@ -800,6 +939,11 @@ double _num(Map<String, dynamic> json, String key) {
   final value = json[key];
   if (value is num) return value.toDouble();
   return double.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+String _money(double value) {
+  if (value <= 0) return '-';
+  return '\$ ${value.toStringAsFixed(0)}';
 }
 
 String? _required(String? value) => value == null || value.trim().isEmpty ? 'Requerido' : null;
