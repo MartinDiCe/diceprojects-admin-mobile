@@ -34,6 +34,18 @@ Desde una cotizacion o solicitud comercial, el front debe permitir seleccionar i
 
 Purchases permite crear solicitud, enviar a proveedores, cargar presupuesto proveedor, comparar por total y adjudicar.
 
+Endpoint implementado:
+
+- `POST /api/v1/quotes/{quoteId}/purchase-request`
+
+Permiso:
+
+- `Sales.Quotes.PurchaseRequest.Create`
+
+Env requerido en Sales:
+
+- `APP_PURCHASES_BASE_URL=http://msvc-purchases.192.168.7.10.sslip.io`
+
 ## Flujo Sales -> Marketing / Organization
 
 Cuando una cotizacion viene de una oportunidad:
@@ -43,6 +55,18 @@ Cuando una cotizacion viene de una oportunidad:
 - El `Customer` puede guardar `leadId` para trazabilidad.
 - Contactos y direcciones quedan como entidades hijas de `customers`.
 
+Endpoint interno implementado en Marketing:
+
+- `POST /api/internal/v1/leads/capture`
+
+Al pasar una cotizacion a `WON`, Sales intenta:
+
+- deduplicar/crear Lead en Marketing;
+- crear Customer en Organization si la cotizacion no tenia `customerId`;
+- guardar `leadId` y `customerId` en la cotizacion cuando la integracion responde bien.
+
+La conversion es best-effort: no bloquea el cambio de estado si Marketing u Organization no estan disponibles.
+
 ## Permisos IAM
 
 Authorization mantiene el catalogo canonico y roles seedeados:
@@ -50,6 +74,7 @@ Authorization mantiene el catalogo canonico y roles seedeados:
 - `PURCHASES_ADMIN`, `PURCHASES_EDITOR`, `PURCHASES_VIEWER`.
 - `PROJECTS_ADMIN`, `PROJECTS_EDITOR`, `PROJECTS_VIEWER`.
 - Roles de Organization incorporan `Suppliers`, `Customers` y `SellerAddresses`.
+- `SALES_EDITOR` puede generar solicitudes de compra y crear/editar clientes para conversion comercial.
 
 Los microservicios Purchases, Projects y Organization tambien registran sus permisos al iniciar para evitar drift entre servicios.
 
