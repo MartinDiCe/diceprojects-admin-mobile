@@ -52,8 +52,8 @@ const Map<String, List<String>> permissionGates = {
     'Purchases.Requests.List',
     'Purchases.Requests.View',
     'Projects.Dashboard.View',
-    'Projects.Access',
-    'Projects.Works.List',
+    'Projects.Projects.List',
+    'Projects.Projects.View',
   ],
   '/iam/users/new': ['IAM.Users.Create', 'IAM.Invitations.Send', 'IAM.Users.Admin'],
   '/iam/users': ['IAM.Users.List', 'IAM.Users.View', 'IAM.Users.Admin'],
@@ -151,10 +151,23 @@ const Map<String, List<String>> permissionGates = {
     'Purchases.Admin',
   ],
   '/projects': [
-    'Projects.Access',
-    'Projects.Works.List',
-    'Projects.Works.View',
-    'Projects.Dashboard.View',
+    'Projects.Projects.List',
+    'Projects.Projects.View',
+    'Projects.Admin',
+  ],
+  '/projects/types': [
+    'Projects.ProjectTypes.List',
+    'Projects.ProjectTypes.View',
+    'Projects.Admin',
+  ],
+  '/projects/resources': [
+    'Projects.Resources.List',
+    'Projects.Resources.View',
+    'Projects.Admin',
+  ],
+  '/projects/templates': [
+    'Projects.ProjectTemplates.List',
+    'Projects.ProjectTemplates.View',
     'Projects.Admin',
   ],
   '/warehouse/stock': [

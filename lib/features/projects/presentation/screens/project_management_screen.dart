@@ -55,72 +55,93 @@ final _projectProgressProvider = FutureProvider.autoDispose.family<List<_Project
   return _list(response.data).map(_ProjectProgressDto.fromJson).toList();
 });
 
+enum ProjectManagementSection { projects, types, resources, templates }
+
 class ProjectManagementScreen extends ConsumerWidget {
-  const ProjectManagementScreen({super.key});
+  final ProjectManagementSection initialSection;
+
+  const ProjectManagementScreen({
+    super.key,
+    this.initialSection = ProjectManagementSection.projects,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final perms = ref.watch(permissionsProvider);
-    final canCreate = perms.hasAnyPermission(['Projects.Projects.Create', 'Projects.Admin']);
+    final title = switch (initialSection) {
+      ProjectManagementSection.projects => 'Obras y proyectos',
+      ProjectManagementSection.types => 'Tipos de obra',
+      ProjectManagementSection.resources => 'Recursos de obra',
+      ProjectManagementSection.templates => 'Templates de obra',
+    };
+    final searchHint = switch (initialSection) {
+      ProjectManagementSection.projects => 'Buscar proyecto...',
+      ProjectManagementSection.types => null,
+      ProjectManagementSection.resources => null,
+      ProjectManagementSection.templates => null,
+    };
+    final canCreateProject = initialSection == ProjectManagementSection.projects &&
+        perms.hasAnyPermission(['Projects.Projects.Create', 'Projects.Admin']);
+    final canCreateType = initialSection == ProjectManagementSection.types &&
+        perms.hasAnyPermission(['Projects.ProjectTypes.Create', 'Projects.Admin']);
 
-    return DefaultTabController(
-      length: 4,
-      child: AppPageScaffold(
-        title: 'Proyectos',
-        searchHint: 'Buscar proyecto...',
-        onSearch: (value) => ref.read(_projectSearchProvider.notifier).state = value,
-        actions: [
-          IconButton(
-            tooltip: 'Actualizar',
-            onPressed: () {
-              ref.invalidate(_projectsProvider);
-              ref.invalidate(_projectTypesProvider);
-              ref.invalidate(_projectResourcesProvider);
-              ref.invalidate(_projectTemplatesProvider);
-            },
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
-        floatingActionButton: canCreate
-            ? CreateFab(
-                label: 'Nuevo proyecto',
-                onPressed: () async {
-                  await showModalBottomSheet<void>(
-                    context: context,
-                    isScrollControlled: true,
-                    useSafeArea: true,
-                    builder: (_) => const _ProjectCreateSheet(),
-                  );
-                  ref.invalidate(_projectsProvider);
-                },
-              )
-            : null,
-        body: Column(
-          children: [
-            Material(
-              color: AppColors.surface,
-              child: const TabBar(
-                tabs: [
-                  Tab(icon: Icon(Icons.account_tree_rounded), text: 'Proyectos'),
-                  Tab(icon: Icon(Icons.tune_rounded), text: 'Tipos'),
-                  Tab(icon: Icon(Icons.inventory_2_rounded), text: 'Recursos'),
-                  Tab(icon: Icon(Icons.view_list_rounded), text: 'Templates'),
-                ],
-              ),
-            ),
-            Expanded(
-              child: TabBarView(
-                children: [
-                  _ProjectsTab(),
-                  _ProjectTypesTab(),
-                  _ProjectResourcesTab(),
-                  _ProjectTemplatesTab(),
-                ],
-              ),
-            ),
-          ],
+    return AppPageScaffold(
+      title: title,
+      searchHint: searchHint,
+      onSearch: initialSection == ProjectManagementSection.projects
+          ? (value) => ref.read(_projectSearchProvider.notifier).state = value
+          : null,
+      actions: [
+        IconButton(
+          tooltip: 'Actualizar',
+          onPressed: () {
+            switch (initialSection) {
+              case ProjectManagementSection.projects:
+                ref.invalidate(_projectsProvider);
+              case ProjectManagementSection.types:
+                ref.invalidate(_projectTypesProvider);
+              case ProjectManagementSection.resources:
+                ref.invalidate(_projectResourcesProvider);
+              case ProjectManagementSection.templates:
+                ref.invalidate(_projectTemplatesProvider);
+            }
+          },
+          icon: const Icon(Icons.refresh_rounded),
         ),
-      ),
+      ],
+      floatingActionButton: canCreateProject
+          ? CreateFab(
+              label: 'Nuevo proyecto',
+              onPressed: () async {
+                await showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  useSafeArea: true,
+                  builder: (_) => const _ProjectCreateSheet(),
+                );
+                ref.invalidate(_projectsProvider);
+              },
+            )
+          : canCreateType
+              ? CreateFab(
+                  label: 'Nuevo tipo',
+                  onPressed: () async {
+                    await showModalBottomSheet<void>(
+                      context: context,
+                      isScrollControlled: true,
+                      useSafeArea: true,
+                      builder: (_) => const _ProjectTypeCreateSheet(),
+                    );
+                    ref.invalidate(_projectTypesProvider);
+                  },
+                )
+              : null,
+      body: switch (initialSection) {
+        ProjectManagementSection.projects => const _ProjectsTab(),
+        ProjectManagementSection.types => const _ProjectTypesTab(showCreateAction: false),
+        ProjectManagementSection.resources => const _ProjectResourcesTab(),
+        ProjectManagementSection.templates => const _ProjectTemplatesTab(),
+      },
     );
   }
 }
@@ -298,7 +319,9 @@ class _ProjectTile extends ConsumerWidget {
 }
 
 class _ProjectTypesTab extends ConsumerWidget {
-  const _ProjectTypesTab();
+  final bool showCreateAction;
+
+  const _ProjectTypesTab({this.showCreateAction = true});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -313,7 +336,7 @@ class _ProjectTypesTab extends ConsumerWidget {
       ),
       data: (items) => Column(
         children: [
-          if (canCreate)
+          if (canCreate && showCreateAction)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: Align(
@@ -407,7 +430,7 @@ class _ProjectCreateSheetState extends ConsumerState<_ProjectCreateSheet> {
               AppTextField(label: 'Nombre *', controller: _name, validator: _required),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: _typeId,
+                initialValue: _typeId,
                 decoration: const InputDecoration(labelText: 'Tipo'),
                 items: types
                     .map((type) => DropdownMenuItem<String>(value: type.id, child: Text(type.name)))
@@ -416,7 +439,7 @@ class _ProjectCreateSheetState extends ConsumerState<_ProjectCreateSheet> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: _status,
+                initialValue: _status,
                 decoration: const InputDecoration(labelText: 'Estado'),
                 items: const [
                   DropdownMenuItem(value: 'DRAFT', child: Text('Borrador')),
@@ -867,9 +890,9 @@ class _ProjectResourceDto {
         id: _str(json, 'id'),
         code: _str(json, 'code'),
         name: _str(json, 'name'),
-        category: _str(json, 'category'),
-        unitCode: _str(json, 'unit_code', fallback: _str(json, 'unitCode', fallback: 'U')),
-        defaultCost: _num(json, 'default_cost') == 0 ? _num(json, 'defaultCost') : _num(json, 'default_cost'),
+        category: _str(json, 'resource_type', fallback: _str(json, 'resourceType')),
+        unitCode: _str(json, 'unit_of_measure', fallback: _str(json, 'unitOfMeasure', fallback: 'UN')),
+        defaultCost: _num(json, 'unit_cost') == 0 ? _num(json, 'unitCost') : _num(json, 'unit_cost'),
       );
 }
 

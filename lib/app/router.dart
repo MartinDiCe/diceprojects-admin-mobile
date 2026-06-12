@@ -364,7 +364,27 @@ final routerProvider = Provider<GoRouter>((ref) {
           // Projects
           GoRoute(
             path: '/projects',
-            builder: (_, __) => const ProjectManagementScreen(),
+            builder: (_, __) => const ProjectManagementScreen(
+              initialSection: ProjectManagementSection.projects,
+            ),
+          ),
+          GoRoute(
+            path: '/projects/types',
+            builder: (_, __) => const ProjectManagementScreen(
+              initialSection: ProjectManagementSection.types,
+            ),
+          ),
+          GoRoute(
+            path: '/projects/resources',
+            builder: (_, __) => const ProjectManagementScreen(
+              initialSection: ProjectManagementSection.resources,
+            ),
+          ),
+          GoRoute(
+            path: '/projects/templates',
+            builder: (_, __) => const ProjectManagementScreen(
+              initialSection: ProjectManagementSection.templates,
+            ),
           ),
           // Notifications
           GoRoute(

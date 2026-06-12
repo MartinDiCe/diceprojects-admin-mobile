@@ -52,7 +52,10 @@ class AppDrawer extends ConsumerWidget {
     final canProducts = perms.canAccessRoute('/products');
     final canSales = perms.canAccessRoute('/sales/quotes');
     final canPurchases = perms.canAccessRoute('/purchases/requests');
-    final canProjects = perms.canAccessRoute('/projects');
+    final canProjects = perms.canAccessRoute('/projects') ||
+        perms.canAccessRoute('/projects/types') ||
+        perms.canAccessRoute('/projects/resources') ||
+        perms.canAccessRoute('/projects/templates');
     final canMarketing = perms.canAccessRoute('/marketing/campaigns') ||
         perms.canAccessRoute('/marketing/coupons') ||
         perms.canAccessRoute('/marketing/leads') ||
@@ -252,6 +255,15 @@ class AppDrawer extends ConsumerWidget {
                     _navItem(context, '/projects',
                         Icons.engineering_rounded, 'Obras y proyectos',
                         primary: true),
+                  if (perms.canAccessRoute('/projects/types'))
+                    _navItem(context, '/projects/types',
+                        Icons.layers_rounded, 'Tipos de obra'),
+                  if (perms.canAccessRoute('/projects/templates'))
+                    _navItem(context, '/projects/templates',
+                        Icons.view_list_rounded, 'Templates de obra'),
+                  if (perms.canAccessRoute('/projects/resources'))
+                    _navItem(context, '/projects/resources',
+                        Icons.inventory_2_rounded, 'Recursos de obra'),
                 ],
 
                 // ── Marketing ────────────────────────────────────
