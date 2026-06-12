@@ -200,7 +200,7 @@ class _ProjectTile extends ConsumerWidget {
               const SizedBox(width: 8),
               StatusBadge(status: project.status),
               const SizedBox(width: 4),
-              const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+              Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
             ],
           ),
         ),
