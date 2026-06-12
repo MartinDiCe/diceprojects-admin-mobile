@@ -40,6 +40,23 @@ class AppDrawer extends ConsumerWidget {
     final headerSubtleBorder = isDarkTheme
         ? AppColors.white.withValues(alpha: 0.10)
         : AppColors.border.withValues(alpha: 0.70);
+    final canSecurity = perms.canAccessRoute('/iam/users');
+    final canOrganization = perms.canAccessRoute('/admin/tenants') ||
+        perms.canAccessRoute('/admin/branches') ||
+        perms.canAccessRoute('/organization/sellers') ||
+        perms.canAccessRoute('/organization/suppliers') ||
+        perms.canAccessRoute('/organization/customers') ||
+        perms.canAccessRoute('/people');
+    final canWarehouse = perms.canAccessRoute('/warehouse') ||
+        perms.canAccessRoute('/warehouse/stock');
+    final canProducts = perms.canAccessRoute('/products');
+    final canSales = perms.canAccessRoute('/sales/quotes');
+    final canPurchases = perms.canAccessRoute('/purchases/requests');
+    final canProjects = perms.canAccessRoute('/projects');
+    final canMarketing = perms.canAccessRoute('/marketing/campaigns') ||
+        perms.canAccessRoute('/marketing/coupons') ||
+        perms.canAccessRoute('/marketing/leads') ||
+        perms.canAccessRoute('/marketing/destacados');
 
     Widget logoWidget = Image.asset(
       'assets/logo_lineal.png',
@@ -162,81 +179,97 @@ class AppDrawer extends ConsumerWidget {
                       Icons.engineering_rounded, 'Dashboard Proyectos'),
 
                 // ── Seguridad ───────────────────────────────────
-                const _SectionHeader(label: 'Seguridad'),
-                if (perms.canAccessRoute('/iam/users'))
-                  _navItem(context, '/iam/users',
-                      Icons.people_rounded, 'Usuarios', primary: true),
+                if (canSecurity) ...[
+                  const _SectionHeader(label: 'Seguridad'),
+                  if (perms.canAccessRoute('/iam/users'))
+                    _navItem(context, '/iam/users',
+                        Icons.people_rounded, 'Usuarios', primary: true),
+                ],
 
                 // ── Organización ────────────────────────────────
-                const _SectionHeader(label: 'Organización'),
-                if (perms.canAccessRoute('/admin/tenants'))
-                  _navItem(context, '/admin/tenants',
-                      Icons.business_rounded, 'Empresas', primary: true),
-                if (perms.canAccessRoute('/admin/branches'))
-                  _navItem(context, '/admin/branches',
-                      Icons.store_rounded, 'Sucursales'),
-                if (perms.canAccessRoute('/organization/sellers'))
-                  _navItem(context, '/organization/sellers',
-                    Icons.storefront_rounded, 'Vendedores'),
-                if (perms.canAccessRoute('/organization/suppliers'))
-                  _navItem(context, '/organization/suppliers',
-                    Icons.local_shipping_rounded, 'Proveedores'),
-                if (perms.canAccessRoute('/organization/customers'))
-                  _navItem(context, '/organization/customers',
-                    Icons.handshake_rounded, 'Clientes'),
-                if (perms.canAccessRoute('/people'))
-                  _navItem(context, '/people',
-                      Icons.badge_rounded, 'Personas', primary: true),
+                if (canOrganization) ...[
+                  const _SectionHeader(label: 'Organización'),
+                  if (perms.canAccessRoute('/admin/tenants'))
+                    _navItem(context, '/admin/tenants',
+                        Icons.business_rounded, 'Empresas', primary: true),
+                  if (perms.canAccessRoute('/admin/branches'))
+                    _navItem(context, '/admin/branches',
+                        Icons.store_rounded, 'Sucursales'),
+                  if (perms.canAccessRoute('/organization/sellers'))
+                    _navItem(context, '/organization/sellers',
+                      Icons.storefront_rounded, 'Vendedores'),
+                  if (perms.canAccessRoute('/organization/suppliers'))
+                    _navItem(context, '/organization/suppliers',
+                      Icons.local_shipping_rounded, 'Proveedores'),
+                  if (perms.canAccessRoute('/organization/customers'))
+                    _navItem(context, '/organization/customers',
+                      Icons.handshake_rounded, 'Clientes'),
+                  if (perms.canAccessRoute('/people'))
+                    _navItem(context, '/people',
+                        Icons.badge_rounded, 'Personas', primary: true),
+                ],
 
                 // ── Depósitos ───────────────────────────────────
-                const _SectionHeader(label: 'Depósitos'),
-                if (perms.canAccessRoute('/warehouse'))
-                  _navItem(context, '/warehouse',
-                    Icons.warehouse_rounded, 'Depósitos', primary: true),
-                if (perms.canAccessRoute('/warehouse/stock'))
-                  _navItem(context, '/warehouse/stock',
-                    Icons.inventory_2_rounded, 'Stock'),
+                if (canWarehouse) ...[
+                  const _SectionHeader(label: 'Depósitos'),
+                  if (perms.canAccessRoute('/warehouse'))
+                    _navItem(context, '/warehouse',
+                      Icons.warehouse_rounded, 'Depósitos', primary: true),
+                  if (perms.canAccessRoute('/warehouse/stock'))
+                    _navItem(context, '/warehouse/stock',
+                      Icons.inventory_2_rounded, 'Stock'),
+                ],
 
                 // ── Productos ────────────────────────────────────
-                const _SectionHeader(label: 'Productos'),
-                if (perms.canAccessRoute('/products'))
-                  _navItem(context, '/products',
-                      Icons.inventory_2_rounded, 'Artículos', primary: true),
+                if (canProducts) ...[
+                  const _SectionHeader(label: 'Productos'),
+                  if (perms.canAccessRoute('/products'))
+                    _navItem(context, '/products',
+                        Icons.inventory_2_rounded, 'Artículos', primary: true),
+                ],
                 // ── Ventas ──────────────────────────────────────
-                const _SectionHeader(label: 'Ventas'),
-                if (perms.canAccessRoute('/sales/quotes'))
-                  _navItem(context, '/sales/quotes',
-                      Icons.request_quote_rounded, 'Cotizaciones',
-                      primary: true),
+                if (canSales) ...[
+                  const _SectionHeader(label: 'Ventas'),
+                  if (perms.canAccessRoute('/sales/quotes'))
+                    _navItem(context, '/sales/quotes',
+                        Icons.request_quote_rounded, 'Cotizaciones',
+                        primary: true),
+                ],
 
                 // ── Compras ─────────────────────────────────────
-                const _SectionHeader(label: 'Compras'),
-                if (perms.canAccessRoute('/purchases/requests'))
-                  _navItem(context, '/purchases/requests',
-                      Icons.assignment_turned_in_rounded, 'Presupuestos proveedor',
-                      primary: true),
+                if (canPurchases) ...[
+                  const _SectionHeader(label: 'Compras'),
+                  if (perms.canAccessRoute('/purchases/requests'))
+                    _navItem(context, '/purchases/requests',
+                        Icons.assignment_turned_in_rounded, 'Presupuestos proveedor',
+                        primary: true),
+                ],
 
                 // ── Proyectos ───────────────────────────────────
-                const _SectionHeader(label: 'Proyectos'),
-                if (perms.canAccessRoute('/projects'))
-                  _navItem(context, '/projects',
-                      Icons.engineering_rounded, 'Obras y proyectos',
-                      primary: true),
+                if (canProjects) ...[
+                  const _SectionHeader(label: 'Proyectos'),
+                  if (perms.canAccessRoute('/projects'))
+                    _navItem(context, '/projects',
+                        Icons.engineering_rounded, 'Obras y proyectos',
+                        primary: true),
+                ],
 
                 // ── Marketing ────────────────────────────────────
-                const _SectionHeader(label: 'Marketing'),
-                if (perms.canAccessRoute('/marketing/campaigns'))
-                  _navItem(context, '/marketing/campaigns',
-                      Icons.campaign_rounded, 'Campañas'),
-                if (perms.canAccessRoute('/marketing/coupons'))
-                  _navItem(context, '/marketing/coupons',
-                      Icons.confirmation_number_rounded, 'Cupones'),
-                if (perms.canAccessRoute('/marketing/leads'))
-                  _navItem(context, '/marketing/leads',
-                      Icons.leaderboard_rounded, 'Leads'),
-                if (perms.canAccessRoute('/marketing/destacados'))
-                  _navItem(context, '/marketing/destacados',
-                      Icons.star_rounded, 'Destacados'),
+                if (canMarketing) ...[
+                  const _SectionHeader(label: 'Marketing'),
+                  if (perms.canAccessRoute('/marketing/campaigns'))
+                    _navItem(context, '/marketing/campaigns',
+                        Icons.campaign_rounded, 'Campañas'),
+                  if (perms.canAccessRoute('/marketing/coupons'))
+                    _navItem(context, '/marketing/coupons',
+                        Icons.confirmation_number_rounded, 'Cupones'),
+                  if (perms.canAccessRoute('/marketing/leads'))
+                    _navItem(context, '/marketing/leads',
+                        Icons.leaderboard_rounded, 'Leads'),
+                  if (perms.canAccessRoute('/marketing/destacados'))
+                    _navItem(context, '/marketing/destacados',
+                        Icons.star_rounded, 'Destacados'),
+                ],
               ],
             ),
           ),

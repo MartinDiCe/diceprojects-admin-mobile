@@ -19,14 +19,22 @@ class PermissionsService {
 
   bool canAccessRoute(String route) {
     if (_isAdminGlobal) return true;
-    // Check exact match or prefix match
-    for (final entry in permissionGates.entries) {
-      if (route.startsWith(entry.key)) {
+    if (_isAlwaysAllowedRoute(route)) return true;
+
+    final gates = permissionGates.entries.toList()
+      ..sort((a, b) => b.key.length.compareTo(a.key.length));
+    for (final entry in gates) {
+      if (route == entry.key || route.startsWith('${entry.key}/')) {
         return hasAnyPermission(entry.value);
       }
     }
-    return true; // no gate = accessible
+    return false;
   }
+
+  bool _isAlwaysAllowedRoute(String route) =>
+      route == '/403' ||
+      route.startsWith('/profile') ||
+      route.startsWith('/notifications/center');
 }
 
 final permissionsProvider = Provider<PermissionsService>((ref) {

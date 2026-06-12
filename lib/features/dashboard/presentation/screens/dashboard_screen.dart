@@ -426,6 +426,7 @@ final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) as
   _cacheDashboardProvider(ref);
   final dio = ref.watch(dioProvider);
   final auth = ref.watch(authNotifierProvider);
+  final perms = ref.watch(permissionsProvider);
   final period = ref.watch(dashboardPeriodProvider(DashboardScope.general));
   final selectedTenantId = ref.watch(dashboardTenantFilterProvider);
   final selectedSellerId = ref.watch(dashboardSellerFilterProvider);
@@ -436,24 +437,58 @@ final dashboardDataProvider = FutureProvider.autoDispose<DashboardData>((ref) as
   );
   final headers = _marketingHeaders(auth, tenantId: scope['tenantId']?.toString());
 
-  final products = await _getPage(dio, '/v1/products', size: 80, extra: scope, headers: headers);
-  final quotes = await _getPage(
-    dio,
-    '/v1/quotes',
-    size: 80,
-    extra: {...scope, ..._quotePeriodParams(period)},
-    headers: headers,
-  );
-  final leads = await _getPage(dio, '/v1/leads', size: 1, extra: scope, headers: headers);
-  final featured = await _getPage(dio, '/v1/products', size: 1, extra: {...scope, 'featured': true}, headers: headers);
-  final campaigns = await _getPage(dio, '/v1/campaigns', size: 20, extra: scope, headers: headers);
-  final coupons = await _getPage(dio, '/v1/coupons', size: 1, extra: scope, headers: headers);
-  final sellers = await _getPage(dio, '/v1/sellers', size: 1, extra: scope, headers: headers);
-  final people = await _getPage(dio, '/v1/people', size: 1);
-  final users = await _getPage(dio, '/v1/users', size: 1);
-  final warehouses = await _getPage(dio, '/v1/warehouses', size: 1);
-  final stock = await _getPage(dio, '/v1/warehouse/stock', size: 1);
-  final traces = await _getPage(dio, '/v1/apitraces', size: 120);
+  final canProducts = perms.canAccessRoute('/dashboard/products') || perms.canAccessRoute('/products');
+  final canSales = perms.canAccessRoute('/dashboard/sales') || perms.canAccessRoute('/sales/quotes');
+  final canMarketing = perms.canAccessRoute('/dashboard/marketing') ||
+      perms.canAccessRoute('/marketing/campaigns') ||
+      perms.canAccessRoute('/marketing/leads');
+  final canOrganization = perms.canAccessRoute('/organization/sellers') || perms.canAccessRoute('/people');
+  final canIam = perms.canAccessRoute('/iam/users');
+  final canWarehouse = perms.canAccessRoute('/dashboard/warehouse') || perms.canAccessRoute('/warehouse/stock');
+  final canApiTraces = perms.hasAnyPermission(['Logs.ApiTraces.List', 'Logs.Admin', 'IAM.Admin']);
+
+  final products = canProducts
+      ? await _getPage(dio, '/v1/products', size: 80, extra: scope, headers: headers)
+      : const _PageData(items: [], total: 0);
+  final quotes = canSales
+      ? await _getPage(
+          dio,
+          '/v1/quotes',
+          size: 80,
+          extra: {...scope, ..._quotePeriodParams(period)},
+          headers: headers,
+        )
+      : const _PageData(items: [], total: 0);
+  final leads = canMarketing
+      ? await _getPage(dio, '/v1/leads', size: 1, extra: scope, headers: headers)
+      : const _PageData(items: [], total: 0);
+  final featured = canProducts
+      ? await _getPage(dio, '/v1/products', size: 1, extra: {...scope, 'featured': true}, headers: headers)
+      : const _PageData(items: [], total: 0);
+  final campaigns = canMarketing
+      ? await _getPage(dio, '/v1/campaigns', size: 20, extra: scope, headers: headers)
+      : const _PageData(items: [], total: 0);
+  final coupons = canMarketing
+      ? await _getPage(dio, '/v1/coupons', size: 1, extra: scope, headers: headers)
+      : const _PageData(items: [], total: 0);
+  final sellers = canOrganization
+      ? await _getPage(dio, '/v1/sellers', size: 1, extra: scope, headers: headers)
+      : const _PageData(items: [], total: 0);
+  final people = canOrganization
+      ? await _getPage(dio, '/v1/people', size: 1)
+      : const _PageData(items: [], total: 0);
+  final users = canIam
+      ? await _getPage(dio, '/v1/users', size: 1)
+      : const _PageData(items: [], total: 0);
+  final warehouses = canWarehouse
+      ? await _getPage(dio, '/v1/warehouses', size: 1)
+      : const _PageData(items: [], total: 0);
+  final stock = canWarehouse
+      ? await _getPage(dio, '/v1/warehouse/stock', size: 1)
+      : const _PageData(items: [], total: 0);
+  final traces = canApiTraces
+      ? await _getPage(dio, '/v1/apitraces', size: 120)
+      : const _PageData(items: [], total: 0);
 
   final productItems = products.items;
   final quoteItems = quotes.items;
@@ -1424,19 +1459,18 @@ class _DashboardContent extends ConsumerWidget {
         const SizedBox(height: 10),
         _DashboardShortcutGrid(cards: visibleDashboards),
         const SizedBox(height: 18),
-        _SectionTitle('Resumen operativo'),
-        const SizedBox(height: 10),
-        _KpiGrid(cards: [
-          _KpiData('Productos', _n(data.products), 'Activos ${data.activeProducts} · Borrador ${data.draftProducts}', Icons.inventory_2_rounded, const Color(0xFF0EA5E9)),
-          _KpiData('Cotizaciones', _n(data.quotes), 'Pendientes ${data.quoteDrafts + data.quoteSent} · Ganadas ${data.quoteWon}', Icons.request_quote_rounded, const Color(0xFF00A676)),
-          _KpiData('Marketing', _n(data.campaigns), 'Leads ${data.leads} · cupones ${data.coupons}', Icons.campaign_rounded, const Color(0xFFFF5A1F)),
-          _KpiData('Depósito', _n(data.stockRows), 'Stock · depósitos ${data.warehouses}', Icons.warehouse_rounded, const Color(0xFF6554F0)),
-        ]),
-        const SizedBox(height: 18),
-        _SectionTitle('Actividad API'),
-        const SizedBox(height: 10),
-        _ApiPanel(data: data),
-        const SizedBox(height: 18),
+        if (_summaryCards(permissions, data).isNotEmpty) ...[
+          _SectionTitle('Resumen operativo'),
+          const SizedBox(height: 10),
+          _KpiGrid(cards: _summaryCards(permissions, data)),
+          const SizedBox(height: 18),
+        ],
+        if (permissions.hasAnyPermission(['Logs.ApiTraces.List', 'Logs.Admin', 'IAM.Admin'])) ...[
+          _SectionTitle('Actividad API'),
+          const SizedBox(height: 10),
+          _ApiPanel(data: data),
+          const SizedBox(height: 18),
+        ],
         _SectionTitle('Módulos'),
         const SizedBox(height: 10),
         _ModuleGrid(modules: modules),
@@ -1549,6 +1583,49 @@ List<_ModuleData> _dashboardCards(PermissionsService perms) => [
         perms.canAccessRoute('/dashboard/projects'),
       ),
     ];
+
+List<_KpiData> _summaryCards(PermissionsService perms, DashboardData data) {
+  final cards = <_KpiData>[];
+  if (perms.canAccessRoute('/dashboard/products') || perms.canAccessRoute('/products')) {
+    cards.add(_KpiData(
+      'Productos',
+      _n(data.products),
+      'Activos ${data.activeProducts} · Borrador ${data.draftProducts}',
+      Icons.inventory_2_rounded,
+      const Color(0xFF0EA5E9),
+    ));
+  }
+  if (perms.canAccessRoute('/dashboard/sales') || perms.canAccessRoute('/sales/quotes')) {
+    cards.add(_KpiData(
+      'Cotizaciones',
+      _n(data.quotes),
+      'Pendientes ${data.quoteDrafts + data.quoteSent} · Ganadas ${data.quoteWon}',
+      Icons.request_quote_rounded,
+      const Color(0xFF00A676),
+    ));
+  }
+  if (perms.canAccessRoute('/dashboard/marketing') ||
+      perms.canAccessRoute('/marketing/campaigns') ||
+      perms.canAccessRoute('/marketing/leads')) {
+    cards.add(_KpiData(
+      'Marketing',
+      _n(data.campaigns),
+      'Leads ${data.leads} · cupones ${data.coupons}',
+      Icons.campaign_rounded,
+      const Color(0xFFFF5A1F),
+    ));
+  }
+  if (perms.canAccessRoute('/dashboard/warehouse') || perms.canAccessRoute('/warehouse/stock')) {
+    cards.add(_KpiData(
+      'Depósito',
+      _n(data.stockRows),
+      'Stock · depósitos ${data.warehouses}',
+      Icons.warehouse_rounded,
+      const Color(0xFF6554F0),
+    ));
+  }
+  return cards;
+}
 
 class _ModuleDashboardShell extends StatelessWidget {
   final Widget child;
