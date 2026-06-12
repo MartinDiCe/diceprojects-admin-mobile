@@ -175,6 +175,12 @@ class AppDrawer extends ConsumerWidget {
                 if (perms.canAccessRoute('/organization/sellers'))
                   _navItem(context, '/organization/sellers',
                     Icons.storefront_rounded, 'Vendedores'),
+                if (perms.canAccessRoute('/organization/suppliers'))
+                  _navItem(context, '/organization/suppliers',
+                    Icons.local_shipping_rounded, 'Proveedores'),
+                if (perms.canAccessRoute('/organization/customers'))
+                  _navItem(context, '/organization/customers',
+                    Icons.handshake_rounded, 'Clientes'),
                 if (perms.canAccessRoute('/people'))
                   _navItem(context, '/people',
                       Icons.badge_rounded, 'Personas', primary: true),
@@ -198,6 +204,20 @@ class AppDrawer extends ConsumerWidget {
                 if (perms.canAccessRoute('/sales/quotes'))
                   _navItem(context, '/sales/quotes',
                       Icons.request_quote_rounded, 'Cotizaciones',
+                      primary: true),
+
+                // ── Compras ─────────────────────────────────────
+                const _SectionHeader(label: 'Compras'),
+                if (perms.canAccessRoute('/purchases/requests'))
+                  _navItem(context, '/purchases/requests',
+                      Icons.assignment_turned_in_rounded, 'Presupuestos proveedor',
+                      primary: true),
+
+                // ── Proyectos ───────────────────────────────────
+                const _SectionHeader(label: 'Proyectos'),
+                if (perms.canAccessRoute('/projects'))
+                  _navItem(context, '/projects',
+                      Icons.engineering_rounded, 'Obras y proyectos',
                       primary: true),
 
                 // ── Marketing ────────────────────────────────────

@@ -20,6 +20,7 @@ import 'package:app_diceprojects_admin/features/notifications/presentation/scree
 import 'package:app_diceprojects_admin/features/notifications/presentation/screens/notif_variables_screen.dart';
 import 'package:app_diceprojects_admin/features/notifications/presentation/screens/sender_profiles_screen.dart';
 import 'package:app_diceprojects_admin/features/organization/presentation/screens/branches_list_screen.dart';
+import 'package:app_diceprojects_admin/features/organization/presentation/screens/organization_parties_screen.dart';
 import 'package:app_diceprojects_admin/features/organization/presentation/screens/tenant_form_screen.dart';
 import 'package:app_diceprojects_admin/features/organization/presentation/screens/tenants_list_screen.dart';
 import 'package:app_diceprojects_admin/features/people/presentation/screens/people_list_screen.dart';
@@ -38,6 +39,8 @@ import 'package:app_diceprojects_admin/features/products/presentation/screens/br
 import 'package:app_diceprojects_admin/features/products/presentation/screens/product_types_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/products_list_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/storage_conditions_screen.dart';
+import 'package:app_diceprojects_admin/features/projects/presentation/screens/project_management_screen.dart';
+import 'package:app_diceprojects_admin/features/purchases/presentation/screens/purchase_requests_screen.dart';
 import 'package:app_diceprojects_admin/features/roles/presentation/screens/role_detail_screen.dart';
 import 'package:app_diceprojects_admin/features/roles/presentation/screens/roles_list_screen.dart';
 import 'package:app_diceprojects_admin/features/sales/presentation/screens/quotes_screen.dart';
@@ -227,6 +230,36 @@ final routerProvider = Provider<GoRouter>((ref) {
               sellerId: state.pathParameters['id'],
             ),
           ),
+          GoRoute(
+            path: '/organization/suppliers',
+            builder: (_, __) => const PartiesListScreen(kind: PartyKind.supplier),
+          ),
+          GoRoute(
+            path: '/organization/suppliers/new',
+            builder: (_, __) => const PartyFormScreen(kind: PartyKind.supplier),
+          ),
+          GoRoute(
+            path: '/organization/suppliers/:id/edit',
+            builder: (_, state) => PartyFormScreen(
+              kind: PartyKind.supplier,
+              id: state.pathParameters['id'],
+            ),
+          ),
+          GoRoute(
+            path: '/organization/customers',
+            builder: (_, __) => const PartiesListScreen(kind: PartyKind.customer),
+          ),
+          GoRoute(
+            path: '/organization/customers/new',
+            builder: (_, __) => const PartyFormScreen(kind: PartyKind.customer),
+          ),
+          GoRoute(
+            path: '/organization/customers/:id/edit',
+            builder: (_, state) => PartyFormScreen(
+              kind: PartyKind.customer,
+              id: state.pathParameters['id'],
+            ),
+          ),
           // People
           GoRoute(
             path: '/people',
@@ -300,6 +333,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/sales/quotes',
             builder: (_, __) => const QuotesScreen(),
+          ),
+          // Purchases
+          GoRoute(
+            path: '/purchases/requests',
+            builder: (_, __) => const PurchaseRequestsScreen(),
+          ),
+          // Projects
+          GoRoute(
+            path: '/projects',
+            builder: (_, __) => const ProjectManagementScreen(),
           ),
           // Notifications
           GoRoute(

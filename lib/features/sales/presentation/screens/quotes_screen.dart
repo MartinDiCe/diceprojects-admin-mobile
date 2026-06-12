@@ -212,6 +212,11 @@ class QuotesNotifier extends ListNotifier<QuoteDto> {
     await _dio.post('/v1/quotes', data: payload);
     reload();
   }
+
+  Future<void> createPurchaseRequest(QuoteDto quote, Map<String, dynamic> payload) async {
+    await _dio.post('/v1/quotes/${quote.id}/purchase-request', data: payload);
+    reload();
+  }
 }
 
 final quotesNotifierProvider =
@@ -877,6 +882,10 @@ class _QuoteDetailSheetState extends ConsumerState<_QuoteDetailSheet> {
         perms.hasAnyPermission(['Sales.Quotes.Edit', 'Sales.Quotes.Create', 'Sales.Admin']);
     final canDelete =
         perms.hasAnyPermission(['Sales.Quotes.Delete', 'Sales.Admin']);
+    final canCreatePurchaseRequest = perms.hasAnyPermission([
+      'Sales.Quotes.PurchaseRequest.Create',
+      'Sales.Admin',
+    ]);
 
     return DraggableScrollableSheet(
       expand: false,
@@ -931,6 +940,15 @@ class _QuoteDetailSheetState extends ConsumerState<_QuoteDetailSheet> {
               icon: Icons.edit_rounded,
               fullWidth: true,
               onPressed: _saving ? null : _openEditSheet,
+            ),
+          ],
+          if (canCreatePurchaseRequest) ...[
+            const SizedBox(height: 12),
+            AppButton.secondary(
+              label: 'Generar solicitud de compra',
+              icon: Icons.assignment_turned_in_rounded,
+              fullWidth: true,
+              onPressed: _saving ? null : _openPurchaseRequestDialog,
             ),
           ],
           if (widget.quote.expiresAt != null) ...[
@@ -1043,6 +1061,14 @@ class _QuoteDetailSheetState extends ConsumerState<_QuoteDetailSheet> {
     }
   }
 
+  Future<void> _openPurchaseRequestDialog() async {
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (_) => _QuotePurchaseRequestDialog(quote: widget.quote),
+    );
+    if (mounted && created == true) Navigator.of(context).pop();
+  }
+
   Future<void> _deleteQuote() async {
     final confirmed = await ConfirmDialog.show(
       context,
@@ -1068,6 +1094,141 @@ class _QuoteEditSheet extends ConsumerStatefulWidget {
 
   @override
   ConsumerState<_QuoteEditSheet> createState() => _QuoteEditSheetState();
+}
+
+class _QuotePurchaseRequestDialog extends ConsumerStatefulWidget {
+  final QuoteDto quote;
+
+  const _QuotePurchaseRequestDialog({required this.quote});
+
+  @override
+  ConsumerState<_QuotePurchaseRequestDialog> createState() =>
+      _QuotePurchaseRequestDialogState();
+}
+
+class _QuotePurchaseRequestDialogState
+    extends ConsumerState<_QuotePurchaseRequestDialog> {
+  final _title = TextEditingController();
+  final _supplierIds = TextEditingController();
+  final _validUntil = TextEditingController();
+  late final Set<String> _selectedItemIds;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _title.text = 'Presupuesto proveedores ${widget.quote.number}';
+    _selectedItemIds = widget.quote.items
+        .map((item) => item.quoteItemId)
+        .whereType<String>()
+        .where((id) => id.trim().isNotEmpty)
+        .toSet();
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _supplierIds.dispose();
+    _validUntil.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Solicitud de compra'),
+      content: SizedBox(
+        width: 620,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _title,
+                decoration: const InputDecoration(labelText: 'Título'),
+              ),
+              TextField(
+                controller: _supplierIds,
+                decoration: const InputDecoration(
+                  labelText: 'Proveedores',
+                  helperText: 'Separá los IDs por coma',
+                ),
+              ),
+              TextField(
+                controller: _validUntil,
+                decoration: const InputDecoration(
+                  labelText: 'Válido hasta',
+                  helperText: 'Formato opcional: 2026-06-30T18:00:00',
+                ),
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Items',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              for (final item in widget.quote.items)
+                CheckboxListTile(
+                  value: _selectedItemIds.contains(item.quoteItemId),
+                  onChanged: item.quoteItemId == null
+                      ? null
+                      : (value) => setState(() {
+                            if (value == true) {
+                              _selectedItemIds.add(item.quoteItemId!);
+                            } else {
+                              _selectedItemIds.remove(item.quoteItemId);
+                            }
+                          }),
+                  title: Text(item.productName),
+                  subtitle: Text('${item.quantity} ${item.unit}'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton.icon(
+          onPressed: _saving ? null : _save,
+          icon: const Icon(Icons.assignment_turned_in_rounded),
+          label: const Text('Generar'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _save() async {
+    final suppliers = _supplierIds.text
+        .split(',')
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList();
+    if (suppliers.isEmpty || _selectedItemIds.isEmpty) {
+      _showSnack(context, 'Seleccioná proveedores e items.');
+      return;
+    }
+    setState(() => _saving = true);
+    final validUntilText = _validUntil.text.trim();
+    await ref.read(quotesNotifierProvider.notifier).createPurchaseRequest(
+      widget.quote,
+      {
+        'title': _title.text.trim(),
+        'validUntil': validUntilText.isEmpty ? null : validUntilText,
+        'quoteItemIds': _selectedItemIds.toList(),
+        'supplierIds': suppliers,
+      },
+    );
+    if (mounted) Navigator.of(context).pop(true);
+  }
 }
 
 class _QuoteEditSheetState extends ConsumerState<_QuoteEditSheet> {

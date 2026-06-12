@@ -63,6 +63,32 @@ const Map<String, List<String>> permissionGates = {
     'Organization.Sellers.View',
     'Organization.Admin',
   ],
+  '/organization/suppliers/new': [
+    'Organization.Suppliers.Create',
+    'Organization.Admin',
+  ],
+  '/organization/suppliers/': [
+    'Organization.Suppliers.Edit',
+    'Organization.Admin',
+  ],
+  '/organization/suppliers': [
+    'Organization.Suppliers.List',
+    'Organization.Suppliers.View',
+    'Organization.Admin',
+  ],
+  '/organization/customers/new': [
+    'Organization.Customers.Create',
+    'Organization.Admin',
+  ],
+  '/organization/customers/': [
+    'Organization.Customers.Edit',
+    'Organization.Admin',
+  ],
+  '/organization/customers': [
+    'Organization.Customers.List',
+    'Organization.Customers.View',
+    'Organization.Admin',
+  ],
   '/people/new': ['People.Create', 'People.Admin'],
   '/people/': ['People.Edit', 'People.Admin'],
   '/people': ['People.List', 'People.View', 'Persona.Ver', 'People.Admin'],
@@ -88,6 +114,16 @@ const Map<String, List<String>> permissionGates = {
     'Products.Admin',
   ],
   '/sales/quotes': ['Sales.Quotes.List', 'Sales.Quotes.View', 'Sales.Admin'],
+  '/purchases/requests': [
+    'Purchases.Requests.List',
+    'Purchases.Requests.View',
+    'Purchases.Admin',
+  ],
+  '/projects': [
+    'Projects.Access',
+    'Projects.Dashboard.View',
+    'Projects.Admin',
+  ],
   '/warehouse/stock': [
     'Warehouse.Stock.List',
     'Warehouse.Stock.View',
