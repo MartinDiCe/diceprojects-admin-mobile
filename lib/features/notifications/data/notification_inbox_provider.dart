@@ -18,6 +18,11 @@ final notificationUnreadCountProvider = Provider<int>((ref) {
   );
 });
 
+final notificationPreferencesProvider =
+    StateNotifierProvider<NotificationPreferencesNotifier, AsyncValue<List<NotificationPreferenceItem>>>(
+  (ref) => NotificationPreferencesNotifier(ref.watch(dioProvider)),
+);
+
 class NotificationInboxNotifier extends StateNotifier<AsyncValue<List<NotificationInboxItem>>> {
   final Dio _dio;
   Timer? _timer;
@@ -61,5 +66,52 @@ class NotificationInboxNotifier extends StateNotifier<AsyncValue<List<Notificati
   void dispose() {
     _timer?.cancel();
     super.dispose();
+  }
+}
+
+class NotificationPreferencesNotifier extends StateNotifier<AsyncValue<List<NotificationPreferenceItem>>> {
+  final Dio _dio;
+
+  NotificationPreferencesNotifier(this._dio) : super(const AsyncValue.loading()) {
+    refresh();
+  }
+
+  Future<void> refresh() async {
+    try {
+      final resp = await _dio.get('/v1/notifications/preferences');
+      final data = resp.data;
+      final items = data is List
+          ? data.whereType<Map>().map((e) => NotificationPreferenceItem.fromJson(Map<String, dynamic>.from(e))).toList()
+          : <NotificationPreferenceItem>[];
+      state = AsyncValue.data(items);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
+  }
+
+  Future<void> toggle(NotificationPreferenceItem item, String channel) async {
+    final previous = state.valueOrNull ?? <NotificationPreferenceItem>[];
+    final next = switch (channel) {
+      'bell' => item.copyWith(bellEnabled: !item.bellEnabled),
+      'web' => item.copyWith(webPushEnabled: !item.webPushEnabled),
+      'mobile' => item.copyWith(mobilePushEnabled: !item.mobilePushEnabled),
+      'email' => item.copyWith(emailEnabled: !item.emailEnabled),
+      _ => item,
+    };
+    state = AsyncValue.data([
+      for (final current in previous)
+        if (current.typeCode == item.typeCode) next else current,
+    ]);
+    try {
+      final resp = await _dio.put('/v1/notifications/preferences/${Uri.encodeComponent(item.typeCode)}', data: next.toJson());
+      final saved = NotificationPreferenceItem.fromJson(Map<String, dynamic>.from(resp.data as Map));
+      state = AsyncValue.data([
+        for (final current in state.valueOrNull ?? <NotificationPreferenceItem>[])
+          if (current.typeCode == item.typeCode) saved else current,
+      ]);
+    } catch (e, st) {
+      state = AsyncValue.data(previous);
+      Error.throwWithStackTrace(e, st);
+    }
   }
 }
