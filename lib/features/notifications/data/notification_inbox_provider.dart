@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:app_diceprojects_admin/core/http/dio_client.dart';
 import 'package:app_diceprojects_admin/features/notifications/data/notification_inbox_models.dart';
 import 'package:dio/dio.dart';
@@ -18,12 +20,14 @@ final notificationUnreadCountProvider = Provider<int>((ref) {
 
 class NotificationInboxNotifier extends StateNotifier<AsyncValue<List<NotificationInboxItem>>> {
   final Dio _dio;
+  Timer? _timer;
 
   NotificationInboxNotifier(this._dio) : super(const AsyncValue.loading()) {
     refresh();
+    _timer = Timer.periodic(const Duration(seconds: 45), (_) => refresh(silent: true));
   }
 
-  Future<void> refresh() async {
+  Future<void> refresh({bool silent = false}) async {
     try {
       final resp = await _dio.get('/v1/notifications/inbox', queryParameters: {
         'unreadOnly': true,
@@ -37,7 +41,7 @@ class NotificationInboxNotifier extends StateNotifier<AsyncValue<List<Notificati
           : <NotificationInboxItem>[];
       state = AsyncValue.data(items);
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      if (!silent) state = AsyncValue.error(e, st);
     }
   }
 
@@ -51,5 +55,11 @@ class NotificationInboxNotifier extends StateNotifier<AsyncValue<List<Notificati
     } catch (_) {
       await refresh();
     }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
   }
 }
