@@ -72,7 +72,9 @@ class ErrorInterceptor extends Interceptor {
 
     final status = response.statusCode ?? 500;
     if (status == 401) {
-      unawaited(Future.sync(() => onUnauthorized?.call()));
+      if (response.requestOptions.extra['skipUnauthorizedHandler'] != true) {
+        unawaited(Future.sync(() => onUnauthorized?.call()));
+      }
       return AppError.unauthorized();
     }
     if (status == 403) return AppError.forbidden();

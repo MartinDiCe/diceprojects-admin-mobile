@@ -46,13 +46,49 @@ class ProductDto {
         discountPercent: _parseDouble(json['discountPercent'] ?? json['discount']),
         // API returns 'statusCode', fallback to 'status'
         status: (json['statusCode'] ?? json['status'] ?? 'ACTIVE').toString(),
-        imageUrl: json['imageUrl']?.toString(),
+        imageUrl: _readImageUrl(json),
       );
 
   static double? _parseDouble(dynamic val) {
     if (val == null) return null;
     if (val is num) return val.toDouble();
     if (val is String) return double.tryParse(val);
+    return null;
+  }
+
+  static String? _readImageUrl(Map<String, dynamic> json) {
+    for (final key in const [
+      'imageUrl',
+      'mainImageUrl',
+      'primaryImageUrl',
+      'thumbnailUrl',
+      'image_url',
+      'main_image_url',
+      'imageUrl0',
+    ]) {
+      final value = json[key]?.toString();
+      if (value != null && value.trim().isNotEmpty) return value.trim();
+    }
+    for (final key in const ['images', 'gallery', 'productImages']) {
+      final raw = json[key];
+      if (raw is List && raw.isNotEmpty) {
+        for (final item in raw) {
+          if (item is Map) {
+            final value = (item['url'] ??
+                    item['imageUrl'] ??
+                    item['publicUrl'] ??
+                    item['image_url'])
+                ?.toString();
+            if (value != null && value.trim().isNotEmpty) {
+              return value.trim();
+            }
+          } else {
+            final value = item.toString();
+            if (value.trim().isNotEmpty) return value.trim();
+          }
+        }
+      }
+    }
     return null;
   }
 }
@@ -259,7 +295,7 @@ class _ProductTile extends StatelessWidget {
     final hasDiscount =
         product.price != null && product.discountPercent != null && product.discountPercent! > 0;
     final discountRate = hasDiscount
-        ? (product.discountPercent!.clamp(0, 100) as num).toDouble()
+        ? product.discountPercent!.clamp(0, 100).toDouble()
         : 0.0;
     final finalPrice = hasDiscount
         ? product.price! * (1 - (discountRate / 100))

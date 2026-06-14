@@ -55,6 +55,12 @@ final _projectProgressProvider = FutureProvider.autoDispose.family<List<_Project
   return _list(response.data).map(_ProjectProgressDto.fromJson).toList();
 });
 
+final _projectDetailProvider = FutureProvider.autoDispose.family<_ProjectDetailDto, String>((ref, projectId) async {
+  final response = await ref.watch(dioProvider).get('/v1/project-management/projects/$projectId/detail');
+  final data = response.data;
+  return _ProjectDetailDto.fromJson(data is Map ? Map<String, dynamic>.from(data) : const {});
+});
+
 enum ProjectManagementSection { projects, types, resources, templates }
 
 class ProjectManagementScreen extends ConsumerWidget {
@@ -562,6 +568,7 @@ class _ProjectDetailDialog extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tasks = ref.watch(_projectTasksProvider(project.id));
     final progress = ref.watch(_projectProgressProvider(project.id));
+    final detail = ref.watch(_projectDetailProvider(project.id));
     final perms = ref.watch(permissionsProvider);
     final canCreateTask = perms.hasAnyPermission(['Projects.Tasks.Create', 'Projects.Admin']);
     final canCreateProgress = perms.hasAnyPermission(['Projects.Progress.Create', 'Projects.Admin']);
@@ -598,6 +605,12 @@ class _ProjectDetailDialog extends ConsumerWidget {
               Expanded(
                 child: ListView(
                   children: [
+                    detail.when(
+                      loading: () => const SizedBox.shrink(),
+                      error: (_, __) => const SizedBox.shrink(),
+                      data: (data) => _EvolutionSummary(detail: data),
+                    ),
+                    const SizedBox(height: 18),
                     _SectionHeader(
                       title: 'Tareas',
                       action: canCreateTask
@@ -638,6 +651,7 @@ class _ProjectDetailDialog extends ConsumerWidget {
                                 );
                                 ref.invalidate(_projectProgressProvider(project.id));
                                 ref.invalidate(_projectTasksProvider(project.id));
+                                ref.invalidate(_projectDetailProvider(project.id));
                               },
                               icon: const Icon(Icons.trending_up_rounded),
                             )
@@ -709,6 +723,77 @@ class _ProgressRow extends StatelessWidget {
       leading: const Icon(Icons.insights_rounded),
       title: Text('${progress.progressPercent.toStringAsFixed(0)}%'),
       subtitle: Text(progress.notes?.isNotEmpty == true ? progress.notes! : 'Sin notas'),
+    );
+  }
+}
+
+class _EvolutionSummary extends StatelessWidget {
+  final _ProjectDetailDto detail;
+
+  const _EvolutionSummary({required this.detail});
+
+  @override
+  Widget build(BuildContext context) {
+    final cards = [
+      ('Base', _money(detail.baselineBudgetTotal), Icons.flag_rounded),
+      ('Actual', _money(detail.currentBudgetTotal), Icons.request_quote_rounded),
+      ('Desvío', '${_money(detail.budgetDeviationAmount)} · ${detail.budgetDeviationPercent.toStringAsFixed(1)}%', Icons.trending_up_rounded),
+      ('Real', _money(detail.realCostTotal), Icons.payments_rounded),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Evolución', style: TextStyle(color: AppColors.ink, fontSize: 15, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 10),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: cards.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 2.2,
+          ),
+          itemBuilder: (_, index) {
+            final card = cards[index];
+            return Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Row(
+                children: [
+                  Icon(card.$3, color: AppColors.accent, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(card.$1, style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700)),
+                        Text(card.$2, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.ink, fontSize: 13, fontWeight: FontWeight.w900)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        if (detail.timeline.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          ...detail.timeline.take(3).map((event) => ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.history_rounded),
+                title: Text(event.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(event.message ?? event.eventType, maxLines: 2, overflow: TextOverflow.ellipsis),
+              )),
+        ],
+      ],
     );
   }
 }
@@ -946,6 +1031,62 @@ class _ProjectProgressDto {
       );
 }
 
+class _ProjectDetailDto {
+  final double baselineBudgetTotal;
+  final double currentBudgetTotal;
+  final double budgetDeviationAmount;
+  final double budgetDeviationPercent;
+  final double realCostTotal;
+  final List<_ProjectTimelineEventDto> timeline;
+
+  const _ProjectDetailDto({
+    required this.baselineBudgetTotal,
+    required this.currentBudgetTotal,
+    required this.budgetDeviationAmount,
+    required this.budgetDeviationPercent,
+    required this.realCostTotal,
+    required this.timeline,
+  });
+
+  factory _ProjectDetailDto.fromJson(Map<String, dynamic> json) {
+    final evolutionRaw = json['evolution'];
+    final evolution = evolutionRaw is Map ? Map<String, dynamic>.from(evolutionRaw) : const <String, dynamic>{};
+    final timelineRaw = json['timeline'];
+    final timeline = timelineRaw is List
+        ? timelineRaw
+            .whereType<Map>()
+            .map((item) => _ProjectTimelineEventDto.fromJson(Map<String, dynamic>.from(item)))
+            .toList()
+        : <_ProjectTimelineEventDto>[];
+    return _ProjectDetailDto(
+      baselineBudgetTotal: _numAny(evolution, const ['baseline_budget_total', 'baselineBudgetTotal']),
+      currentBudgetTotal: _numAny(evolution, const ['current_budget_total', 'currentBudgetTotal']),
+      budgetDeviationAmount: _numAny(evolution, const ['budget_deviation_amount', 'budgetDeviationAmount']),
+      budgetDeviationPercent: _numAny(evolution, const ['budget_deviation_percent', 'budgetDeviationPercent']),
+      realCostTotal: _numAny(evolution, const ['real_cost_total', 'realCostTotal']),
+      timeline: timeline,
+    );
+  }
+}
+
+class _ProjectTimelineEventDto {
+  final String eventType;
+  final String title;
+  final String? message;
+
+  const _ProjectTimelineEventDto({
+    required this.eventType,
+    required this.title,
+    this.message,
+  });
+
+  factory _ProjectTimelineEventDto.fromJson(Map<String, dynamic> json) => _ProjectTimelineEventDto(
+        eventType: _str(json, 'event_type', fallback: _str(json, 'eventType')),
+        title: _str(json, 'title', fallback: _str(json, 'event_type', fallback: 'Hito')),
+        message: _nullableStr(json, 'message'),
+      );
+}
+
 List<Map<String, dynamic>> _list(Object? data) {
   if (data is! List) return const [];
   return data.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
@@ -962,6 +1103,15 @@ double _num(Map<String, dynamic> json, String key) {
   final value = json[key];
   if (value is num) return value.toDouble();
   return double.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+double _numAny(Map<String, dynamic> json, List<String> keys) {
+  for (final key in keys) {
+    final parsed = _num(json, key);
+    if (parsed != 0) return parsed;
+    if (json.containsKey(key)) return parsed;
+  }
+  return 0;
 }
 
 String _money(double value) {

@@ -207,6 +207,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       final response = await _dio.post(
         '/auth/mobile/refresh',
+        options: Options(extra: const {'skipUnauthorizedHandler': true}),
         data: {
           'refreshToken': refreshToken,
           'deviceId': deviceId,
