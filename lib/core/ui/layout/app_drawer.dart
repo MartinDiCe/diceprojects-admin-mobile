@@ -48,7 +48,8 @@ class AppDrawer extends ConsumerWidget {
         perms.canAccessRoute('/organization/customers') ||
         perms.canAccessRoute('/people');
     final canWarehouse = perms.canAccessRoute('/warehouse') ||
-        perms.canAccessRoute('/warehouse/stock');
+        perms.canAccessRoute('/warehouse/stock') ||
+        perms.canAccessRoute('/warehouse/operations');
     final canProducts = perms.canAccessRoute('/products');
     final canSales = perms.canAccessRoute('/sales/quotes');
     final canPurchases = perms.canAccessRoute('/purchases/requests');
@@ -160,8 +161,9 @@ class AppDrawer extends ConsumerWidget {
               padding: const EdgeInsets.only(top: 8, bottom: 4),
               children: [
                 // Primary: Dashboard
-                _navItem(context, '/dashboard',
-                    Icons.dashboard_rounded, 'Dashboard', primary: true),
+                _navItem(
+                    context, '/dashboard', Icons.dashboard_rounded, 'Dashboard',
+                    primary: true),
                 if (perms.canAccessRoute('/dashboard/products'))
                   _navItem(context, '/dashboard/products',
                       Icons.inventory_2_rounded, 'Dashboard Productos'),
@@ -185,50 +187,58 @@ class AppDrawer extends ConsumerWidget {
                 if (canSecurity) ...[
                   const _SectionHeader(label: 'Seguridad'),
                   if (perms.canAccessRoute('/iam/users'))
-                    _navItem(context, '/iam/users',
-                        Icons.people_rounded, 'Usuarios', primary: true),
+                    _navItem(
+                        context, '/iam/users', Icons.people_rounded, 'Usuarios',
+                        primary: true),
                 ],
 
                 // ── Organización ────────────────────────────────
                 if (canOrganization) ...[
                   const _SectionHeader(label: 'Organización'),
                   if (perms.canAccessRoute('/admin/tenants'))
-                    _navItem(context, '/admin/tenants',
-                        Icons.business_rounded, 'Empresas', primary: true),
+                    _navItem(context, '/admin/tenants', Icons.business_rounded,
+                        'Empresas',
+                        primary: true),
                   if (perms.canAccessRoute('/admin/branches'))
-                    _navItem(context, '/admin/branches',
-                        Icons.store_rounded, 'Sucursales'),
+                    _navItem(context, '/admin/branches', Icons.store_rounded,
+                        'Sucursales'),
                   if (perms.canAccessRoute('/organization/sellers'))
                     _navItem(context, '/organization/sellers',
-                      Icons.storefront_rounded, 'Vendedores'),
+                        Icons.storefront_rounded, 'Vendedores'),
                   if (perms.canAccessRoute('/organization/suppliers'))
                     _navItem(context, '/organization/suppliers',
-                      Icons.local_shipping_rounded, 'Proveedores'),
+                        Icons.local_shipping_rounded, 'Proveedores'),
                   if (perms.canAccessRoute('/organization/customers'))
                     _navItem(context, '/organization/customers',
-                      Icons.handshake_rounded, 'Clientes'),
+                        Icons.handshake_rounded, 'Clientes'),
                   if (perms.canAccessRoute('/people'))
-                    _navItem(context, '/people',
-                        Icons.badge_rounded, 'Personas', primary: true),
+                    _navItem(
+                        context, '/people', Icons.badge_rounded, 'Personas',
+                        primary: true),
                 ],
 
                 // ── Depósitos ───────────────────────────────────
                 if (canWarehouse) ...[
                   const _SectionHeader(label: 'Depósitos'),
                   if (perms.canAccessRoute('/warehouse'))
-                    _navItem(context, '/warehouse',
-                      Icons.warehouse_rounded, 'Depósitos', primary: true),
+                    _navItem(context, '/warehouse', Icons.warehouse_rounded,
+                        'Depósitos',
+                        primary: true),
                   if (perms.canAccessRoute('/warehouse/stock'))
                     _navItem(context, '/warehouse/stock',
-                      Icons.inventory_2_rounded, 'Stock'),
+                        Icons.inventory_2_rounded, 'Stock'),
+                  if (perms.canAccessRoute('/warehouse/operations'))
+                    _navItem(context, '/warehouse/operations',
+                        Icons.sync_alt_rounded, 'Operaciones'),
                 ],
 
                 // ── Productos ────────────────────────────────────
                 if (canProducts) ...[
                   const _SectionHeader(label: 'Productos'),
                   if (perms.canAccessRoute('/products'))
-                    _navItem(context, '/products',
-                        Icons.inventory_2_rounded, 'Artículos', primary: true),
+                    _navItem(context, '/products', Icons.inventory_2_rounded,
+                        'Artículos',
+                        primary: true),
                 ],
                 // ── Ventas ──────────────────────────────────────
                 if (canSales) ...[
@@ -243,8 +253,11 @@ class AppDrawer extends ConsumerWidget {
                 if (canPurchases) ...[
                   const _SectionHeader(label: 'Compras'),
                   if (perms.canAccessRoute('/purchases/requests'))
-                    _navItem(context, '/purchases/requests',
-                        Icons.assignment_turned_in_rounded, 'Presupuestos proveedor',
+                    _navItem(
+                        context,
+                        '/purchases/requests',
+                        Icons.assignment_turned_in_rounded,
+                        'Presupuestos proveedor',
                         primary: true),
                 ],
 
@@ -252,12 +265,12 @@ class AppDrawer extends ConsumerWidget {
                 if (canProjects) ...[
                   const _SectionHeader(label: 'Proyectos'),
                   if (perms.canAccessRoute('/projects'))
-                    _navItem(context, '/projects',
-                        Icons.engineering_rounded, 'Obras y proyectos',
+                    _navItem(context, '/projects', Icons.engineering_rounded,
+                        'Obras y proyectos',
                         primary: true),
                   if (perms.canAccessRoute('/projects/types'))
-                    _navItem(context, '/projects/types',
-                        Icons.layers_rounded, 'Tipos de obra'),
+                    _navItem(context, '/projects/types', Icons.layers_rounded,
+                        'Tipos de obra'),
                   if (perms.canAccessRoute('/projects/templates'))
                     _navItem(context, '/projects/templates',
                         Icons.view_list_rounded, 'Templates de obra'),
@@ -367,11 +380,9 @@ class AppDrawer extends ConsumerWidget {
     final isDarkTheme = Theme.of(context).brightness == Brightness.dark;
     const activeColor = AppColors.accent;
     final textPrimary = isDarkTheme ? AppColors.sidebarText : AppColors.ink;
-    final textMuted = isDarkTheme
-        ? AppColors.sidebarTextMuted
-        : AppColors.textSecondary;
-    final activeBg =
-      isDarkTheme ? AppColors.accentDark : AppColors.accentLight;
+    final textMuted =
+        isDarkTheme ? AppColors.sidebarTextMuted : AppColors.textSecondary;
+    final activeBg = isDarkTheme ? AppColors.accentDark : AppColors.accentLight;
     final activeText = isDarkTheme ? AppColors.white : AppColors.ink;
 
     return Container(
@@ -379,7 +390,7 @@ class AppDrawer extends ConsumerWidget {
       decoration: BoxDecoration(
         color: isActive ? activeBg : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
-      border: null,
+        border: null,
       ),
       child: ListTile(
         dense: true,
@@ -394,9 +405,7 @@ class AppDrawer extends ConsumerWidget {
         title: Text(
           label,
           style: TextStyle(
-            color: isActive
-                ? activeText
-                : (primary ? textPrimary : textMuted),
+            color: isActive ? activeText : (primary ? textPrimary : textMuted),
             fontSize: primary ? 14 : 13.5,
             fontWeight: isActive
                 ? FontWeight.w600
@@ -422,7 +431,9 @@ String _resolveTenantLabel(WidgetRef ref, String? tenantId) {
   if (id == null || id.isEmpty) return 'Empresa asignada';
   final async = ref.watch(_tenantNameProvider(id));
   return async.maybeWhen(
-    data: (name) => (name != null && name.trim().isNotEmpty) ? name.trim() : 'Empresa asignada',
+    data: (name) => (name != null && name.trim().isNotEmpty)
+        ? name.trim()
+        : 'Empresa asignada',
     loading: () => 'Cargando empresa…',
     orElse: () => 'Empresa asignada',
   );

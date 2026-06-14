@@ -33,6 +33,7 @@ import 'package:app_diceprojects_admin/features/sellers/presentation/screens/sel
 import 'package:app_diceprojects_admin/features/sellers/presentation/screens/sellers_list_screen.dart';
 import 'package:app_diceprojects_admin/features/warehouse/presentation/screens/movements_screen.dart';
 import 'package:app_diceprojects_admin/features/warehouse/presentation/screens/stock_overview_screen.dart';
+import 'package:app_diceprojects_admin/features/warehouse/presentation/screens/warehouse_operations_screen.dart';
 import 'package:app_diceprojects_admin/features/warehouse/presentation/screens/warehouse_types_screen.dart';
 import 'package:app_diceprojects_admin/features/warehouse/presentation/screens/warehouses_list_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/product_form_screen.dart';
@@ -224,13 +225,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/admin/tenants/new',
-            builder: (_, __) =>
-                const TenantFormScreen(tenantId: null),
+            builder: (_, __) => const TenantFormScreen(tenantId: null),
           ),
           GoRoute(
             path: '/admin/tenants/:id/edit',
-            builder: (_, state) => TenantFormScreen(
-                tenantId: state.pathParameters['id']),
+            builder: (_, state) =>
+                TenantFormScreen(tenantId: state.pathParameters['id']),
           ),
           GoRoute(
             path: '/admin/branches',
@@ -254,7 +254,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/organization/suppliers',
-            builder: (_, __) => const PartiesListScreen(kind: PartyKind.supplier),
+            builder: (_, __) =>
+                const PartiesListScreen(kind: PartyKind.supplier),
           ),
           GoRoute(
             path: '/organization/suppliers/new',
@@ -269,7 +270,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/organization/customers',
-            builder: (_, __) => const PartiesListScreen(kind: PartyKind.customer),
+            builder: (_, __) =>
+                const PartiesListScreen(kind: PartyKind.customer),
           ),
           GoRoute(
             path: '/organization/customers/new',
@@ -289,8 +291,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/people/new',
-            builder: (_, __) =>
-                const PersonFormScreen(personId: null),
+            builder: (_, __) => const PersonFormScreen(personId: null),
           ),
           GoRoute(
             path: '/people/:id/edit',
@@ -453,6 +454,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/warehouse/stock',
             builder: (_, __) => const StockOverviewScreen(),
+          ),
+          GoRoute(
+            path: '/warehouse/operations',
+            builder: (_, __) => const WarehouseOperationsScreen(),
           ),
           GoRoute(
             path: '/warehouse/:warehouseId/movements',

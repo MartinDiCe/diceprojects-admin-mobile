@@ -55,7 +55,11 @@ const Map<String, List<String>> permissionGates = {
     'Projects.Projects.List',
     'Projects.Projects.View',
   ],
-  '/iam/users/new': ['IAM.Users.Create', 'IAM.Invitations.Send', 'IAM.Users.Admin'],
+  '/iam/users/new': [
+    'IAM.Users.Create',
+    'IAM.Invitations.Send',
+    'IAM.Users.Admin'
+  ],
   '/iam/users': ['IAM.Users.List', 'IAM.Users.View', 'IAM.Users.Admin'],
   '/iam/invitations': ['IAM.Invitations.List', 'IAM.Invitations.Send'],
   '/authorization': ['IAM.Roles.List'],
@@ -175,6 +179,14 @@ const Map<String, List<String>> permissionGates = {
     'Warehouse.Stock.View',
     'Warehouse.Admin',
   ],
+  '/warehouse/operations': [
+    'Warehouse.Locations.List',
+    'Warehouse.Reservations.List',
+    'Warehouse.ReorderRules.List',
+    'Warehouse.Transfers.List',
+    'Warehouse.Admin',
+    'Warehouse.Editor',
+  ],
   '/warehouse': [
     'Warehouse.Warehouses.List',
     'Warehouse.Warehouses.View',
@@ -218,8 +230,16 @@ const Map<String, List<String>> permissionGates = {
     'Sales.Quotes.View',
     'Sales.Admin',
   ],
-  '/notifications/types': ['Notification.Listar', 'Notification.Admin', 'Notificacion.VerTipos'],
-  '/notifications/templates': ['Notification.Listar', 'Notification.Admin', 'Notificacion.VerPlantillas'],
+  '/notifications/types': [
+    'Notification.Listar',
+    'Notification.Admin',
+    'Notificacion.VerTipos'
+  ],
+  '/notifications/templates': [
+    'Notification.Listar',
+    'Notification.Admin',
+    'Notificacion.VerPlantillas'
+  ],
   '/notifications/sender-profiles': [
     'Notification.Listar',
     'Notification.Admin'
