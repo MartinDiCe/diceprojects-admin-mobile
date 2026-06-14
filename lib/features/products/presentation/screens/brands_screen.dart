@@ -7,6 +7,8 @@ import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/status_badge.dart';
 import 'package:app_diceprojects_admin/core/utils/list_state.dart';
 import 'package:app_diceprojects_admin/core/utils/pagination.dart';
+import 'package:app_diceprojects_admin/features/auth/presentation/controllers/auth_notifier.dart';
+import 'package:app_diceprojects_admin/features/organization/presentation/widgets/tenant_scope_filter.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -46,14 +48,19 @@ class BrandDto {
 
 class BrandsNotifier extends ListNotifier<BrandDto> {
   final Dio _dio;
+  final String? tenantId;
 
-  BrandsNotifier(this._dio) : super();
+  BrandsNotifier(this._dio, this.tenantId) : super();
 
   @override
   Future<PaginatedResponse<BrandDto>> fetchPage(PageParams params) async {
     final query = params.toQueryParams();
     query['size'] = 50;
     query['pageSize'] = 50;
+    final scopedTenant = tenantId?.trim();
+    if (scopedTenant != null && scopedTenant.isNotEmpty) {
+      query['companyId'] = scopedTenant;
+    }
 
     final resp = await _dio.get(
       '/v1/brands',
@@ -63,9 +70,12 @@ class BrandsNotifier extends ListNotifier<BrandDto> {
   }
 }
 
-final brandsNotifierProvider =
-    StateNotifierProvider.autoDispose<BrandsNotifier, ListState<BrandDto>>(
-  (ref) => BrandsNotifier(ref.watch(dioProvider)),
+final selectedBrandsTenantProvider =
+    StateProvider.autoDispose<String?>((ref) => null);
+
+final brandsNotifierProvider = StateNotifierProvider.autoDispose
+    .family<BrandsNotifier, ListState<BrandDto>, String?>(
+  (ref, tenantId) => BrandsNotifier(ref.watch(dioProvider), tenantId),
 );
 
 // ────────────────────────────── Screen ──────────────────────────────
@@ -75,14 +85,23 @@ class BrandsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(brandsNotifierProvider);
-    final notifier = ref.read(brandsNotifierProvider.notifier);
+    final auth = ref.watch(authNotifierProvider);
+    final selectedTenant = ref.watch(selectedBrandsTenantProvider);
+    final effectiveTenant = auth.isAdminGlobal ? selectedTenant : auth.tenantId;
+    final state = ref.watch(brandsNotifierProvider(effectiveTenant));
+    final notifier = ref.read(brandsNotifierProvider(effectiveTenant).notifier);
 
     return AppPageScaffold(
       title: 'Marcas',
       searchHint: 'Buscar marca…',
       onSearch: notifier.setSearch,
-      body: _buildBody(state, notifier),
+      body: Column(
+        children: [
+          TenantScopeFilter(
+              selectedTenantProvider: selectedBrandsTenantProvider),
+          Expanded(child: _buildBody(state, notifier)),
+        ],
+      ),
     );
   }
 
@@ -130,7 +149,8 @@ class BrandsScreen extends ConsumerWidget {
               color: Colors.transparent,
               borderRadius: BorderRadius.circular(16),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
                   children: [
                     Container(
@@ -167,7 +187,8 @@ class BrandsScreen extends ConsumerWidget {
                               ),
                               if (b.isGlobal)
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
                                     color: AppColors.accentLight,
                                     borderRadius: BorderRadius.circular(999),

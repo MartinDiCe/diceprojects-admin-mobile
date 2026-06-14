@@ -7,6 +7,8 @@ import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/status_badge.dart';
 import 'package:app_diceprojects_admin/core/utils/list_state.dart';
 import 'package:app_diceprojects_admin/core/utils/pagination.dart';
+import 'package:app_diceprojects_admin/features/auth/presentation/controllers/auth_notifier.dart';
+import 'package:app_diceprojects_admin/features/organization/presentation/widgets/tenant_scope_filter.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -56,22 +58,49 @@ class WarehouseDto {
 
 class WarehousesListNotifier extends ListNotifier<WarehouseDto> {
   final Dio _dio;
+  final String? tenantId;
+  final String? sellerId;
 
-  WarehousesListNotifier(this._dio) : super();
+  WarehousesListNotifier(this._dio, this.tenantId, this.sellerId) : super();
 
   @override
   Future<PaginatedResponse<WarehouseDto>> fetchPage(PageParams params) async {
     final resp = await _dio.get(
       '/v1/warehouses',
       queryParameters: params.toQueryParams(),
+      options: tenantScopeOptions(tenantId, sellerId: sellerId),
     );
     return PaginatedResponse.fromJson(resp.data, WarehouseDto.fromJson);
   }
 }
 
-final warehousesListNotifierProvider = StateNotifierProvider.autoDispose<
-    WarehousesListNotifier, ListState<WarehouseDto>>(
-  (ref) => WarehousesListNotifier(ref.watch(dioProvider)),
+final selectedWarehousesTenantProvider =
+    StateProvider.autoDispose<String?>((ref) => null);
+final selectedWarehousesSellerProvider =
+    StateProvider.autoDispose<String?>((ref) => null);
+
+String _scopeKey(String? tenantId, String? sellerId) =>
+    '${tenantId?.trim() ?? ''}|${sellerId?.trim() ?? ''}';
+
+String? _tenantFromScopeKey(String key) {
+  final value = key.split('|').first.trim();
+  return value.isEmpty ? null : value;
+}
+
+String? _sellerFromScopeKey(String key) {
+  final parts = key.split('|');
+  if (parts.length < 2) return null;
+  final value = parts[1].trim();
+  return value.isEmpty ? null : value;
+}
+
+final warehousesListNotifierProvider = StateNotifierProvider.autoDispose
+    .family<WarehousesListNotifier, ListState<WarehouseDto>, String>(
+  (ref, key) => WarehousesListNotifier(
+    ref.watch(dioProvider),
+    _tenantFromScopeKey(key),
+    _sellerFromScopeKey(key),
+  ),
 );
 
 // ────────────────────────────── Screen ──────────────────────────────
@@ -81,14 +110,29 @@ class WarehousesListScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(warehousesListNotifierProvider);
-    final notifier = ref.read(warehousesListNotifierProvider.notifier);
+    final auth = ref.watch(authNotifierProvider);
+    final selectedTenant = ref.watch(selectedWarehousesTenantProvider);
+    final selectedSeller = ref.watch(selectedWarehousesSellerProvider);
+    final effectiveTenant = auth.isAdminGlobal ? selectedTenant : auth.tenantId;
+    final key = _scopeKey(effectiveTenant, selectedSeller);
+    final state = ref.watch(warehousesListNotifierProvider(key));
+    final notifier = ref.read(warehousesListNotifierProvider(key).notifier);
 
     return AppPageScaffold(
       title: 'Depósitos',
       searchHint: 'Buscar depósito…',
       onSearch: notifier.setSearch,
-      body: _buildBody(context, state, notifier),
+      body: Column(
+        children: [
+          TenantScopeFilter(
+              selectedTenantProvider: selectedWarehousesTenantProvider),
+          SellerScopeFilter(
+            selectedSellerProvider: selectedWarehousesSellerProvider,
+            tenantId: effectiveTenant,
+          ),
+          Expanded(child: _buildBody(context, state, notifier)),
+        ],
+      ),
     );
   }
 
@@ -145,11 +189,15 @@ class _WarehouseTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final subtitleParts = <String>[];
-    if ((warehouse.code ?? '').trim().isNotEmpty) subtitleParts.add(warehouse.code!.trim());
+    if ((warehouse.code ?? '').trim().isNotEmpty) {
+      subtitleParts.add(warehouse.code!.trim());
+    }
     if ((warehouse.warehouseTypeCode ?? '').trim().isNotEmpty) {
       subtitleParts.add(warehouse.warehouseTypeCode!.trim());
     }
-    if ((warehouse.address ?? '').trim().isNotEmpty) subtitleParts.add(warehouse.address!.trim());
+    if ((warehouse.address ?? '').trim().isNotEmpty) {
+      subtitleParts.add(warehouse.address!.trim());
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -218,7 +266,8 @@ class _WarehouseTile extends StatelessWidget {
               PopupMenuButton<String>(
                 onSelected: (v) {
                   if (v == 'movements') {
-                    context.push('/warehouse/${warehouse.warehouseId}/movements');
+                    context
+                        .push('/warehouse/${warehouse.warehouseId}/movements');
                   }
                 },
                 itemBuilder: (_) => const [

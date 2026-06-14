@@ -7,6 +7,8 @@ import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/status_badge.dart';
 import 'package:app_diceprojects_admin/core/utils/list_state.dart';
 import 'package:app_diceprojects_admin/core/utils/pagination.dart';
+import 'package:app_diceprojects_admin/features/auth/presentation/controllers/auth_notifier.dart';
+import 'package:app_diceprojects_admin/features/organization/presentation/widgets/tenant_scope_filter.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -47,14 +49,20 @@ class StorageConditionDto {
 
 class StorageConditionsNotifier extends ListNotifier<StorageConditionDto> {
   final Dio _dio;
+  final String? tenantId;
 
-  StorageConditionsNotifier(this._dio) : super();
+  StorageConditionsNotifier(this._dio, this.tenantId) : super();
 
   @override
-  Future<PaginatedResponse<StorageConditionDto>> fetchPage(PageParams params) async {
+  Future<PaginatedResponse<StorageConditionDto>> fetchPage(
+      PageParams params) async {
     final query = params.toQueryParams();
     query['size'] = 50;
     query['pageSize'] = 50;
+    final scopedTenant = tenantId?.trim();
+    if (scopedTenant != null && scopedTenant.isNotEmpty) {
+      query['companyId'] = scopedTenant;
+    }
 
     final resp = await _dio.get(
       '/v1/storage-conditions',
@@ -64,9 +72,13 @@ class StorageConditionsNotifier extends ListNotifier<StorageConditionDto> {
   }
 }
 
-final storageConditionsNotifierProvider = StateNotifierProvider.autoDispose<
-    StorageConditionsNotifier, ListState<StorageConditionDto>>(
-  (ref) => StorageConditionsNotifier(ref.watch(dioProvider)),
+final selectedStorageConditionsTenantProvider =
+    StateProvider.autoDispose<String?>((ref) => null);
+
+final storageConditionsNotifierProvider = StateNotifierProvider.autoDispose
+    .family<StorageConditionsNotifier, ListState<StorageConditionDto>, String?>(
+  (ref, tenantId) =>
+      StorageConditionsNotifier(ref.watch(dioProvider), tenantId),
 );
 
 // ────────────────────────────── Screen ──────────────────────────────
@@ -76,14 +88,25 @@ class StorageConditionsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(storageConditionsNotifierProvider);
-    final notifier = ref.read(storageConditionsNotifierProvider.notifier);
+    final auth = ref.watch(authNotifierProvider);
+    final selectedTenant = ref.watch(selectedStorageConditionsTenantProvider);
+    final effectiveTenant = auth.isAdminGlobal ? selectedTenant : auth.tenantId;
+    final state = ref.watch(storageConditionsNotifierProvider(effectiveTenant));
+    final notifier =
+        ref.read(storageConditionsNotifierProvider(effectiveTenant).notifier);
 
     return AppPageScaffold(
       title: 'Condiciones',
       searchHint: 'Buscar condición…',
       onSearch: notifier.setSearch,
-      body: _buildBody(state, notifier),
+      body: Column(
+        children: [
+          TenantScopeFilter(
+            selectedTenantProvider: selectedStorageConditionsTenantProvider,
+          ),
+          Expanded(child: _buildBody(state, notifier)),
+        ],
+      ),
     );
   }
 
@@ -131,7 +154,8 @@ class StorageConditionsScreen extends ConsumerWidget {
               color: Colors.transparent,
               borderRadius: BorderRadius.circular(16),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
                   children: [
                     Container(
@@ -168,7 +192,8 @@ class StorageConditionsScreen extends ConsumerWidget {
                               ),
                               if (c.isGlobal)
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
                                     color: AppColors.accentLight,
                                     borderRadius: BorderRadius.circular(999),

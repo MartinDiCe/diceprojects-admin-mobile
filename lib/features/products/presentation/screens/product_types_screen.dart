@@ -7,6 +7,8 @@ import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/status_badge.dart';
 import 'package:app_diceprojects_admin/core/utils/list_state.dart';
 import 'package:app_diceprojects_admin/core/utils/pagination.dart';
+import 'package:app_diceprojects_admin/features/auth/presentation/controllers/auth_notifier.dart';
+import 'package:app_diceprojects_admin/features/organization/presentation/widgets/tenant_scope_filter.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -46,8 +48,9 @@ class ProductTypeDto {
 
 class ProductTypesNotifier extends ListNotifier<ProductTypeDto> {
   final Dio _dio;
+  final String? tenantId;
 
-  ProductTypesNotifier(this._dio) : super();
+  ProductTypesNotifier(this._dio, this.tenantId) : super();
 
   @override
   Future<PaginatedResponse<ProductTypeDto>> fetchPage(PageParams params) async {
@@ -58,14 +61,18 @@ class ProductTypesNotifier extends ListNotifier<ProductTypeDto> {
     final resp = await _dio.get(
       '/v1/product-types',
       queryParameters: query,
+      options: tenantScopeOptions(tenantId),
     );
     return PaginatedResponse.fromJson(resp.data, ProductTypeDto.fromJson);
   }
 }
 
-final productTypesNotifierProvider = StateNotifierProvider.autoDispose<
-    ProductTypesNotifier, ListState<ProductTypeDto>>(
-  (ref) => ProductTypesNotifier(ref.watch(dioProvider)),
+final selectedProductTypesTenantProvider =
+    StateProvider.autoDispose<String?>((ref) => null);
+
+final productTypesNotifierProvider = StateNotifierProvider.autoDispose
+    .family<ProductTypesNotifier, ListState<ProductTypeDto>, String?>(
+  (ref, tenantId) => ProductTypesNotifier(ref.watch(dioProvider), tenantId),
 );
 
 // ────────────────────────────── Screen ──────────────────────────────
@@ -75,14 +82,25 @@ class ProductTypesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(productTypesNotifierProvider);
-    final notifier = ref.read(productTypesNotifierProvider.notifier);
+    final auth = ref.watch(authNotifierProvider);
+    final selectedTenant = ref.watch(selectedProductTypesTenantProvider);
+    final effectiveTenant = auth.isAdminGlobal ? selectedTenant : auth.tenantId;
+    final state = ref.watch(productTypesNotifierProvider(effectiveTenant));
+    final notifier =
+        ref.read(productTypesNotifierProvider(effectiveTenant).notifier);
 
     return AppPageScaffold(
       title: 'Tipos de Producto',
       searchHint: 'Buscar tipo…',
       onSearch: notifier.setSearch,
-      body: _buildBody(state, notifier),
+      body: Column(
+        children: [
+          TenantScopeFilter(
+            selectedTenantProvider: selectedProductTypesTenantProvider,
+          ),
+          Expanded(child: _buildBody(state, notifier)),
+        ],
+      ),
     );
   }
 
@@ -130,7 +148,8 @@ class ProductTypesScreen extends ConsumerWidget {
               color: Colors.transparent,
               borderRadius: BorderRadius.circular(16),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
                   children: [
                     Container(
@@ -167,7 +186,8 @@ class ProductTypesScreen extends ConsumerWidget {
                               ),
                               if (t.isGlobal)
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
                                     color: AppColors.accentLight,
                                     borderRadius: BorderRadius.circular(999),
