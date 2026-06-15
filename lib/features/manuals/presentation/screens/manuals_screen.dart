@@ -267,11 +267,18 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final highlightedBackground =
+        isDark ? AppColors.surface : AppColors.accentLight;
+    final highlightedTitle = isDark ? AppColors.ink : const Color(0xFF0F2F4A);
+    final highlightedText =
+        isDark ? AppColors.textSecondary : const Color(0xFF31546D);
+
     return Container(
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: highlighted ? AppColors.accentLight : AppColors.surface,
+        color: highlighted ? highlightedBackground : AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: highlighted
@@ -291,7 +298,7 @@ class _SectionCard extends StatelessWidget {
               Text(
                 title,
                 style: TextStyle(
-                  color: AppColors.ink,
+                  color: highlighted ? highlightedTitle : AppColors.ink,
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
                 ),
@@ -306,7 +313,8 @@ class _SectionCard extends StatelessWidget {
               child: Text(
                 '$prefix${entry.value}',
                 style: TextStyle(
-                  color: AppColors.textSecondary,
+                  color:
+                      highlighted ? highlightedText : AppColors.textSecondary,
                   height: 1.35,
                   fontSize: 13.5,
                 ),
@@ -441,16 +449,16 @@ const _manuals = [
   _ManualDefinition(
     id: 'ai-orchestrator',
     title: 'Manual AI Orchestrator',
-    subtitle: 'Proyectos IA, memoria segura y configuracion por tenant.',
+    subtitle: 'Proyectos IA, memoria segura y configuración por empresa.',
     icon: Icons.auto_awesome_rounded,
     purpose:
         'Define como el asistente usa manuales, permisos, herramientas, memoria y conocimiento curado sin mezclar empresas ni usuarios.',
     keyExample:
-        'Si un usuario pregunta como generar una propuesta de obra, el asistente combina manual de Obras, permisos, tenant activo y conocimiento curado; si aprende una regla de una empresa, esa memoria queda scoped a esa empresa, no global.',
+        'Si un usuario pregunta como generar una propuesta de obra, el asistente combina manual de Obras, permisos, empresa activa y conocimiento curado; si aprende una regla de una empresa, esa memoria queda asociada a esa empresa, no global.',
     quickStart: [
       'Mantené globales los proyectos base y reglas comunes.',
-      'Creá proyecto por tenant cuando haya memoria, tono, limites o integraciones propias.',
-      'Guardá memoria privada por tenantId, userId y conversationId.',
+      'Creá proyecto por empresa cuando haya memoria, tono, limites o integraciones propias.',
+      'Guardá memoria privada por empresa, usuario y conversación.',
       'Promové a global solo reglas validadas por un admin.',
       'Medí consumo de tokens por conversacion, usuario y empresa.',
     ],

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:app_diceprojects_admin/app/locale_provider.dart';
 import 'package:app_diceprojects_admin/app/theme_mode_provider.dart';
 import 'package:app_diceprojects_admin/core/config/app_config.dart';
 import 'package:app_diceprojects_admin/core/http/dio_client.dart';
@@ -190,7 +191,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (shouldEnable != true) return false;
 
       final authenticated = await localAuth.authenticate(
-        localizedReason: 'Confirmá tu huella para activar el ingreso biométrico',
+        localizedReason:
+            'Confirmá tu huella para activar el ingreso biométrico',
         options: const AuthenticationOptions(
           biometricOnly: true,
           stickyAuth: true,
@@ -262,7 +264,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo abrir la política de privacidad.')),
+        const SnackBar(
+            content: Text('No se pudo abrir la política de privacidad.')),
       );
     }
   }
@@ -377,29 +380,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             const SizedBox(height: 18),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: AppColors.surface,
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(color: AppColors.border),
-                                ),
-                                child: IconButton(
-                                  tooltip:
-                                      isDarkTheme ? 'Modo claro' : 'Modo oscuro',
-                                  onPressed: () => ref
-                                      .read(themeModeProvider.notifier)
-                                      .toggle(),
-                                  icon: Icon(
-                                    isDarkTheme
-                                        ? Icons.light_mode_rounded
-                                        : Icons.dark_mode_rounded,
-                                    color: AppColors.accent,
-                                    size: 20,
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                const _LanguageSelector(),
+                                const SizedBox(width: 8),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surface,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: AppColors.border),
+                                  ),
+                                  child: IconButton(
+                                    tooltip: isDarkTheme
+                                        ? 'Modo claro'
+                                        : 'Modo oscuro',
+                                    onPressed: () => ref
+                                        .read(themeModeProvider.notifier)
+                                        .toggle(),
+                                    icon: Icon(
+                                      isDarkTheme
+                                          ? Icons.light_mode_rounded
+                                          : Icons.dark_mode_rounded,
+                                      color: AppColors.accent,
+                                      size: 20,
+                                    ),
                                   ),
                                 ),
-                              ),
+                              ],
                             ),
                             const SizedBox(height: 34),
                             Center(
@@ -411,7 +419,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     decoration: BoxDecoration(
                                       color: logoBlendBg,
                                       borderRadius: BorderRadius.circular(22),
-                                      border: Border.all(color: logoBlendBorder),
+                                      border:
+                                          Border.all(color: logoBlendBorder),
                                       boxShadow: const [
                                         BoxShadow(
                                           color: Color(0x0D000000),
@@ -466,11 +475,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     hint: 'Usuario o correo',
                                     helper: 'Ej: usuario@dominio.com',
                                     prefixIcon: Icons.person_outline_rounded,
-                                    keyboardType:
-                                        TextInputType.emailAddress,
+                                    keyboardType: TextInputType.emailAddress,
                                     textInputAction: TextInputAction.next,
-                                    autofillHints:
-                                        const [AutofillHints.username],
+                                    autofillHints: const [
+                                      AutofillHints.username
+                                    ],
                                     onFieldSubmitted: (_) =>
                                         FocusScope.of(context)
                                             .requestFocus(_passwordFocus),
@@ -485,20 +494,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     controller: _passwordCtrl,
                                     hint: 'Contraseña',
                                     helper: 'Tu contraseña de acceso',
-                                    prefixIcon:
-                                        Icons.lock_outline_rounded,
+                                    prefixIcon: Icons.lock_outline_rounded,
                                     focusNode: _passwordFocus,
                                     obscureText: _obscure,
                                     textInputAction: TextInputAction.done,
-                                    autofillHints:
-                                        const [AutofillHints.password],
+                                    autofillHints: const [
+                                      AutofillHints.password
+                                    ],
                                     onFieldSubmitted: (_) => _submit(),
-                                    toggleObscure: () => setState(
-                                        () => _obscure = !_obscure),
-                                    validator: (v) =>
-                                        (v == null || v.isEmpty)
-                                            ? 'Ingresá tu contraseña'
-                                            : null,
+                                    toggleObscure: () =>
+                                        setState(() => _obscure = !_obscure),
+                                    validator: (v) => (v == null || v.isEmpty)
+                                        ? 'Ingresá tu contraseña'
+                                        : null,
                                   ),
                                   if (auth.error != null) ...[
                                     const SizedBox(height: 12),
@@ -509,7 +517,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     isLoading: auth.isLoading,
                                     onPressed: _submit,
                                   ),
-
                                   const SizedBox(height: 10),
                                   _RememberRow(
                                     value: _rememberLogin,
@@ -525,8 +532,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                           icon: Icons.mail_outline_rounded,
                                           customIcon: const _GmailIcon(),
                                           label: 'Gmail',
-                                          onPressed:
-                                              auth.isLoading ? null : _loginWithGoogle,
+                                          onPressed: auth.isLoading
+                                              ? null
+                                              : _loginWithGoogle,
                                         ),
                                       ),
                                       const SizedBox(width: 10),
@@ -581,7 +589,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     ),
                                   ),
                                   if (AppConfig.reviewerUsername.isNotEmpty &&
-                                      AppConfig.reviewerPassword.isNotEmpty) ...[
+                                      AppConfig
+                                          .reviewerPassword.isNotEmpty) ...[
                                     const SizedBox(height: 4),
                                     _ReviewerAccessButton(
                                       onPressed: () {
@@ -656,6 +665,49 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 }
 
 // ── Login options ────────────────────────────────────────────────────────────
+
+class _LanguageSelector extends ConsumerWidget {
+  const _LanguageSelector();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final locale = ref.watch(appLocaleProvider);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: locale.languageCode,
+          icon: Icon(
+            Icons.expand_more_rounded,
+            color: AppColors.textSecondary,
+            size: 18,
+          ),
+          borderRadius: BorderRadius.circular(14),
+          style: TextStyle(
+            color: AppColors.ink,
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.6,
+          ),
+          items: const [
+            DropdownMenuItem(value: 'es', child: Text('ES')),
+            DropdownMenuItem(value: 'en', child: Text('EN')),
+            DropdownMenuItem(value: 'pt', child: Text('PT')),
+          ],
+          onChanged: (value) {
+            if (value == null) return;
+            ref.read(appLocaleProvider.notifier).setLocale(Locale(value));
+          },
+        ),
+      ),
+    );
+  }
+}
 
 class _RememberRow extends StatelessWidget {
   final bool value;
@@ -796,7 +848,8 @@ class _GmailIconPainter extends CustomPainter {
     canvas.drawLine(Offset(w - 1.5, 3), Offset(w - 1.5, h - 1.5), stroke);
 
     stroke.color = const Color(0xFF34A853);
-    canvas.drawLine(Offset(w - 1.5, h - 1.5), Offset(w * 0.67, h - 1.5), stroke);
+    canvas.drawLine(
+        Offset(w - 1.5, h - 1.5), Offset(w * 0.67, h - 1.5), stroke);
   }
 
   @override
@@ -948,7 +1001,7 @@ class _LabelledField extends StatelessWidget {
         hintText: hint,
         prefixIcon: prefixIcon == null
             ? null
-          : Icon(prefixIcon, color: AppColors.accent, size: 20),
+            : Icon(prefixIcon, color: AppColors.accent, size: 20),
         hintStyle: TextStyle(
           color: AppColors.textMuted,
           fontSize: 15,
@@ -990,8 +1043,7 @@ class _LabelledField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide:
-              BorderSide(color: AppColors.borderFocus, width: 1.6),
+          borderSide: BorderSide(color: AppColors.borderFocus, width: 1.6),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -1098,5 +1150,3 @@ class _LoginButton extends StatelessWidget {
     );
   }
 }
-
-

@@ -932,6 +932,15 @@ final marketingDashboardDetailsProvider = FutureProvider.autoDispose
     extra: scoped({'active': true}),
     headers: requestHeaders,
   );
+  final campaignsAnyStatus = campaigns.total > 0
+      ? campaigns
+      : await _getPage(
+          dio,
+          '/v1/campaigns',
+          size: 1,
+          extra: scope,
+          headers: requestHeaders,
+        );
   final coupons = await _getPage(
     dio,
     '/v1/coupons',
@@ -974,7 +983,8 @@ final marketingDashboardDetailsProvider = FutureProvider.autoDispose
   return MarketingDashboardDetails(
     campaigns: _firstPositive([
       _intAny(summary, ['campaigns', 'totalCampaigns', 'activeCampaigns']),
-      campaigns.total
+      campaigns.total,
+      campaignsAnyStatus.total,
     ]),
     coupons: _firstPositive([
       _intAny(summary, ['coupons', 'totalCoupons', 'activeCoupons']),
@@ -1549,9 +1559,7 @@ class DashboardScreen extends ConsumerWidget {
     final perms = ref.watch(permissionsProvider);
     final tenantId = ref.watch(dashboardTenantFilterProvider);
     final waitForTenant = _dashboardRequiresTenantSelection(auth, tenantId);
-    final data = waitForTenant
-        ? null
-        : ref.watch(dashboardDataProvider);
+    final data = waitForTenant ? null : ref.watch(dashboardDataProvider);
     final username = (auth.username?.trim().isNotEmpty ?? false)
         ? auth.username!.trim()
         : 'Usuario';
@@ -1567,15 +1575,11 @@ class DashboardScreen extends ConsumerWidget {
           ref.read(dashboardPeriodProvider(DashboardScope.warehouse))));
       ref.invalidate(purchasesDashboardDetailsProvider(
           ref.read(dashboardPeriodProvider(DashboardScope.purchases))));
-      ref.invalidate(projectsDashboardDetailsProvider(
-          _projectsDashboardQuery(
-              ref.read(dashboardPeriodProvider(DashboardScope.projects)),
-              'WORK')));
-      ref.invalidate(projectsDashboardDetailsProvider(
-          _projectsDashboardQuery(
-              ref.read(
-                  dashboardPeriodProvider(DashboardScope.integralProjects)),
-              'INTEGRAL')));
+      ref.invalidate(projectsDashboardDetailsProvider(_projectsDashboardQuery(
+          ref.read(dashboardPeriodProvider(DashboardScope.projects)), 'WORK')));
+      ref.invalidate(projectsDashboardDetailsProvider(_projectsDashboardQuery(
+          ref.read(dashboardPeriodProvider(DashboardScope.integralProjects)),
+          'INTEGRAL')));
     }
 
     return AppPageScaffold(
@@ -1595,48 +1599,48 @@ class DashboardScreen extends ConsumerWidget {
                 username: username,
               )
             : data!.when(
-          data: (value) => _DashboardContent(
-            data: value,
-            username: username,
-            permissions: perms,
-            scope: scope,
-          ),
-          loading: () => const _DashboardLoading(),
-          error: (_, __) => _DashboardContent(
-            data: const DashboardData(
-              products: 0,
-              activeProducts: 0,
-              draftProducts: 0,
-              featuredProducts: 0,
-              quotes: 0,
-              quoteDrafts: 0,
-              quoteSent: 0,
-              quoteWon: 0,
-              quoteAmount: 0,
-              leads: 0,
-              featured: 0,
-              campaigns: 0,
-              coupons: 0,
-              sellers: 0,
-              people: 0,
-              users: 0,
-              warehouses: 0,
-              stockRows: 0,
-              apiRequests: 0,
-              api2xx: 0,
-              apiErrors: 0,
-              apiP95Ms: 0,
-              apiAvgMs: 0,
-              services: [],
-              traces: [],
-              recentQuotes: [],
-              productsById: {},
-            ),
-            username: username,
-            permissions: perms,
-            scope: scope,
-          ),
-        ),
+                data: (value) => _DashboardContent(
+                  data: value,
+                  username: username,
+                  permissions: perms,
+                  scope: scope,
+                ),
+                loading: () => const _DashboardLoading(),
+                error: (_, __) => _DashboardContent(
+                  data: const DashboardData(
+                    products: 0,
+                    activeProducts: 0,
+                    draftProducts: 0,
+                    featuredProducts: 0,
+                    quotes: 0,
+                    quoteDrafts: 0,
+                    quoteSent: 0,
+                    quoteWon: 0,
+                    quoteAmount: 0,
+                    leads: 0,
+                    featured: 0,
+                    campaigns: 0,
+                    coupons: 0,
+                    sellers: 0,
+                    people: 0,
+                    users: 0,
+                    warehouses: 0,
+                    stockRows: 0,
+                    apiRequests: 0,
+                    api2xx: 0,
+                    apiErrors: 0,
+                    apiP95Ms: 0,
+                    apiAvgMs: 0,
+                    services: [],
+                    traces: [],
+                    recentQuotes: [],
+                    productsById: {},
+                  ),
+                  username: username,
+                  permissions: perms,
+                  scope: scope,
+                ),
+              ),
       ),
     );
   }
@@ -2537,8 +2541,9 @@ class _ProjectsDashboardContent extends ConsumerWidget {
               icon: isIntegral
                   ? Icons.account_tree_rounded
                   : Icons.engineering_rounded,
-              color:
-                  isIntegral ? const Color(0xFF0F766E) : const Color(0xFF7C3AED),
+              color: isIntegral
+                  ? const Color(0xFF0F766E)
+                  : const Color(0xFF7C3AED),
               title: isIntegral ? 'Servicios integrales' : 'Obras',
               subtitle: isIntegral
                   ? 'Proyectos de servicios, recursos, avances y costos reales.'

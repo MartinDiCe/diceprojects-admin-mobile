@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:app_diceprojects_admin/app/locale_provider.dart';
 import 'package:app_diceprojects_admin/app/router.dart';
 import 'package:app_diceprojects_admin/app/theme.dart';
 import 'package:app_diceprojects_admin/app/theme_mode_provider.dart';
@@ -9,6 +10,7 @@ import 'package:app_diceprojects_admin/features/notifications/data/notification_
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 class AppRoot extends ConsumerStatefulWidget {
   const AppRoot({super.key});
@@ -40,8 +42,10 @@ class _AppRootState extends ConsumerState<AppRoot> {
   Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final locale = ref.watch(appLocaleProvider);
 
-    final platformBrightness = View.of(context).platformDispatcher.platformBrightness;
+    final platformBrightness =
+        View.of(context).platformDispatcher.platformBrightness;
     final isDark = switch (themeMode) {
       ThemeMode.dark => true,
       ThemeMode.light => false,
@@ -57,6 +61,13 @@ class _AppRootState extends ConsumerState<AppRoot> {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
+      locale: locale,
+      supportedLocales: appSupportedLocales,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       routerConfig: router,
     );
   }
