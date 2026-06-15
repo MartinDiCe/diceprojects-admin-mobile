@@ -531,8 +531,7 @@ class _ForbiddenScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     void goHome() {
-      final target = ref.read(permissionsProvider).firstAllowedRoute();
-      context.go(target);
+      context.go('/manual');
     }
 
     Future<void> logout() async {
