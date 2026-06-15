@@ -5,7 +5,7 @@ class AppConfig {
   );
   static const String privacyPolicyUrl = String.fromEnvironment(
     'PRIVACY_POLICY_URL',
-    defaultValue: 'https://diceprojects.com/privacy',
+    defaultValue: 'https://diceprojects.com/privacidad',
   );
   static const String reviewerUsername = String.fromEnvironment(
     'REVIEWER_USERNAME',

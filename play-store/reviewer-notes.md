@@ -38,7 +38,7 @@ Publicar `play-store/privacy-policy.html` en una URL publica y compilar indicand
 
 ```powershell
 flutter build appbundle --release `
-  --dart-define=PRIVACY_POLICY_URL="https://diceprojects.com/privacy"
+  --dart-define=PRIVACY_POLICY_URL="https://diceprojects.com/privacidad"
 ```
 
 ## Permisos declarados
@@ -56,4 +56,3 @@ No commitear:
 - `android/app/upload-keystore.jks`
 - `android/key.properties`
 - credenciales server de Firebase/Google Cloud
-
