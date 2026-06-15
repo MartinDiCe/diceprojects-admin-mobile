@@ -73,15 +73,29 @@ class ApiTraceDto {
 
 class ApiTracesNotifier extends ListNotifier<ApiTraceDto> {
   final Dio _dio;
+  int? _httpResponseCode;
+
   ApiTracesNotifier(this._dio) : super();
 
   @override
   Future<PaginatedResponse<ApiTraceDto>> fetchPage(PageParams params) async {
+    final query = params.toQueryParams();
+    if (_httpResponseCode != null) {
+      query['httpResponseCode'] = _httpResponseCode;
+    }
     final resp = await _dio.get(
       '/v1/apitraces',
-      queryParameters: params.toQueryParams(),
+      queryParameters: query,
     );
     return PaginatedResponse.fromJson(resp.data, ApiTraceDto.fromJson);
+  }
+
+  int? get httpResponseCode => _httpResponseCode;
+
+  void setHttpResponseCode(int? code) {
+    if (_httpResponseCode == code) return;
+    _httpResponseCode = code;
+    loadPage(0);
   }
 }
 
@@ -102,7 +116,45 @@ class ApiTracesScreen extends ConsumerWidget {
       title: 'API Traces',
       searchHint: 'Buscar por path, usuario…',
       onSearch: notifier.setSearch,
-      body: _buildBody(state, notifier),
+      body: Column(
+        children: [
+          _buildStatusFilter(notifier),
+          Expanded(child: _buildBody(state, notifier)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusFilter(ApiTracesNotifier notifier) {
+    const statuses = <int?>[null, 200, 400, 500];
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      color: AppColors.background,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: statuses.map((status) {
+          final selected = notifier.httpResponseCode == status;
+          return FilterChip(
+            label: Text(status == null ? 'Todos' : '$status'),
+            selected: selected,
+            onSelected: (_) => notifier.setHttpResponseCode(status),
+            selectedColor: AppColors.accent.withValues(alpha: 0.14),
+            checkmarkColor: AppColors.accent,
+            labelStyle: TextStyle(
+              color: selected ? AppColors.accent : AppColors.textSecondary,
+              fontWeight: FontWeight.w700,
+            ),
+            side: BorderSide(
+              color: selected ? AppColors.accent : AppColors.border,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 
