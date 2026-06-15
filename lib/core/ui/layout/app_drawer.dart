@@ -189,11 +189,8 @@ class AppDrawer extends ConsumerWidget {
                   _navItem(context, '/dashboard/projects',
                       Icons.engineering_rounded, 'Dashboard Obras'),
                 if (perms.canAccessRoute('/dashboard/integral-projects'))
-                  _navItem(
-                      context,
-                      '/dashboard/integral-projects',
-                      Icons.account_tree_rounded,
-                      'Dashboard Servicios'),
+                  _navItem(context, '/dashboard/integral-projects',
+                      Icons.account_tree_rounded, 'Dashboard Servicios'),
 
                 // ── Seguridad ───────────────────────────────────
                 if (canSecurity) ...[
@@ -325,6 +322,13 @@ class AppDrawer extends ConsumerWidget {
                     _navItem(context, '/marketing/destacados',
                         Icons.star_rounded, 'Destacados'),
                 ],
+
+                // ── Ayuda ───────────────────────────────────────
+                const _SectionHeader(label: 'Ayuda'),
+                _navItem(context, '/manual', Icons.menu_book_rounded,
+                    'Manuales de uso',
+                    primary: true),
+                _navItem(context, '/chat', Icons.forum_rounded, 'Chat IA'),
               ],
             ),
           ),

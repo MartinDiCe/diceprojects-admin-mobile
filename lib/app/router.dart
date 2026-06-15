@@ -16,6 +16,7 @@ import 'package:app_diceprojects_admin/features/marketing_campaigns/presentation
 import 'package:app_diceprojects_admin/features/marketing_coupons/presentation/screens/coupons_screen.dart';
 import 'package:app_diceprojects_admin/features/marketing_destacados/presentation/screens/destacados_screen.dart';
 import 'package:app_diceprojects_admin/features/marketing_leads/presentation/screens/leads_list_screen.dart';
+import 'package:app_diceprojects_admin/features/manuals/presentation/screens/manuals_screen.dart';
 import 'package:app_diceprojects_admin/features/notifications/presentation/screens/notif_logs_screen.dart';
 import 'package:app_diceprojects_admin/features/notifications/presentation/screens/notification_center_screen.dart';
 import 'package:app_diceprojects_admin/features/notifications/presentation/screens/notif_templates_screen.dart';
@@ -175,8 +176,21 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/dashboard/integral-projects',
-            builder: (_, __) => const DashboardScreen(
-                scope: DashboardScope.integralProjects),
+            builder: (_, __) =>
+                const DashboardScreen(scope: DashboardScope.integralProjects),
+          ),
+          GoRoute(
+            path: '/manual',
+            builder: (_, __) => const ManualsScreen(),
+          ),
+          GoRoute(
+            path: '/manual/:moduleId',
+            builder: (_, state) =>
+                ManualsScreen(moduleId: state.pathParameters['moduleId']),
+          ),
+          GoRoute(
+            path: '/chat',
+            builder: (_, __) => const ChatComingSoonScreen(),
           ),
           // IAM
           GoRoute(
@@ -511,21 +525,58 @@ final routerProvider = Provider<GoRouter>((ref) {
 
 // ─── Generic screens ─────────────────────────────────────────────────────────
 
-class _ForbiddenScreen extends StatelessWidget {
+class _ForbiddenScreen extends ConsumerWidget {
   const _ForbiddenScreen();
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Acceso denegado')),
-      body: const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.block_rounded, size: 72, color: Colors.red),
-            SizedBox(height: 16),
-            Text('No tenés permisos para acceder a esta sección.'),
-          ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    void goHome() => context.go('/dashboard');
+
+    Future<void> logout() async {
+      await ref.read(authNotifierProvider.notifier).logout();
+      if (context.mounted) context.go('/login');
+    }
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) goHome();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Acceso denegado'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: goHome,
+          ),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.block_rounded, size: 72, color: Colors.red),
+                const SizedBox(height: 16),
+                const Text(
+                  'No tenés permisos para acceder a esta sección.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: goHome,
+                  icon: const Icon(Icons.dashboard_rounded),
+                  label: const Text('Ir al inicio'),
+                ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: logout,
+                  icon: const Icon(Icons.logout_rounded),
+                  label: const Text('Cerrar sesión'),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
