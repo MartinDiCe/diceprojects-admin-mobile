@@ -31,6 +31,36 @@ class PermissionsService {
     return false;
   }
 
+  String firstAllowedRoute() {
+    const preferredRoutes = [
+      '/dashboard',
+      '/dashboard/products',
+      '/dashboard/sales',
+      '/dashboard/warehouse',
+      '/dashboard/purchases',
+      '/dashboard/projects',
+      '/dashboard/integral-projects',
+      '/products',
+      '/sales/quotes',
+      '/purchases/requests',
+      '/projects',
+      '/integral-projects',
+      '/warehouse',
+      '/people',
+      '/organization/customers',
+      '/organization/suppliers',
+      '/organization/sellers',
+      '/marketing/campaigns',
+      '/notifications/center',
+      '/manual',
+      '/chat',
+    ];
+    for (final route in preferredRoutes) {
+      if (canAccessRoute(route)) return route;
+    }
+    return '/manual';
+  }
+
   bool _isAlwaysAllowedRoute(String route) =>
       route == '/403' ||
       route == '/chat' ||

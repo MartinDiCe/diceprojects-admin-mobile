@@ -327,11 +327,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> logout() async {
     await _storage.delete(AppConfig.tokenKey);
     await _storage.delete(AppConfig.refreshTokenKey);
+    await _storage.delete(AppConfig.refreshDeviceIdKey);
     state = const AuthState(isInitialized: true);
   }
 
   Future<void> expireSession() async {
     await _storage.delete(AppConfig.tokenKey);
+    await _storage.delete(AppConfig.refreshTokenKey);
     state = const AuthState(
       isInitialized: true,
       error: 'Sesión expirada. Iniciá sesión nuevamente.',

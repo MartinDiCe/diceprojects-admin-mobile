@@ -1,4 +1,5 @@
 import 'package:app_diceprojects_admin/features/auth/presentation/controllers/auth_notifier.dart';
+import 'package:app_diceprojects_admin/features/permissions/permissions_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -21,7 +22,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     ref.listenManual<AuthState>(authNotifierProvider, (prev, next) {
       if (!next.isInitialized) return;
       if (next.isAuthenticated) {
-        context.go('/dashboard');
+        context.go(ref.read(permissionsProvider).firstAllowedRoute());
       } else {
         context.go('/login');
       }

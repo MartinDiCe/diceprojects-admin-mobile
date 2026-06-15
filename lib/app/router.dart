@@ -114,7 +114,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       if (loc == '/splash' || loc == '/login') {
-        return '/dashboard';
+        return ref.read(permissionsProvider).firstAllowedRoute();
       }
 
       if (loc != '/403') {
@@ -530,11 +530,19 @@ class _ForbiddenScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    void goHome() => context.go('/dashboard');
+    void goHome() {
+      final target = ref.read(permissionsProvider).firstAllowedRoute();
+      context.go(target);
+    }
 
     Future<void> logout() async {
       await ref.read(authNotifierProvider.notifier).logout();
-      if (context.mounted) context.go('/login');
+      if (context.mounted) {
+        while (context.canPop()) {
+          context.pop();
+        }
+        context.go('/login');
+      }
     }
 
     return PopScope(
