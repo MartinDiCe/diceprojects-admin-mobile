@@ -173,6 +173,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (_, __) =>
                 const DashboardScreen(scope: DashboardScope.projects),
           ),
+          GoRoute(
+            path: '/dashboard/integral-projects',
+            builder: (_, __) => const DashboardScreen(
+                scope: DashboardScope.integralProjects),
+          ),
           // IAM
           GoRoute(
             path: '/iam/users',
@@ -367,24 +372,56 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/projects',
             builder: (_, __) => const ProjectManagementScreen(
               initialSection: ProjectManagementSection.projects,
+              projectFamily: 'WORK',
             ),
           ),
           GoRoute(
             path: '/projects/types',
             builder: (_, __) => const ProjectManagementScreen(
               initialSection: ProjectManagementSection.types,
+              projectFamily: 'WORK',
             ),
           ),
           GoRoute(
             path: '/projects/resources',
             builder: (_, __) => const ProjectManagementScreen(
               initialSection: ProjectManagementSection.resources,
+              projectFamily: 'WORK',
             ),
           ),
           GoRoute(
             path: '/projects/templates',
             builder: (_, __) => const ProjectManagementScreen(
               initialSection: ProjectManagementSection.templates,
+              projectFamily: 'WORK',
+            ),
+          ),
+          GoRoute(
+            path: '/integral-projects',
+            builder: (_, __) => const ProjectManagementScreen(
+              initialSection: ProjectManagementSection.projects,
+              projectFamily: 'INTEGRAL',
+            ),
+          ),
+          GoRoute(
+            path: '/integral-projects/types',
+            builder: (_, __) => const ProjectManagementScreen(
+              initialSection: ProjectManagementSection.types,
+              projectFamily: 'INTEGRAL',
+            ),
+          ),
+          GoRoute(
+            path: '/integral-projects/resources',
+            builder: (_, __) => const ProjectManagementScreen(
+              initialSection: ProjectManagementSection.resources,
+              projectFamily: 'INTEGRAL',
+            ),
+          ),
+          GoRoute(
+            path: '/integral-projects/templates',
+            builder: (_, __) => const ProjectManagementScreen(
+              initialSection: ProjectManagementSection.templates,
+              projectFamily: 'INTEGRAL',
             ),
           ),
           // Notifications

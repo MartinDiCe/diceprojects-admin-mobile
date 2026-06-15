@@ -19,7 +19,8 @@ enum DashboardScope {
   marketing,
   warehouse,
   purchases,
-  projects
+  projects,
+  integralProjects
 }
 
 enum DashboardPeriod { today, threeDays, sevenDays, all }
@@ -31,12 +32,16 @@ final dashboardPeriodProvider =
 
 final dashboardTenantFilterProvider = StateProvider.autoDispose<String?>((ref) {
   final auth = ref.watch(authNotifierProvider);
+  if (auth.isAdminGlobal) return null;
   final tenantId = auth.tenantId?.trim();
   return tenantId == null || tenantId.isEmpty ? null : tenantId;
 });
 
 final dashboardSellerFilterProvider = StateProvider.autoDispose<String?>((ref) {
   final auth = ref.watch(authNotifierProvider);
+  if (auth.isAdminGlobal || auth.tenantId?.trim().isNotEmpty != true) {
+    return null;
+  }
   final sellerId = auth.sellerId?.trim();
   if (sellerId != null && sellerId.isNotEmpty) return sellerId;
   return auth.sellerIds.length == 1 ? auth.sellerIds.first : null;
@@ -793,8 +798,15 @@ final purchasesDashboardDetailsProvider = FutureProvider.autoDispose
 });
 
 final projectsDashboardDetailsProvider = FutureProvider.autoDispose
-    .family<ProjectsDashboardDetails, DashboardPeriod>((ref, period) async {
+    .family<ProjectsDashboardDetails, String>((ref, query) async {
   _cacheDashboardProvider(ref);
+  final parts = query.split('|');
+  final periodIndex = int.tryParse(parts.first) ?? DashboardPeriod.today.index;
+  final safePeriodIndex =
+      math.max(0, math.min(periodIndex, DashboardPeriod.values.length - 1));
+  final period = DashboardPeriod.values[safePeriodIndex];
+  final projectFamily =
+      parts.length > 1 && parts[1].trim().isNotEmpty ? parts[1].trim() : 'WORK';
   final dio = ref.watch(dioProvider);
   final auth = ref.watch(authNotifierProvider);
   final scope = _dashboardScope(
@@ -807,13 +819,15 @@ final projectsDashboardDetailsProvider = FutureProvider.autoDispose
   final raw = await _getMap(
     dio,
     '/v1/project-management/dashboard',
-    extra: {...scope, 'period': _periodCode(period)},
+    extra: {...scope, 'period': _periodCode(period), 'family': projectFamily},
     headers: headers,
   );
   final summary = Map<String, dynamic>.from(raw['summary'] as Map? ?? raw);
   if (summary.isEmpty) {
     final projects = await _getPage(dio, '/v1/project-management/projects',
-        size: 500, extra: scope, headers: headers);
+        size: 500,
+        extra: {...scope, 'family': projectFamily},
+        headers: headers);
     return ProjectsDashboardDetails(
       totalProjects: projects.total,
       activeProjects: projects.items
@@ -1465,6 +1479,62 @@ DateTime? _dateAny(Map<String, dynamic> item, List<String> keys) {
   return null;
 }
 
+String _projectsDashboardQuery(DashboardPeriod period, String family) =>
+    '${period.index}|$family';
+
+bool _dashboardRequiresTenantSelection(AuthState auth, String? tenantId) {
+  if (!auth.isAdminGlobal && auth.tenantId?.trim().isNotEmpty == true) {
+    return false;
+  }
+  return tenantId?.trim().isNotEmpty != true;
+}
+
+class _TenantSelectionDashboard extends StatelessWidget {
+  final DashboardScope scope;
+  final String username;
+
+  const _TenantSelectionDashboard({
+    required this.scope,
+    required this.username,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+      children: [
+        if (scope == DashboardScope.general) ...[
+          _HeroHeader(username: username),
+          const SizedBox(height: 14),
+        ],
+        const _DashboardScopeSelector(),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: _cardDecoration(),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.info_outline_rounded, color: AppColors.accent),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Seleccioná una empresa para cargar este dashboard. No precargamos datos en usuarios globales o multitenant para evitar mezclar contextos.',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class DashboardScreen extends ConsumerWidget {
   final DashboardScope scope;
 
@@ -1477,7 +1547,11 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authNotifierProvider);
     final perms = ref.watch(permissionsProvider);
-    final data = ref.watch(dashboardDataProvider);
+    final tenantId = ref.watch(dashboardTenantFilterProvider);
+    final waitForTenant = _dashboardRequiresTenantSelection(auth, tenantId);
+    final data = waitForTenant
+        ? null
+        : ref.watch(dashboardDataProvider);
     final username = (auth.username?.trim().isNotEmpty ?? false)
         ? auth.username!.trim()
         : 'Usuario';
@@ -1494,7 +1568,14 @@ class DashboardScreen extends ConsumerWidget {
       ref.invalidate(purchasesDashboardDetailsProvider(
           ref.read(dashboardPeriodProvider(DashboardScope.purchases))));
       ref.invalidate(projectsDashboardDetailsProvider(
-          ref.read(dashboardPeriodProvider(DashboardScope.projects))));
+          _projectsDashboardQuery(
+              ref.read(dashboardPeriodProvider(DashboardScope.projects)),
+              'WORK')));
+      ref.invalidate(projectsDashboardDetailsProvider(
+          _projectsDashboardQuery(
+              ref.read(
+                  dashboardPeriodProvider(DashboardScope.integralProjects)),
+              'INTEGRAL')));
     }
 
     return AppPageScaffold(
@@ -1508,7 +1589,12 @@ class DashboardScreen extends ConsumerWidget {
       ],
       body: RefreshIndicator(
         onRefresh: () async => refreshDashboard(),
-        child: data.when(
+        child: waitForTenant
+            ? _TenantSelectionDashboard(
+                scope: scope,
+                username: username,
+              )
+            : data!.when(
           data: (value) => _DashboardContent(
             data: value,
             username: username,
@@ -1601,7 +1687,18 @@ class _DashboardContent extends ConsumerWidget {
     }
     if (scope == DashboardScope.projects) {
       return const _ModuleDashboardShell(
-        child: _ProjectsDashboardContent(),
+        child: _ProjectsDashboardContent(
+          scope: DashboardScope.projects,
+          projectFamily: 'WORK',
+        ),
+      );
+    }
+    if (scope == DashboardScope.integralProjects) {
+      return const _ModuleDashboardShell(
+        child: _ProjectsDashboardContent(
+          scope: DashboardScope.integralProjects,
+          projectFamily: 'INTEGRAL',
+        ),
       );
     }
     final period = ref.watch(dashboardPeriodProvider(DashboardScope.general));
@@ -1756,7 +1853,9 @@ String _dashboardTitle(DashboardScope scope) {
     case DashboardScope.purchases:
       return 'Dashboard Compras';
     case DashboardScope.projects:
-      return 'Dashboard Proyectos';
+      return 'Dashboard Obras';
+    case DashboardScope.integralProjects:
+      return 'Dashboard Servicios';
     case DashboardScope.general:
       return 'Dashboard';
   }
@@ -2417,21 +2516,33 @@ class _PurchasesDashboardContent extends ConsumerWidget {
 }
 
 class _ProjectsDashboardContent extends ConsumerWidget {
-  const _ProjectsDashboardContent();
+  final DashboardScope scope;
+  final String projectFamily;
+
+  const _ProjectsDashboardContent({
+    required this.scope,
+    required this.projectFamily,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final period = ref.watch(dashboardPeriodProvider(DashboardScope.projects));
-    final details = ref.watch(projectsDashboardDetailsProvider(period));
+    final period = ref.watch(dashboardPeriodProvider(scope));
+    final details = ref.watch(projectsDashboardDetailsProvider(
+        _projectsDashboardQuery(period, projectFamily)));
+    final isIntegral = projectFamily == 'INTEGRAL';
     Widget buildContent(ProjectsDashboardDetails metrics) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _DashboardIntro(
-              icon: Icons.engineering_rounded,
-              color: const Color(0xFF7C3AED),
-              title: 'Proyectos',
-              subtitle:
-                  'Obras, presupuestos, materiales, avances y costos reales.',
+              icon: isIntegral
+                  ? Icons.account_tree_rounded
+                  : Icons.engineering_rounded,
+              color:
+                  isIntegral ? const Color(0xFF0F766E) : const Color(0xFF7C3AED),
+              title: isIntegral ? 'Servicios integrales' : 'Obras',
+              subtitle: isIntegral
+                  ? 'Proyectos de servicios, recursos, avances y costos reales.'
+                  : 'Obras, presupuestos, materiales, avances y costos reales.',
             ),
             const SizedBox(height: 12),
             const _DashboardScopeSelector(),
@@ -2439,14 +2550,19 @@ class _ProjectsDashboardContent extends ConsumerWidget {
             _PeriodSelector(
               value: period,
               onChanged: (value) => ref
-                  .read(
-                      dashboardPeriodProvider(DashboardScope.projects).notifier)
+                  .read(dashboardPeriodProvider(scope).notifier)
                   .state = value,
             ),
             const SizedBox(height: 14),
             _KpiGrid(cards: [
-              _KpiData('Obras', _n(metrics.totalProjects), _periodLabel(period),
-                  Icons.account_tree_rounded, const Color(0xFF7C3AED)),
+              _KpiData(
+                  isIntegral ? 'Servicios' : 'Obras',
+                  _n(metrics.totalProjects),
+                  _periodLabel(period),
+                  Icons.account_tree_rounded,
+                  isIntegral
+                      ? const Color(0xFF0F766E)
+                      : const Color(0xFF7C3AED)),
               _KpiData(
                   'En curso',
                   _n(metrics.inProgressProjects),
@@ -2627,15 +2743,12 @@ class _DashboardScopeSelector extends ConsumerWidget {
               if (items.isEmpty) return const SizedBox.shrink();
               final current =
                   items.any((item) => item.id == tenantId) ? tenantId : null;
-              if (current == null && items.length == 1) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  ref.read(marketingTenantFilterProvider.notifier).state =
-                      items.first.id;
-                });
-              }
               return DropdownButtonFormField<String>(
                 value: current,
-                decoration: const InputDecoration(labelText: 'Empresa'),
+                decoration: const InputDecoration(
+                  labelText: 'Empresa',
+                  helperText: 'Seleccioná una empresa para cargar datos.',
+                ),
                 items: items
                     .map(
                       (item) => DropdownMenuItem(

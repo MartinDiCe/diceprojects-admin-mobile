@@ -15,25 +15,35 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final _projectSearchProvider = StateProvider.autoDispose<String>((_) => '');
 
-final _projectTypesProvider = FutureProvider.autoDispose<List<_ProjectTypeDto>>((ref) async {
-  final response = await ref.watch(dioProvider).get('/v1/project-management/types');
+final _projectTypesProvider =
+    FutureProvider.autoDispose.family<List<_ProjectTypeDto>, String>((ref, family) async {
+  final response = await ref
+      .watch(dioProvider)
+      .get('/v1/project-management/types', queryParameters: {'family': family});
   return _list(response.data).map(_ProjectTypeDto.fromJson).toList();
 });
 
-final _projectResourcesProvider = FutureProvider.autoDispose<List<_ProjectResourceDto>>((ref) async {
-  final response = await ref.watch(dioProvider).get('/v1/project-management/resources');
+final _projectResourcesProvider =
+    FutureProvider.autoDispose.family<List<_ProjectResourceDto>, String>((ref, family) async {
+  final response = await ref
+      .watch(dioProvider)
+      .get('/v1/project-management/resources', queryParameters: {'family': family});
   return _list(response.data).map(_ProjectResourceDto.fromJson).toList();
 });
 
-final _projectTemplatesProvider = FutureProvider.autoDispose<List<_ProjectTemplateDto>>((ref) async {
-  final response = await ref.watch(dioProvider).get('/v1/project-management/templates');
+final _projectTemplatesProvider =
+    FutureProvider.autoDispose.family<List<_ProjectTemplateDto>, String>((ref, family) async {
+  final response = await ref
+      .watch(dioProvider)
+      .get('/v1/project-management/templates', queryParameters: {'family': family});
   return _list(response.data).map(_ProjectTemplateDto.fromJson).toList();
 });
 
-final _projectsProvider = FutureProvider.autoDispose<List<_ProjectDto>>((ref) async {
+final _projectsProvider =
+    FutureProvider.autoDispose.family<List<_ProjectDto>, String>((ref, family) async {
   final auth = ref.watch(authNotifierProvider);
   final search = ref.watch(_projectSearchProvider).trim();
-  final params = <String, dynamic>{};
+  final params = <String, dynamic>{'family': family};
   if (!auth.isAdminGlobal && auth.tenantId?.isNotEmpty == true) {
     params['tenantId'] = auth.tenantId;
   }
@@ -65,20 +75,23 @@ enum ProjectManagementSection { projects, types, resources, templates }
 
 class ProjectManagementScreen extends ConsumerWidget {
   final ProjectManagementSection initialSection;
+  final String projectFamily;
 
   const ProjectManagementScreen({
     super.key,
     this.initialSection = ProjectManagementSection.projects,
+    this.projectFamily = 'WORK',
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final perms = ref.watch(permissionsProvider);
+    final isIntegral = projectFamily == 'INTEGRAL';
     final title = switch (initialSection) {
-      ProjectManagementSection.projects => 'Obras y proyectos',
-      ProjectManagementSection.types => 'Tipos de obra',
-      ProjectManagementSection.resources => 'Recursos de obra',
-      ProjectManagementSection.templates => 'Templates de obra',
+      ProjectManagementSection.projects => isIntegral ? 'Proyectos integrales' : 'Obras y proyectos',
+      ProjectManagementSection.types => isIntegral ? 'Tipos integrales' : 'Tipos de obra',
+      ProjectManagementSection.resources => isIntegral ? 'Recursos integrales' : 'Recursos de obra',
+      ProjectManagementSection.templates => isIntegral ? 'Templates integrales' : 'Templates de obra',
     };
     final searchHint = switch (initialSection) {
       ProjectManagementSection.projects => 'Buscar proyecto...',
@@ -87,9 +100,15 @@ class ProjectManagementScreen extends ConsumerWidget {
       ProjectManagementSection.templates => null,
     };
     final canCreateProject = initialSection == ProjectManagementSection.projects &&
-        perms.hasAnyPermission(['Projects.Projects.Create', 'Projects.Admin']);
+        perms.hasAnyPermission([
+          isIntegral ? 'Projects.Integral.Projects.Create' : 'Projects.Work.Projects.Create',
+          'Projects.Admin'
+        ]);
     final canCreateType = initialSection == ProjectManagementSection.types &&
-        perms.hasAnyPermission(['Projects.ProjectTypes.Create', 'Projects.Admin']);
+        perms.hasAnyPermission([
+          isIntegral ? 'Projects.Integral.ProjectTypes.Create' : 'Projects.Work.ProjectTypes.Create',
+          'Projects.Admin'
+        ]);
 
     return AppPageScaffold(
       title: title,
@@ -103,13 +122,13 @@ class ProjectManagementScreen extends ConsumerWidget {
           onPressed: () {
             switch (initialSection) {
               case ProjectManagementSection.projects:
-                ref.invalidate(_projectsProvider);
+                ref.invalidate(_projectsProvider(projectFamily));
               case ProjectManagementSection.types:
-                ref.invalidate(_projectTypesProvider);
+                ref.invalidate(_projectTypesProvider(projectFamily));
               case ProjectManagementSection.resources:
-                ref.invalidate(_projectResourcesProvider);
+                ref.invalidate(_projectResourcesProvider(projectFamily));
               case ProjectManagementSection.templates:
-                ref.invalidate(_projectTemplatesProvider);
+                ref.invalidate(_projectTemplatesProvider(projectFamily));
             }
           },
           icon: const Icon(Icons.refresh_rounded),
@@ -123,9 +142,9 @@ class ProjectManagementScreen extends ConsumerWidget {
                   context: context,
                   isScrollControlled: true,
                   useSafeArea: true,
-                  builder: (_) => const _ProjectCreateSheet(),
+                  builder: (_) => _ProjectCreateSheet(projectFamily: projectFamily),
                 );
-                ref.invalidate(_projectsProvider);
+                ref.invalidate(_projectsProvider(projectFamily));
               },
             )
           : canCreateType
@@ -136,33 +155,35 @@ class ProjectManagementScreen extends ConsumerWidget {
                       context: context,
                       isScrollControlled: true,
                       useSafeArea: true,
-                      builder: (_) => const _ProjectTypeCreateSheet(),
+                      builder: (_) => _ProjectTypeCreateSheet(projectFamily: projectFamily),
                     );
-                    ref.invalidate(_projectTypesProvider);
+                    ref.invalidate(_projectTypesProvider(projectFamily));
                   },
                 )
               : null,
       body: switch (initialSection) {
-        ProjectManagementSection.projects => const _ProjectsTab(),
-        ProjectManagementSection.types => const _ProjectTypesTab(showCreateAction: false),
-        ProjectManagementSection.resources => const _ProjectResourcesTab(),
-        ProjectManagementSection.templates => const _ProjectTemplatesTab(),
+        ProjectManagementSection.projects => _ProjectsTab(projectFamily: projectFamily),
+        ProjectManagementSection.types => _ProjectTypesTab(projectFamily: projectFamily, showCreateAction: false),
+        ProjectManagementSection.resources => _ProjectResourcesTab(projectFamily: projectFamily),
+        ProjectManagementSection.templates => _ProjectTemplatesTab(projectFamily: projectFamily),
       },
     );
   }
 }
 
 class _ProjectResourcesTab extends ConsumerWidget {
-  const _ProjectResourcesTab();
+  final String projectFamily;
+
+  const _ProjectResourcesTab({required this.projectFamily});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final resources = ref.watch(_projectResourcesProvider);
+    final resources = ref.watch(_projectResourcesProvider(projectFamily));
     return resources.when(
       loading: () => const LoadingState(),
       error: (_, __) => ErrorState(
         message: 'No se pudieron cargar los recursos de obra.',
-        onRetry: () => ref.invalidate(_projectResourcesProvider),
+        onRetry: () => ref.invalidate(_projectResourcesProvider(projectFamily)),
       ),
       data: (items) => items.isEmpty
           ? const EmptyState(
@@ -189,16 +210,18 @@ class _ProjectResourcesTab extends ConsumerWidget {
 }
 
 class _ProjectTemplatesTab extends ConsumerWidget {
-  const _ProjectTemplatesTab();
+  final String projectFamily;
+
+  const _ProjectTemplatesTab({required this.projectFamily});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final templates = ref.watch(_projectTemplatesProvider);
+    final templates = ref.watch(_projectTemplatesProvider(projectFamily));
     return templates.when(
       loading: () => const LoadingState(),
       error: (_, __) => ErrorState(
         message: 'No se pudieron cargar los templates de obra.',
-        onRetry: () => ref.invalidate(_projectTemplatesProvider),
+        onRetry: () => ref.invalidate(_projectTemplatesProvider(projectFamily)),
       ),
       data: (items) => items.isEmpty
           ? const EmptyState(
@@ -225,16 +248,18 @@ class _ProjectTemplatesTab extends ConsumerWidget {
 }
 
 class _ProjectsTab extends ConsumerWidget {
-  const _ProjectsTab();
+  final String projectFamily;
+
+  const _ProjectsTab({required this.projectFamily});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final projects = ref.watch(_projectsProvider);
+    final projects = ref.watch(_projectsProvider(projectFamily));
     return projects.when(
       loading: () => const LoadingState(),
       error: (_, __) => ErrorState(
         message: 'No se pudieron cargar los proyectos.',
-        onRetry: () => ref.invalidate(_projectsProvider),
+        onRetry: () => ref.invalidate(_projectsProvider(projectFamily)),
       ),
       data: (items) {
         if (items.isEmpty) {
@@ -245,7 +270,7 @@ class _ProjectsTab extends ConsumerWidget {
           );
         }
         return RefreshIndicator(
-          onRefresh: () async => ref.invalidate(_projectsProvider),
+          onRefresh: () async => ref.invalidate(_projectsProvider(projectFamily)),
           child: ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: items.length,
@@ -325,20 +350,29 @@ class _ProjectTile extends ConsumerWidget {
 }
 
 class _ProjectTypesTab extends ConsumerWidget {
+  final String projectFamily;
   final bool showCreateAction;
 
-  const _ProjectTypesTab({this.showCreateAction = true});
+  const _ProjectTypesTab({
+    required this.projectFamily,
+    this.showCreateAction = true,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final types = ref.watch(_projectTypesProvider);
+    final types = ref.watch(_projectTypesProvider(projectFamily));
     final perms = ref.watch(permissionsProvider);
-    final canCreate = perms.hasAnyPermission(['Projects.ProjectTypes.Create', 'Projects.Admin']);
+    final canCreate = perms.hasAnyPermission([
+      projectFamily == 'INTEGRAL'
+          ? 'Projects.Integral.ProjectTypes.Create'
+          : 'Projects.Work.ProjectTypes.Create',
+      'Projects.Admin',
+    ]);
     return types.when(
       loading: () => const LoadingState(),
       error: (_, __) => ErrorState(
         message: 'No se pudo cargar la configuracion de proyectos.',
-        onRetry: () => ref.invalidate(_projectTypesProvider),
+        onRetry: () => ref.invalidate(_projectTypesProvider(projectFamily)),
       ),
       data: (items) => Column(
         children: [
@@ -355,9 +389,9 @@ class _ProjectTypesTab extends ConsumerWidget {
                       context: context,
                       isScrollControlled: true,
                       useSafeArea: true,
-                      builder: (_) => const _ProjectTypeCreateSheet(),
+                      builder: (_) => _ProjectTypeCreateSheet(projectFamily: projectFamily),
                     );
-                    ref.invalidate(_projectTypesProvider);
+                    ref.invalidate(_projectTypesProvider(projectFamily));
                   },
                 ),
               ),
@@ -391,7 +425,9 @@ class _ProjectTypesTab extends ConsumerWidget {
 }
 
 class _ProjectCreateSheet extends ConsumerStatefulWidget {
-  const _ProjectCreateSheet();
+  final String projectFamily;
+
+  const _ProjectCreateSheet({required this.projectFamily});
 
   @override
   ConsumerState<_ProjectCreateSheet> createState() => _ProjectCreateSheetState();
@@ -414,7 +450,7 @@ class _ProjectCreateSheetState extends ConsumerState<_ProjectCreateSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final types = ref.watch(_projectTypesProvider).valueOrNull ?? const <_ProjectTypeDto>[];
+    final types = ref.watch(_projectTypesProvider(widget.projectFamily)).valueOrNull ?? const <_ProjectTypeDto>[];
     return Padding(
       padding: EdgeInsets.only(
         left: 16,
@@ -479,6 +515,7 @@ class _ProjectCreateSheetState extends ConsumerState<_ProjectCreateSheet> {
       await ref.read(dioProvider).post('/v1/project-management/projects', data: {
         'tenantId': auth.tenantId ?? 'global',
         'sellerId': auth.sellerId,
+        'projectFamily': widget.projectFamily,
         'projectTypeId': _typeId,
         'code': _code.text.trim(),
         'name': _name.text.trim(),
@@ -492,7 +529,9 @@ class _ProjectCreateSheetState extends ConsumerState<_ProjectCreateSheet> {
 }
 
 class _ProjectTypeCreateSheet extends ConsumerStatefulWidget {
-  const _ProjectTypeCreateSheet();
+  final String projectFamily;
+
+  const _ProjectTypeCreateSheet({required this.projectFamily});
 
   @override
   ConsumerState<_ProjectTypeCreateSheet> createState() => _ProjectTypeCreateSheetState();
@@ -548,6 +587,7 @@ class _ProjectTypeCreateSheetState extends ConsumerState<_ProjectTypeCreateSheet
     setState(() => _saving = true);
     try {
       await ref.read(dioProvider).post('/v1/project-management/types', data: {
+        'projectFamily': widget.projectFamily,
         'code': _code.text.trim(),
         'name': _name.text.trim(),
         'active': true,

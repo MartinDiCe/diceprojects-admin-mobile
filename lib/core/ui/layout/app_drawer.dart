@@ -52,11 +52,16 @@ class AppDrawer extends ConsumerWidget {
         perms.canAccessRoute('/warehouse/operations');
     final canProducts = perms.canAccessRoute('/products');
     final canSales = perms.canAccessRoute('/sales/quotes');
+    final canGeneralDashboard = perms.canAccessRoute('/dashboard');
     final canPurchases = perms.canAccessRoute('/purchases/requests');
-    final canProjects = perms.canAccessRoute('/projects') ||
+    final canWorkProjects = perms.canAccessRoute('/projects') ||
         perms.canAccessRoute('/projects/types') ||
         perms.canAccessRoute('/projects/resources') ||
         perms.canAccessRoute('/projects/templates');
+    final canIntegralProjects = perms.canAccessRoute('/integral-projects') ||
+        perms.canAccessRoute('/integral-projects/types') ||
+        perms.canAccessRoute('/integral-projects/resources') ||
+        perms.canAccessRoute('/integral-projects/templates');
     final canMarketing = perms.canAccessRoute('/marketing/campaigns') ||
         perms.canAccessRoute('/marketing/coupons') ||
         perms.canAccessRoute('/marketing/leads') ||
@@ -161,9 +166,10 @@ class AppDrawer extends ConsumerWidget {
               padding: const EdgeInsets.only(top: 8, bottom: 4),
               children: [
                 // Primary: Dashboard
-                _navItem(
-                    context, '/dashboard', Icons.dashboard_rounded, 'Dashboard',
-                    primary: true),
+                if (canGeneralDashboard)
+                  _navItem(context, '/dashboard', Icons.dashboard_rounded,
+                      'Dashboard',
+                      primary: true),
                 if (perms.canAccessRoute('/dashboard/products'))
                   _navItem(context, '/dashboard/products',
                       Icons.inventory_2_rounded, 'Dashboard Productos'),
@@ -181,7 +187,13 @@ class AppDrawer extends ConsumerWidget {
                       Icons.assignment_turned_in_rounded, 'Dashboard Compras'),
                 if (perms.canAccessRoute('/dashboard/projects'))
                   _navItem(context, '/dashboard/projects',
-                      Icons.engineering_rounded, 'Dashboard Proyectos'),
+                      Icons.engineering_rounded, 'Dashboard Obras'),
+                if (perms.canAccessRoute('/dashboard/integral-projects'))
+                  _navItem(
+                      context,
+                      '/dashboard/integral-projects',
+                      Icons.account_tree_rounded,
+                      'Dashboard Servicios'),
 
                 // ── Seguridad ───────────────────────────────────
                 if (canSecurity) ...[
@@ -262,7 +274,7 @@ class AppDrawer extends ConsumerWidget {
                 ],
 
                 // ── Proyectos ───────────────────────────────────
-                if (canProjects) ...[
+                if (canWorkProjects) ...[
                   const _SectionHeader(label: 'Proyectos'),
                   if (perms.canAccessRoute('/projects'))
                     _navItem(context, '/projects', Icons.engineering_rounded,
@@ -277,6 +289,24 @@ class AppDrawer extends ConsumerWidget {
                   if (perms.canAccessRoute('/projects/resources'))
                     _navItem(context, '/projects/resources',
                         Icons.inventory_2_rounded, 'Recursos de obra'),
+                ],
+
+                // ── Servicios integrales ───────────────────────
+                if (canIntegralProjects) ...[
+                  const _SectionHeader(label: 'Servicios integrales'),
+                  if (perms.canAccessRoute('/integral-projects'))
+                    _navItem(context, '/integral-projects',
+                        Icons.account_tree_rounded, 'Proyectos integrales',
+                        primary: true),
+                  if (perms.canAccessRoute('/integral-projects/types'))
+                    _navItem(context, '/integral-projects/types',
+                        Icons.layers_rounded, 'Tipos'),
+                  if (perms.canAccessRoute('/integral-projects/templates'))
+                    _navItem(context, '/integral-projects/templates',
+                        Icons.view_list_rounded, 'Templates'),
+                  if (perms.canAccessRoute('/integral-projects/resources'))
+                    _navItem(context, '/integral-projects/resources',
+                        Icons.inventory_2_rounded, 'Recursos'),
                 ],
 
                 // ── Marketing ────────────────────────────────────
