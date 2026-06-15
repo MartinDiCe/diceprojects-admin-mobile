@@ -61,12 +61,12 @@ class AuthInterceptor extends Interceptor {
       final sellerIds = claims['sellerIds'];
       final isAdminGlobal = tenantId == null || tenantId.trim().isEmpty;
       if (!isAdminGlobal && tenantId.trim().isNotEmpty) {
-        options.queryParameters['tenantId'] = tenantId;
-        options.headers['X-Tenant-Id'] = tenantId;
+        options.queryParameters.putIfAbsent('tenantId', () => tenantId.trim());
+        options.headers.putIfAbsent('X-Tenant-Id', () => tenantId.trim());
       }
       if (sellerId != null && sellerId.trim().isNotEmpty) {
         options.queryParameters.putIfAbsent('sellerId', () => sellerId.trim());
-        options.headers['X-Seller-Id'] = sellerId.trim();
+        options.headers.putIfAbsent('X-Seller-Id', () => sellerId.trim());
       } else if (sellerIds is List && sellerIds.isNotEmpty) {
         final csv = sellerIds
             .map((id) => id.toString().trim())
@@ -74,7 +74,7 @@ class AuthInterceptor extends Interceptor {
             .join(',');
         if (csv.isNotEmpty) {
           options.queryParameters.putIfAbsent('sellerIds', () => csv);
-          options.headers['X-Seller-Ids'] = csv;
+          options.headers.putIfAbsent('X-Seller-Ids', () => csv);
         }
       }
     }
