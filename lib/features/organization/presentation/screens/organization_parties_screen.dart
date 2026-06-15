@@ -304,6 +304,7 @@ class _PartyFormScreenState extends ConsumerState<PartyFormScreen> {
   final _notes = TextEditingController();
   bool _loading = true;
   bool _saving = false;
+  String? _error;
   bool _active = true;
 
   @override
@@ -326,26 +327,40 @@ class _PartyFormScreenState extends ConsumerState<PartyFormScreen> {
   }
 
   Future<void> _load() async {
-    final auth = ref.read(authNotifierProvider);
-    _tenantId.text = auth.tenantId ?? '';
-    _sellerId.text = auth.sellerId ?? '';
-    if (widget.id == null) {
-      setState(() => _loading = false);
-      return;
+    try {
+      final auth = ref.read(authNotifierProvider);
+      _tenantId.text = auth.tenantId ?? '';
+      _sellerId.text = auth.sellerId ?? '';
+      if (widget.id == null) {
+        setState(() => _loading = false);
+        return;
+      }
+      final dio = ref.read(dioProvider);
+      final resp = await dio.get('${widget.kind.endpoint}/${widget.id}');
+      final data = Map<String, dynamic>.from(resp.data as Map);
+      _tenantId.text = data['tenantId']?.toString() ?? '';
+      _sellerId.text = data['sellerId']?.toString() ?? '';
+      _code.text = data['code']?.toString() ?? '';
+      _businessName.text = data['businessName']?.toString() ?? '';
+      _taxId.text = data['taxId']?.toString() ?? '';
+      _email.text = data['email']?.toString() ?? '';
+      _phone.text = data['phone']?.toString() ?? '';
+      _notes.text = data['notes']?.toString() ?? '';
+      _active = data['active'] != false;
+      if (mounted) setState(() => _loading = false);
+    } on DioException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = _partyErrorMessage(error, widget.kind);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'No pudimos cargar ${widget.kind.singular.toLowerCase()}.';
+      });
     }
-    final dio = ref.read(dioProvider);
-    final resp = await dio.get('${widget.kind.endpoint}/${widget.id}');
-    final data = Map<String, dynamic>.from(resp.data as Map);
-    _tenantId.text = data['tenantId']?.toString() ?? '';
-    _sellerId.text = data['sellerId']?.toString() ?? '';
-    _code.text = data['code']?.toString() ?? '';
-    _businessName.text = data['businessName']?.toString() ?? '';
-    _taxId.text = data['taxId']?.toString() ?? '';
-    _email.text = data['email']?.toString() ?? '';
-    _phone.text = data['phone']?.toString() ?? '';
-    _notes.text = data['notes']?.toString() ?? '';
-    _active = data['active'] != false;
-    if (mounted) setState(() => _loading = false);
   }
 
   Future<void> _save() async {
@@ -368,13 +383,27 @@ class _PartyFormScreenState extends ConsumerState<PartyFormScreen> {
       payload.putIfAbsent('lastName', () => null);
     }
 
-    final dio = ref.read(dioProvider);
-    if (widget.id == null) {
-      await dio.post(widget.kind.endpoint, data: payload);
-    } else {
-      await dio.put('${widget.kind.endpoint}/${widget.id}', data: payload);
+    try {
+      final dio = ref.read(dioProvider);
+      if (widget.id == null) {
+        await dio.post(widget.kind.endpoint, data: payload);
+      } else {
+        await dio.put('${widget.kind.endpoint}/${widget.id}', data: payload);
+      }
+      if (mounted) context.go(widget.kind.listRoute);
+    } on DioException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = _partyErrorMessage(error, widget.kind);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = 'No pudimos guardar ${widget.kind.singular.toLowerCase()}.';
+      });
     }
-    if (mounted) context.go(widget.kind.listRoute);
   }
 
   @override
@@ -384,6 +413,18 @@ class _PartyFormScreenState extends ConsumerState<PartyFormScreen> {
       title: '${isEdit ? 'Editar' : 'Nuevo'} ${widget.kind.singular.toLowerCase()}',
       body: _loading
           ? const LoadingState()
+          : _error != null
+              ? ErrorState(
+                  title: 'No pudimos abrir ${widget.kind.singular.toLowerCase()}',
+                  message: _error!,
+                  onRetry: () {
+                    setState(() {
+                      _loading = true;
+                      _error = null;
+                    });
+                    _load();
+                  },
+                )
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: ConstrainedBox(
@@ -471,6 +512,28 @@ class _PartyFormScreenState extends ConsumerState<PartyFormScreen> {
       ),
     );
   }
+}
+
+String _partyErrorMessage(DioException error, PartyKind kind) {
+  final status = error.response?.statusCode;
+  if (status == 404) {
+    return 'La ruta de ${kind.title.toLowerCase()} no está disponible en la API publicada. Revisá que el gateway tenga activo /api${kind.endpoint}.';
+  }
+  if (status == 403) {
+    return 'No tenés permisos suficientes para operar ${kind.title.toLowerCase()}.';
+  }
+  if (status == 400) {
+    final data = error.response?.data;
+    if (data is Map && data['detail'] != null) {
+      return data['detail'].toString();
+    }
+    return 'Los datos enviados no son válidos.';
+  }
+  final data = error.response?.data;
+  if (data is Map && data['detail'] != null) {
+    return data['detail'].toString();
+  }
+  return error.message ?? 'No pudimos operar ${kind.title.toLowerCase()}.';
 }
 
 final _partyContactsProvider = FutureProvider.autoDispose
