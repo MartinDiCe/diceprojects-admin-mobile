@@ -42,7 +42,8 @@ class NotifTemplateDto {
                 ? 'INACTIVE'
                 : (json['status'] ?? 'ACTIVE').toString()),
         // Backend key: notificationTypeId
-        notifType: (json['notificationTypeId'] ?? json['notifType'])?.toString(),
+        notifType:
+            (json['notificationTypeId'] ?? json['notifType'])?.toString(),
       );
 }
 
@@ -51,7 +52,8 @@ class NotifTemplatesNotifier extends ListNotifier<NotifTemplateDto> {
   NotifTemplatesNotifier(this._dio) : super();
 
   @override
-  Future<PaginatedResponse<NotifTemplateDto>> fetchPage(PageParams params) async {
+  Future<PaginatedResponse<NotifTemplateDto>> fetchPage(
+      PageParams params) async {
     final resp = await _dio.get(
       '/v1/notification-templates',
       queryParameters: params.toQueryParams(),
@@ -60,8 +62,8 @@ class NotifTemplatesNotifier extends ListNotifier<NotifTemplateDto> {
   }
 }
 
-final notifTemplatesNotifierProvider =
-    StateNotifierProvider.autoDispose<NotifTemplatesNotifier, ListState<NotifTemplateDto>>(
+final notifTemplatesNotifierProvider = StateNotifierProvider.autoDispose<
+    NotifTemplatesNotifier, ListState<NotifTemplateDto>>(
   (ref) => NotifTemplatesNotifier(ref.watch(dioProvider)),
 );
 
@@ -74,8 +76,8 @@ class NotifTemplatesScreen extends ConsumerWidget {
     final notifier = ref.read(notifTemplatesNotifierProvider.notifier);
 
     return AppPageScaffold(
-      title: 'Templates de Notificación',
-      searchHint: 'Buscar template…',
+      title: 'Plantillas de notificación',
+      searchHint: 'Buscar plantilla…',
       onSearch: notifier.setSearch,
       body: _buildBody(state, notifier),
     );
@@ -86,7 +88,7 @@ class NotifTemplatesScreen extends ConsumerWidget {
     if (state.isLoading) return const LoadingState();
     if (state.error != null && state.items.isEmpty) {
       return ErrorState(
-        title: 'No pudimos cargar los templates',
+        title: 'No pudimos cargar las plantillas',
         message: state.error!,
         onRetry: notifier.reload,
       );
@@ -94,8 +96,8 @@ class NotifTemplatesScreen extends ConsumerWidget {
     if (state.items.isEmpty) {
       return const EmptyState(
         icon: Icons.description_outlined,
-        title: 'Sin templates',
-        message: 'No hay templates de notificación configurados.',
+        title: 'Sin plantillas',
+        message: 'No hay plantillas de notificación configuradas.',
       );
     }
 
@@ -127,8 +129,8 @@ class NotifTemplatesScreen extends ConsumerWidget {
               color: Colors.transparent,
               borderRadius: BorderRadius.circular(16),
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
                   children: [
                     Container(
@@ -159,8 +161,7 @@ class NotifTemplatesScreen extends ConsumerWidget {
                               if (t.channel != null) t.channel!,
                             ].join(' · '),
                             style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 12),
+                                color: AppColors.textSecondary, fontSize: 12),
                           ),
                         ],
                       ),

@@ -2,6 +2,7 @@ import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
 import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
 import 'package:app_diceprojects_admin/features/notifications/data/notification_inbox_models.dart';
 import 'package:app_diceprojects_admin/features/notifications/data/notification_inbox_provider.dart';
+import 'package:app_diceprojects_admin/features/permissions/permissions_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -14,6 +15,7 @@ class NotificationCenterScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(notificationInboxProvider);
     final notifier = ref.read(notificationInboxProvider.notifier);
+    final permissions = ref.watch(permissionsProvider);
 
     return AppPageScaffold(
       title: 'Notificaciones',
@@ -43,7 +45,7 @@ class NotificationCenterScreen extends ConsumerWidget {
             children: const [
               _EmptyState(
                 icon: Icons.notifications_off_rounded,
-                title: 'No pudimos cargar la campana',
+                title: 'No pudimos cargar la campaña',
                 subtitle: 'Deslizá para reintentar.',
               ),
             ],
@@ -73,7 +75,29 @@ class NotificationCenterScreen extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(18),
                     onTap: () async {
                       await notifier.markRead(item);
-                      if (context.mounted) context.go(_mobileTarget(item.targetPath));
+                      if (!context.mounted) return;
+                      final target = _mobileTarget(item.targetPath);
+                      if (target == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'La notificación no tiene un destino disponible en la app.',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+                      if (!permissions.canAccessRoute(target)) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'No tenés permisos para abrir este destino.',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+                      context.go(target);
                     },
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -87,27 +111,42 @@ class NotificationCenterScreen extends ConsumerWidget {
                               color: AppColors.accentLight,
                               borderRadius: BorderRadius.circular(14),
                             ),
-                            child: Icon(Icons.notifications_active_rounded, color: AppColors.accent),
+                            child: const Icon(
+                                Icons.notifications_active_rounded,
+                                color: AppColors.accent),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(item.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                                Text(item.title,
+                                    style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800)),
                                 if (item.description.isNotEmpty) ...[
                                   const SizedBox(height: 4),
-                                  Text(item.description, style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                                  Text(item.description,
+                                      style: TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 13)),
                                 ],
                                 const SizedBox(height: 8),
                                 Text(
-                                  item.createdDate == null ? 'Nueva' : DateFormat('dd/MM/yyyy HH:mm').format(item.createdDate!),
-                                  style: TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.w700),
+                                  item.createdDate == null
+                                      ? 'Nueva'
+                                      : DateFormat('dd/MM/yyyy HH:mm')
+                                          .format(item.createdDate!),
+                                  style: TextStyle(
+                                      color: AppColors.textMuted,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700),
                                 ),
                               ],
                             ),
                           ),
-                          Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+                          Icon(Icons.chevron_right_rounded,
+                              color: AppColors.textMuted),
                         ],
                       ),
                     ),
@@ -123,9 +162,39 @@ class NotificationCenterScreen extends ConsumerWidget {
     );
   }
 
-  static String _mobileTarget(String targetPath) {
-    if (targetPath.startsWith('/sales/quotes')) return '/sales/quotes';
-    return targetPath.split('?').first;
+  static String? _mobileTarget(String targetPath) {
+    final raw = targetPath.trim();
+    if (raw.isEmpty) return null;
+    final parsed = Uri.tryParse(raw);
+    final path =
+        (parsed?.path.isNotEmpty == true) ? parsed!.path : raw.split('?').first;
+
+    if (path == '/dashboard' || path.startsWith('/dashboard/')) return path;
+    if (path.startsWith('/sales/quotes')) return '/sales/quotes';
+    if (path.startsWith('/purchases/requests')) return '/purchases/requests';
+    if (path.startsWith('/projects')) return '/projects';
+    if (path.startsWith('/integral-projects')) return '/integral-projects';
+    if (path.startsWith('/products')) return '/products';
+    if (path.startsWith('/warehouse')) return '/warehouse';
+    if (path.startsWith('/marketing/campaigns')) {
+      return '/marketing/campaigns';
+    }
+    if (path.startsWith('/marketing/leads')) return '/marketing/leads';
+    if (path.startsWith('/notifications/center')) {
+      return '/notifications/center';
+    }
+    if (path.startsWith('/organization/customers')) {
+      return '/organization/customers';
+    }
+    if (path.startsWith('/organization/suppliers')) {
+      return '/organization/suppliers';
+    }
+    if (path.startsWith('/organization/sellers')) {
+      return '/organization/sellers';
+    }
+    if (path.startsWith('/people')) return '/people';
+    if (path.startsWith('/iam/users')) return '/iam/users';
+    return null;
   }
 }
 
@@ -149,7 +218,10 @@ class _NotificationPreferencesSheet extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     'Preferencias',
-                    style: TextStyle(color: AppColors.ink, fontSize: 18, fontWeight: FontWeight.w800),
+                    style: TextStyle(
+                        color: AppColors.ink,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800),
                   ),
                 ),
                 IconButton(
@@ -161,7 +233,10 @@ class _NotificationPreferencesSheet extends ConsumerWidget {
             ),
             Text(
               'Elegí qué avisos recibir por cada canal.',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
             Expanded(
@@ -210,20 +285,47 @@ class _NotificationPreferencesSheet extends ConsumerWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(item.typeCode, style: TextStyle(color: AppColors.ink, fontSize: 14, fontWeight: FontWeight.w800)),
+                              Text(item.typeCode,
+                                  style: TextStyle(
+                                      color: AppColors.ink,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w800)),
                               if (item.description.isNotEmpty) ...[
                                 const SizedBox(height: 4),
-                                Text(item.description, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                                Text(item.description,
+                                    style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 12)),
                               ],
                               const SizedBox(height: 12),
                               Wrap(
                                 spacing: 8,
                                 runSpacing: 8,
                                 children: [
-                                  _PreferenceChip(icon: Icons.notifications_rounded, label: 'Campana', active: item.bellEnabled, onTap: () => _toggle(context, notifier, item, 'bell')),
-                                  _PreferenceChip(icon: Icons.web_asset_rounded, label: 'Web', active: item.webPushEnabled, onTap: () => _toggle(context, notifier, item, 'web')),
-                                  _PreferenceChip(icon: Icons.phone_android_rounded, label: 'App', active: item.mobilePushEnabled, onTap: () => _toggle(context, notifier, item, 'mobile')),
-                                  _PreferenceChip(icon: Icons.mail_rounded, label: 'Email', active: item.emailEnabled, onTap: () => _toggle(context, notifier, item, 'email')),
+                                  _PreferenceChip(
+                                      icon: Icons.notifications_rounded,
+                                      label: 'Campaña',
+                                      active: item.bellEnabled,
+                                      onTap: () => _toggle(
+                                          context, notifier, item, 'bell')),
+                                  _PreferenceChip(
+                                      icon: Icons.web_asset_rounded,
+                                      label: 'Web',
+                                      active: item.webPushEnabled,
+                                      onTap: () => _toggle(
+                                          context, notifier, item, 'web')),
+                                  _PreferenceChip(
+                                      icon: Icons.phone_android_rounded,
+                                      label: 'App',
+                                      active: item.mobilePushEnabled,
+                                      onTap: () => _toggle(
+                                          context, notifier, item, 'mobile')),
+                                  _PreferenceChip(
+                                      icon: Icons.mail_rounded,
+                                      label: 'Email',
+                                      active: item.emailEnabled,
+                                      onTap: () => _toggle(
+                                          context, notifier, item, 'email')),
                                 ],
                               ),
                             ],
@@ -241,12 +343,17 @@ class _NotificationPreferencesSheet extends ConsumerWidget {
     );
   }
 
-  Future<void> _toggle(BuildContext context, NotificationPreferencesNotifier notifier, NotificationPreferenceItem item, String channel) async {
+  Future<void> _toggle(
+      BuildContext context,
+      NotificationPreferencesNotifier notifier,
+      NotificationPreferenceItem item,
+      String channel) async {
     try {
       await notifier.toggle(item, channel);
     } catch (_) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No se pudo guardar la preferencia.')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('No se pudo guardar la preferencia.')));
       }
     }
   }
@@ -258,14 +365,19 @@ class _PreferenceChip extends StatelessWidget {
   final bool active;
   final VoidCallback onTap;
 
-  const _PreferenceChip({required this.icon, required this.label, required this.active, required this.onTap});
+  const _PreferenceChip(
+      {required this.icon,
+      required this.label,
+      required this.active,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return FilterChip(
       selected: active,
       onSelected: (_) => onTap(),
-      avatar: Icon(icon, size: 16, color: active ? AppColors.white : AppColors.textMuted),
+      avatar: Icon(icon,
+          size: 16, color: active ? AppColors.white : AppColors.textMuted),
       label: Text(label),
       selectedColor: AppColors.accent,
       checkmarkColor: AppColors.white,
@@ -274,7 +386,10 @@ class _PreferenceChip extends StatelessWidget {
         fontWeight: FontWeight.w800,
         fontSize: 12,
       ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: active ? AppColors.accent : AppColors.border)),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side:
+              BorderSide(color: active ? AppColors.accent : AppColors.border)),
     );
   }
 }
@@ -284,7 +399,8 @@ class _EmptyState extends StatelessWidget {
   final String title;
   final String subtitle;
 
-  const _EmptyState({required this.icon, required this.title, required this.subtitle});
+  const _EmptyState(
+      {required this.icon, required this.title, required this.subtitle});
 
   @override
   Widget build(BuildContext context) {
@@ -298,9 +414,13 @@ class _EmptyState extends StatelessWidget {
             child: Icon(icon, size: 40, color: AppColors.accent),
           ),
           const SizedBox(height: 18),
-          Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+          Text(title,
+              style:
+                  const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
-          Text(subtitle, textAlign: TextAlign.center, style: TextStyle(color: AppColors.textSecondary, fontSize: 15)),
+          Text(subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 15)),
         ],
       ),
     );
