@@ -140,6 +140,24 @@ const Map<String, List<String>> permissionGates = {
     'Producto.VerProducto',
     'Products.Admin',
   ],
+  '/products/types': [
+    'Products.Types.List',
+    'Products.Types.View',
+    'Products.Articles.List',
+    'Products.Admin',
+  ],
+  '/products/brands': [
+    'Products.Brands.List',
+    'Products.Brands.View',
+    'Products.Articles.List',
+    'Products.Admin',
+  ],
+  '/products/storage-conditions': [
+    'Products.StorageConditions.List',
+    'Products.StorageConditions.View',
+    'Products.Articles.List',
+    'Products.Admin',
+  ],
   '/sales/quotes': ['Sales.Quotes.List', 'Sales.Quotes.View', 'Sales.Admin'],
   '/purchases/requests': [
     'Purchases.Access',
@@ -202,6 +220,17 @@ const Map<String, List<String>> permissionGates = {
     'Warehouse.Transfers.List',
     'Warehouse.Admin',
     'Warehouse.Editor',
+  ],
+  '/warehouse/types': [
+    'Warehouse.Types.List',
+    'Warehouse.Types.View',
+    'Warehouse.Admin',
+  ],
+  '/warehouse/': [
+    'Warehouse.Movements.List',
+    'Warehouse.Movements.View',
+    'Warehouse.Stock.View',
+    'Warehouse.Admin',
   ],
   '/warehouse': [
     'Warehouse.Warehouses.List',
@@ -266,6 +295,7 @@ const Map<String, List<String>> permissionGates = {
     'Notificacion.VerPlantillas',
   ],
   '/core/currencies': ['Core.VerMoneda', 'Currencies.Admin'],
+  '/core/sectors': ['Core.VerSector', 'Core.Sectors.List', 'Core.Admin'],
   '/core/languages': ['Core.VerIdioma', 'Languages.Admin'],
   '/core/geo/countries': ['Core.VerGeografia', 'Countries.Admin'],
   '/core/geo/states': ['Core.VerGeografia'],

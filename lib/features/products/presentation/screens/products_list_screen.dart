@@ -38,12 +38,13 @@ class ProductDto {
   factory ProductDto.fromJson(Map<String, dynamic> json) => ProductDto(
         // API returns 'productId' as primary key
         id: (json['productId'] ?? json['id'])?.toString() ?? '',
-      name: (json['name'] ?? '').toString(),
+        name: (json['name'] ?? '').toString(),
         sku: json['sku']?.toString(),
         category: json['category']?.toString(),
         // API returns 'basePrice' as BigDecimal — may arrive as num or String
         price: _parseDouble(json['basePrice'] ?? json['price']),
-        discountPercent: _parseDouble(json['discountPercent'] ?? json['discount']),
+        discountPercent:
+            _parseDouble(json['discountPercent'] ?? json['discount']),
         // API returns 'statusCode', fallback to 'status'
         status: (json['statusCode'] ?? json['status'] ?? 'ACTIVE').toString(),
         imageUrl: _readImageUrl(json),
@@ -113,12 +114,17 @@ class ProductsListNotifier extends ListNotifier<ProductDto> {
 
   Future<void> delete(String id) async {
     await _dio.delete('/v1/products/$id');
-    reload();
+    final nextTotal =
+        state.totalElements > 0 ? state.totalElements - 1 : state.totalElements;
+    state = state.copyWith(
+      items: state.items.where((item) => item.id != id).toList(),
+      totalElements: nextTotal,
+    );
   }
 }
 
-final productsListNotifierProvider =
-    StateNotifierProvider.autoDispose<ProductsListNotifier, ListState<ProductDto>>(
+final productsListNotifierProvider = StateNotifierProvider.autoDispose<
+    ProductsListNotifier, ListState<ProductDto>>(
   (ref) => ProductsListNotifier(ref.watch(dioProvider)),
 );
 
@@ -163,12 +169,8 @@ class ProductsListScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildBody(
-      BuildContext context,
-      ListState<ProductDto> state,
-      ProductsListNotifier notifier,
-      bool canEdit,
-      bool canDelete) {
+  Widget _buildBody(BuildContext context, ListState<ProductDto> state,
+      ProductsListNotifier notifier, bool canEdit, bool canDelete) {
     if (state.isLoading) return const LoadingState();
     if (state.error != null && state.items.isEmpty) {
       return ErrorState(
@@ -228,8 +230,8 @@ class _ProductTile extends StatelessWidget {
   final ProductDto product;
   final Future<void> Function() onEdit;
   final Future<void> Function() onPresentations;
-  final VoidCallback onToggle;
-  final VoidCallback onDelete;
+  final Future<void> Function() onToggle;
+  final Future<void> Function() onDelete;
   final bool canEdit;
   final bool canDelete;
 
@@ -263,7 +265,25 @@ class _ProductTile extends StatelessWidget {
         ],
       ),
     );
-    if (confirmed == true) onDelete();
+    if (confirmed == true && context.mounted) {
+      try {
+        await onDelete();
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Producto eliminado.')),
+          );
+        }
+      } catch (_) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content:
+                  Text('No pudimos eliminar el producto. Probá nuevamente.'),
+            ),
+          );
+        }
+      }
+    }
   }
 
   Future<void> _confirmToggle(BuildContext context) async {
@@ -287,16 +307,16 @@ class _ProductTile extends StatelessWidget {
         ],
       ),
     );
-    if (confirmed == true) onToggle();
+    if (confirmed == true) await onToggle();
   }
 
   @override
   Widget build(BuildContext context) {
-    final hasDiscount =
-        product.price != null && product.discountPercent != null && product.discountPercent! > 0;
-    final discountRate = hasDiscount
-        ? product.discountPercent!.clamp(0, 100).toDouble()
-        : 0.0;
+    final hasDiscount = product.price != null &&
+        product.discountPercent != null &&
+        product.discountPercent! > 0;
+    final discountRate =
+        hasDiscount ? product.discountPercent!.clamp(0, 100).toDouble() : 0.0;
     final finalPrice = hasDiscount
         ? product.price! * (1 - (discountRate / 100))
         : product.price;
@@ -318,8 +338,7 @@ class _ProductTile extends StatelessWidget {
           highlightColor: AppColors.accentLight,
           onTap: canEdit ? onEdit : null,
           child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
                 // Image / placeholder
@@ -373,7 +392,8 @@ class _ProductTile extends StatelessWidget {
                             ),
                           if (hasDiscount)
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFFFE4E6),
                                 borderRadius: BorderRadius.circular(999),
@@ -403,7 +423,7 @@ class _ProductTile extends StatelessWidget {
                   )
                 else
                   Icon(Icons.chevron_right_rounded,
-                    color: AppColors.textMuted, size: 16),
+                      color: AppColors.textMuted, size: 16),
                 if (canEdit || canDelete)
                   PopupMenuButton<String>(
                     onSelected: (v) {
