@@ -7,6 +7,18 @@ class AppConfig {
     'PRIVACY_POLICY_URL',
     defaultValue: 'https://diceprojects.com/privacidad',
   );
+  static const String contactUrl = String.fromEnvironment(
+    'CONTACT_URL',
+    defaultValue: 'https://diceprojects.com/contacto',
+  );
+  static const String appVersionName = String.fromEnvironment(
+    'APP_VERSION_NAME',
+    defaultValue: '1.0.5',
+  );
+  static const String appBuildNumber = String.fromEnvironment(
+    'APP_BUILD_NUMBER',
+    defaultValue: '21',
+  );
   static const String reviewerUsername = String.fromEnvironment(
     'REVIEWER_USERNAME',
     defaultValue: '',
