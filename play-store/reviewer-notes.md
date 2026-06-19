@@ -21,7 +21,9 @@ Pasos:
 1. Abrir la app.
 2. Ingresar con el usuario demo.
 3. Revisar dashboard, productos, ventas, marketing, organizaciones/personas y notificaciones.
-4. No usar datos reales de clientes.
+4. Abrir Manuales de uso para ver guías por módulo.
+5. Abrir Chat IA para validar el copiloto operativo local. El copiloto no ejecuta cambios destructivos: guía, explica y navega según permisos.
+6. No usar datos reales de clientes.
 ```
 
 Si se desea mostrar un boton "Completar acceso demo para revision" en el login sin hardcodear credenciales, compilar con:
@@ -47,6 +49,12 @@ flutter build appbundle --release `
 - Camara: carga de imagenes cuando el usuario lo solicita.
 - Notificaciones: alertas operativas y novedades de cotizaciones.
 - Biometria: ingreso opcional en el mismo dispositivo.
+
+## Funciones de asistencia
+
+- Manuales de uso: documentación funcional dentro de la app.
+- Chat IA / Copiloto Backoffice: asistente local basado en manuales, contexto y permisos. No usa LLM por defecto y no guarda datos fuera de la API DiceProjects.
+- El usuario sólo puede navegar a módulos habilitados por sus permisos IAM.
 
 ## Seguridad
 
