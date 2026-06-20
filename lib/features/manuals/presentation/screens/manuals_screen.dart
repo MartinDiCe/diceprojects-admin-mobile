@@ -69,15 +69,38 @@ class ManualsScreen extends ConsumerWidget {
   }
 }
 
-class ChatComingSoonScreen extends ConsumerStatefulWidget {
+class ChatComingSoonScreen extends ConsumerWidget {
   const ChatComingSoonScreen({super.key});
 
   @override
-  ConsumerState<ChatComingSoonScreen> createState() =>
-      _BackofficeCopilotState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final locale = ref.watch(appLocaleProvider).languageCode;
+    return AppPageScaffold(
+      title: _t(locale, 'Chat IA', 'AI Chat', 'Chat IA'),
+      body: const BackofficeCopilotPanel(),
+    );
+  }
 }
 
-class _BackofficeCopilotState extends ConsumerState<ChatComingSoonScreen> {
+class BackofficeCopilotPanel extends ConsumerStatefulWidget {
+  final bool showHeader;
+  final VoidCallback? onClose;
+  final VoidCallback? onMinimize;
+
+  const BackofficeCopilotPanel({
+    super.key,
+    this.showHeader = false,
+    this.onClose,
+    this.onMinimize,
+  });
+
+  @override
+  ConsumerState<BackofficeCopilotPanel> createState() =>
+      _BackofficeCopilotPanelState();
+}
+
+class _BackofficeCopilotPanelState
+    extends ConsumerState<BackofficeCopilotPanel> {
   final _controller = TextEditingController();
   final _messages = <_ChatMessage>[
     const _ChatMessage(
@@ -117,85 +140,88 @@ class _BackofficeCopilotState extends ConsumerState<ChatComingSoonScreen> {
     final auth = ref.watch(authNotifierProvider);
     final locale = ref.watch(appLocaleProvider).languageCode;
 
-    return AppPageScaffold(
-      title: _t(locale, 'Chat IA', 'AI Chat', 'Chat IA'),
-      body: Column(
-        children: [
-          _CopilotContextCard(auth: auth),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                return _MessageBubble(
-                  message: _messages[index],
-                  onAction: (action) {
-                    if (action.route != null) {
-                      context.go(action.route!);
-                    } else if (action.prompt != null) {
-                      _send(action.prompt);
-                    }
-                  },
-                );
-              },
-            ),
+    return Column(
+      children: [
+        if (widget.showHeader)
+          _CopilotPanelHeader(
+            onClose: widget.onClose,
+            onMinimize: widget.onMinimize,
           ),
-          _QuickPromptBar(onPrompt: _send),
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      minLines: 1,
-                      maxLines: 3,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: _send,
-                      decoration: InputDecoration(
-                        hintText: _t(
-                          locale,
-                          'Preguntá por módulos, acciones o permisos...',
-                          'Ask about modules, actions or permissions...',
-                          'Pergunte sobre módulos, ações ou permissões...',
-                        ),
-                        filled: true,
-                        fillColor: AppColors.surface,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: AppColors.border),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: AppColors.border),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(color: AppColors.accent),
-                        ),
+        _CopilotContextCard(auth: auth),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+            itemCount: _messages.length,
+            itemBuilder: (context, index) {
+              return _MessageBubble(
+                message: _messages[index],
+                onAction: (action) {
+                  if (action.route != null) {
+                    context.go(action.route!);
+                    widget.onMinimize?.call();
+                  } else if (action.prompt != null) {
+                    _send(action.prompt);
+                  }
+                },
+              );
+            },
+          ),
+        ),
+        _QuickPromptBar(onPrompt: _send),
+        SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    minLines: 1,
+                    maxLines: 3,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: _send,
+                    decoration: InputDecoration(
+                      hintText: _t(
+                        locale,
+                        'Preguntá por módulos, acciones o permisos...',
+                        'Ask about modules, actions or permissions...',
+                        'Pergunte sobre módulos, ações ou permissões...',
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  FilledButton(
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(52, 52),
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(
+                      filled: true,
+                      fillColor: AppColors.surface,
+                      border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: AppColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: AppColors.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: AppColors.accent),
                       ),
                     ),
-                    onPressed: _send,
-                    child: const Icon(Icons.send_rounded),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 10),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(52, 52),
+                    padding: EdgeInsets.zero,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  onPressed: _send,
+                  child: const Icon(Icons.send_rounded),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -239,7 +265,7 @@ class _BackofficeCopilotState extends ConsumerState<ChatComingSoonScreen> {
         contextLine: contextLine,
         perms: perms,
         manualId: 'integral-projects',
-        route: '/integral-projects',
+        route: '/integral-projects/management',
         action:
             'Podés crear un proyecto integral, cargar tipos, recursos y templates. Si el usuario tiene permisos, abrí el módulo y confirmá el alta en pantalla.',
       );
@@ -250,7 +276,7 @@ class _BackofficeCopilotState extends ConsumerState<ChatComingSoonScreen> {
         contextLine: contextLine,
         perms: perms,
         manualId: 'projects',
-        route: '/projects',
+        route: '/projects/management',
         action:
             'Para dar de alta una obra: elegí cliente, tipo, responsable, template y partidas. El copiloto puede guiar el armado, pero el guardado se confirma en el formulario del módulo.',
       );
@@ -261,7 +287,7 @@ class _BackofficeCopilotState extends ConsumerState<ChatComingSoonScreen> {
         contextLine: contextLine,
         perms: perms,
         manualId: 'partners',
-        route: '/organization/suppliers',
+        route: '/partners',
         action:
             'Buscá proveedores por nombre, CUIT, email o estado. Para presupuestos, el proveedor queda referenciado y se guarda snapshot para no depender en caliente.',
       );
@@ -272,7 +298,7 @@ class _BackofficeCopilotState extends ConsumerState<ChatComingSoonScreen> {
         contextLine: contextLine,
         perms: perms,
         manualId: 'customers',
-        route: '/organization/customers',
+        route: '/customers',
         action:
             'Buscá o creá clientes por empresa y seller cuando corresponda. Ventas y proyectos usan referencia más snapshot para mantener trazabilidad.',
       );
@@ -431,6 +457,74 @@ class _CopilotContextCard extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CopilotPanelHeader extends StatelessWidget {
+  final VoidCallback? onClose;
+  final VoidCallback? onMinimize;
+
+  const _CopilotPanelHeader({this.onClose, this.onMinimize});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 58,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFF101828),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            radius: 17,
+            backgroundColor: AppColors.accent,
+            child: Icon(Icons.auto_awesome_rounded,
+                color: AppColors.white, size: 18),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Copiloto Backoffice',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  'Asistente contextual',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Color(0xFFCBD5E1),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Minimizar',
+            onPressed: onMinimize,
+            icon: const Icon(Icons.remove_rounded, color: AppColors.white),
+          ),
+          IconButton(
+            tooltip: 'Cerrar',
+            onPressed: onClose,
+            icon: const Icon(Icons.close_rounded, color: AppColors.white),
           ),
         ],
       ),

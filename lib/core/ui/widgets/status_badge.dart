@@ -68,8 +68,10 @@ class StatusBadge extends StatelessWidget {
   String _label(String s) {
     switch (s) {
       case 'ACTIVE':
+      case 'ACTIVO':
         return 'Activo';
       case 'INACTIVE':
+      case 'INACTIVO':
         return 'Inactivo';
       case 'PENDING':
         return 'Pendiente';

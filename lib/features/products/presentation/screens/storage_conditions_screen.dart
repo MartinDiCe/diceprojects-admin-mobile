@@ -1,10 +1,9 @@
 import 'package:app_diceprojects_admin/core/http/dio_client.dart';
-import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
 import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
+import 'package:app_diceprojects_admin/core/ui/widgets/app_entity_tile.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/empty_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
-import 'package:app_diceprojects_admin/core/ui/widgets/status_badge.dart';
 import 'package:app_diceprojects_admin/core/utils/list_state.dart';
 import 'package:app_diceprojects_admin/core/utils/pagination.dart';
 import 'package:app_diceprojects_admin/features/auth/presentation/controllers/auth_notifier.dart';
@@ -138,97 +137,15 @@ class StorageConditionsScreen extends ConsumerWidget {
         separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (ctx, i) {
           final c = state.items[i];
-          return Container(
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x0D000000),
-                  blurRadius: 16,
-                  offset: Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(16),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: AppColors.accentLight,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.thermostat_rounded,
-                        color: AppColors.accent,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  c.name,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                    color: AppColors.ink,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (c.isGlobal)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.accentLight,
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: const Text(
-                                    'Global',
-                                    style: TextStyle(
-                                      color: AppColors.accent,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            [c.code, c.description]
-                                .where((v) => (v ?? '').trim().isNotEmpty)
-                                .join(' · '),
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    StatusBadge(status: c.statusCode),
-                  ],
-                ),
-              ),
-            ),
+          return AppEntityTile(
+            icon: Icons.thermostat_rounded,
+            title: c.name,
+            details: [
+              c.code,
+              if ((c.description ?? '').trim().isNotEmpty) c.description!,
+              if (c.isGlobal) 'Global',
+            ],
+            status: c.statusCode,
           );
         },
       ),

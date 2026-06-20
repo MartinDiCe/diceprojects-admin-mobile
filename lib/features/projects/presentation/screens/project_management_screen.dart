@@ -2,6 +2,7 @@ import 'package:app_diceprojects_admin/core/http/dio_client.dart';
 import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
 import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/app_button.dart';
+import 'package:app_diceprojects_admin/core/ui/widgets/app_entity_tile.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/app_text_field.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/create_fab.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/empty_state.dart';
@@ -15,32 +16,32 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final _projectSearchProvider = StateProvider.autoDispose<String>((_) => '');
 
-final _projectTypesProvider =
-    FutureProvider.autoDispose.family<List<_ProjectTypeDto>, String>((ref, family) async {
+final _projectTypesProvider = FutureProvider.autoDispose
+    .family<List<_ProjectTypeDto>, String>((ref, family) async {
   final response = await ref
       .watch(dioProvider)
       .get('/v1/project-management/types', queryParameters: {'family': family});
   return _list(response.data).map(_ProjectTypeDto.fromJson).toList();
 });
 
-final _projectResourcesProvider =
-    FutureProvider.autoDispose.family<List<_ProjectResourceDto>, String>((ref, family) async {
-  final response = await ref
-      .watch(dioProvider)
-      .get('/v1/project-management/resources', queryParameters: {'family': family});
+final _projectResourcesProvider = FutureProvider.autoDispose
+    .family<List<_ProjectResourceDto>, String>((ref, family) async {
+  final response = await ref.watch(dioProvider).get(
+      '/v1/project-management/resources',
+      queryParameters: {'family': family});
   return _list(response.data).map(_ProjectResourceDto.fromJson).toList();
 });
 
-final _projectTemplatesProvider =
-    FutureProvider.autoDispose.family<List<_ProjectTemplateDto>, String>((ref, family) async {
-  final response = await ref
-      .watch(dioProvider)
-      .get('/v1/project-management/templates', queryParameters: {'family': family});
+final _projectTemplatesProvider = FutureProvider.autoDispose
+    .family<List<_ProjectTemplateDto>, String>((ref, family) async {
+  final response = await ref.watch(dioProvider).get(
+      '/v1/project-management/templates',
+      queryParameters: {'family': family});
   return _list(response.data).map(_ProjectTemplateDto.fromJson).toList();
 });
 
-final _projectsProvider =
-    FutureProvider.autoDispose.family<List<_ProjectDto>, String>((ref, family) async {
+final _projectsProvider = FutureProvider.autoDispose
+    .family<List<_ProjectDto>, String>((ref, family) async {
   final auth = ref.watch(authNotifierProvider);
   final search = ref.watch(_projectSearchProvider).trim();
   final params = <String, dynamic>{'family': family};
@@ -51,24 +52,36 @@ final _projectsProvider =
     params['sellerId'] = auth.sellerId;
   }
   if (search.isNotEmpty) params['search'] = search;
-  final response = await ref.watch(dioProvider).get('/v1/project-management/projects', queryParameters: params);
+  final response = await ref
+      .watch(dioProvider)
+      .get('/v1/project-management/projects', queryParameters: params);
   return _list(response.data).map(_ProjectDto.fromJson).toList();
 });
 
-final _projectTasksProvider = FutureProvider.autoDispose.family<List<_ProjectTaskDto>, String>((ref, projectId) async {
-  final response = await ref.watch(dioProvider).get('/v1/project-management/projects/$projectId/tasks');
+final _projectTasksProvider = FutureProvider.autoDispose
+    .family<List<_ProjectTaskDto>, String>((ref, projectId) async {
+  final response = await ref
+      .watch(dioProvider)
+      .get('/v1/project-management/projects/$projectId/tasks');
   return _list(response.data).map(_ProjectTaskDto.fromJson).toList();
 });
 
-final _projectProgressProvider = FutureProvider.autoDispose.family<List<_ProjectProgressDto>, String>((ref, projectId) async {
-  final response = await ref.watch(dioProvider).get('/v1/project-management/projects/$projectId/progress');
+final _projectProgressProvider = FutureProvider.autoDispose
+    .family<List<_ProjectProgressDto>, String>((ref, projectId) async {
+  final response = await ref
+      .watch(dioProvider)
+      .get('/v1/project-management/projects/$projectId/progress');
   return _list(response.data).map(_ProjectProgressDto.fromJson).toList();
 });
 
-final _projectDetailProvider = FutureProvider.autoDispose.family<_ProjectDetailDto, String>((ref, projectId) async {
-  final response = await ref.watch(dioProvider).get('/v1/project-management/projects/$projectId/detail');
+final _projectDetailProvider = FutureProvider.autoDispose
+    .family<_ProjectDetailDto, String>((ref, projectId) async {
+  final response = await ref
+      .watch(dioProvider)
+      .get('/v1/project-management/projects/$projectId/detail');
   final data = response.data;
-  return _ProjectDetailDto.fromJson(data is Map ? Map<String, dynamic>.from(data) : const {});
+  return _ProjectDetailDto.fromJson(
+      data is Map ? Map<String, dynamic>.from(data) : const {});
 });
 
 enum ProjectManagementSection { projects, types, resources, templates }
@@ -88,10 +101,14 @@ class ProjectManagementScreen extends ConsumerWidget {
     final perms = ref.watch(permissionsProvider);
     final isIntegral = projectFamily == 'INTEGRAL';
     final title = switch (initialSection) {
-      ProjectManagementSection.projects => isIntegral ? 'Proyectos integrales' : 'Obras y proyectos',
-      ProjectManagementSection.types => isIntegral ? 'Tipos integrales' : 'Tipos de obra',
-      ProjectManagementSection.resources => isIntegral ? 'Recursos integrales' : 'Recursos de obra',
-      ProjectManagementSection.templates => isIntegral ? 'Templates integrales' : 'Templates de obra',
+      ProjectManagementSection.projects =>
+        isIntegral ? 'Proyectos integrales' : 'Obras y proyectos',
+      ProjectManagementSection.types =>
+        isIntegral ? 'Tipos integrales' : 'Tipos de obra',
+      ProjectManagementSection.resources =>
+        isIntegral ? 'Recursos integrales' : 'Recursos de obra',
+      ProjectManagementSection.templates =>
+        isIntegral ? 'Templates integrales' : 'Templates de obra',
     };
     final searchHint = switch (initialSection) {
       ProjectManagementSection.projects => 'Buscar proyecto...',
@@ -99,14 +116,19 @@ class ProjectManagementScreen extends ConsumerWidget {
       ProjectManagementSection.resources => null,
       ProjectManagementSection.templates => null,
     };
-    final canCreateProject = initialSection == ProjectManagementSection.projects &&
-        perms.hasAnyPermission([
-          isIntegral ? 'Projects.Integral.Projects.Create' : 'Projects.Work.Projects.Create',
-          'Projects.Admin'
-        ]);
+    final canCreateProject =
+        initialSection == ProjectManagementSection.projects &&
+            perms.hasAnyPermission([
+              isIntegral
+                  ? 'Projects.Integral.Projects.Create'
+                  : 'Projects.Work.Projects.Create',
+              'Projects.Admin'
+            ]);
     final canCreateType = initialSection == ProjectManagementSection.types &&
         perms.hasAnyPermission([
-          isIntegral ? 'Projects.Integral.ProjectTypes.Create' : 'Projects.Work.ProjectTypes.Create',
+          isIntegral
+              ? 'Projects.Integral.ProjectTypes.Create'
+              : 'Projects.Work.ProjectTypes.Create',
           'Projects.Admin'
         ]);
 
@@ -142,7 +164,8 @@ class ProjectManagementScreen extends ConsumerWidget {
                   context: context,
                   isScrollControlled: true,
                   useSafeArea: true,
-                  builder: (_) => _ProjectCreateSheet(projectFamily: projectFamily),
+                  builder: (_) =>
+                      _ProjectCreateSheet(projectFamily: projectFamily),
                 );
                 ref.invalidate(_projectsProvider(projectFamily));
               },
@@ -155,17 +178,22 @@ class ProjectManagementScreen extends ConsumerWidget {
                       context: context,
                       isScrollControlled: true,
                       useSafeArea: true,
-                      builder: (_) => _ProjectTypeCreateSheet(projectFamily: projectFamily),
+                      builder: (_) =>
+                          _ProjectTypeCreateSheet(projectFamily: projectFamily),
                     );
                     ref.invalidate(_projectTypesProvider(projectFamily));
                   },
                 )
               : null,
       body: switch (initialSection) {
-        ProjectManagementSection.projects => _ProjectsTab(projectFamily: projectFamily),
-        ProjectManagementSection.types => _ProjectTypesTab(projectFamily: projectFamily, showCreateAction: false),
-        ProjectManagementSection.resources => _ProjectResourcesTab(projectFamily: projectFamily),
-        ProjectManagementSection.templates => _ProjectTemplatesTab(projectFamily: projectFamily),
+        ProjectManagementSection.projects =>
+          _ProjectsTab(projectFamily: projectFamily),
+        ProjectManagementSection.types => _ProjectTypesTab(
+            projectFamily: projectFamily, showCreateAction: false),
+        ProjectManagementSection.resources =>
+          _ProjectResourcesTab(projectFamily: projectFamily),
+        ProjectManagementSection.templates =>
+          _ProjectTemplatesTab(projectFamily: projectFamily),
       },
     );
   }
@@ -189,7 +217,8 @@ class _ProjectResourcesTab extends ConsumerWidget {
           ? const EmptyState(
               icon: Icons.inventory_2_rounded,
               title: 'Sin recursos',
-              message: 'Los recursos base permiten armar presupuestos y materiales por obra.',
+              message:
+                  'Los recursos base permiten armar presupuestos y materiales por obra.',
             )
           : ListView.separated(
               padding: const EdgeInsets.all(16),
@@ -200,8 +229,10 @@ class _ProjectResourcesTab extends ConsumerWidget {
                 return ListTile(
                   leading: const Icon(Icons.inventory_2_outlined),
                   title: Text(item.name),
-                  subtitle: Text('${item.code} · ${item.unitCode}${item.category.isEmpty ? '' : ' · ${item.category}'}'),
-                  trailing: Text(item.defaultCost <= 0 ? '-' : _money(item.defaultCost)),
+                  subtitle: Text(
+                      '${item.code} · ${item.unitCode}${item.category.isEmpty ? '' : ' · ${item.category}'}'),
+                  trailing: Text(
+                      item.defaultCost <= 0 ? '-' : _money(item.defaultCost)),
                 );
               },
             ),
@@ -227,19 +258,23 @@ class _ProjectTemplatesTab extends ConsumerWidget {
           ? const EmptyState(
               icon: Icons.view_list_rounded,
               title: 'Sin templates',
-              message: 'Los templates aceleran presupuestos, capítulos, partidas y recursos.',
+              message:
+                  'Los templates aceleran presupuestos, capítulos, partidas y recursos.',
             )
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: items.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
               itemBuilder: (_, index) {
                 final item = items[index];
-                return ListTile(
-                  leading: const Icon(Icons.view_list_outlined),
-                  title: Text(item.name),
-                  subtitle: Text('${item.code}${item.typeName == null ? '' : ' · ${item.typeName}'}'),
-                  trailing: StatusBadge(status: item.active ? 'ACTIVO' : 'INACTIVO'),
+                return AppEntityTile(
+                  icon: Icons.view_list_outlined,
+                  title: item.name,
+                  details: [
+                    item.code,
+                    if ((item.typeName ?? '').trim().isNotEmpty) item.typeName!,
+                  ],
+                  status: item.active ? 'ACTIVE' : 'INACTIVE',
                 );
               },
             ),
@@ -270,12 +305,14 @@ class _ProjectsTab extends ConsumerWidget {
           );
         }
         return RefreshIndicator(
-          onRefresh: () async => ref.invalidate(_projectsProvider(projectFamily)),
+          onRefresh: () async =>
+              ref.invalidate(_projectsProvider(projectFamily)),
           child: ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: items.length,
             separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (context, index) => _ProjectTile(project: items[index]),
+            itemBuilder: (context, index) =>
+                _ProjectTile(project: items[index]),
           ),
         );
       },
@@ -290,61 +327,21 @@ class _ProjectTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: () => showDialog<void>(
-          context: context,
-          builder: (_) => _ProjectDetailDialog(project: project),
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            border: Border.all(color: AppColors.border),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceVariant,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.construction_rounded, color: AppColors.accent),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      project.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: AppColors.ink, fontSize: 15, fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '${project.code}${project.typeName == null ? '' : ' - ${project.typeName}'}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              StatusBadge(status: project.status),
-              const SizedBox(width: 4),
-              Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
-            ],
-          ),
-        ),
+    return AppEntityTile(
+      icon: Icons.construction_rounded,
+      title: project.name,
+      details: [
+        project.code,
+        if ((project.typeName ?? '').trim().isNotEmpty) project.typeName!,
+      ],
+      status: project.status,
+      onTap: () => showDialog<void>(
+        context: context,
+        builder: (_) => _ProjectDetailDialog(project: project),
       ),
+      actions: [
+        Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+      ],
     );
   }
 }
@@ -389,7 +386,8 @@ class _ProjectTypesTab extends ConsumerWidget {
                       context: context,
                       isScrollControlled: true,
                       useSafeArea: true,
-                      builder: (_) => _ProjectTypeCreateSheet(projectFamily: projectFamily),
+                      builder: (_) =>
+                          _ProjectTypeCreateSheet(projectFamily: projectFamily),
                     );
                     ref.invalidate(_projectTypesProvider(projectFamily));
                   },
@@ -401,19 +399,20 @@ class _ProjectTypesTab extends ConsumerWidget {
                 ? const EmptyState(
                     icon: Icons.tune_rounded,
                     title: 'Sin tipos',
-                    message: 'Carga los tipos base para clasificar obras y servicios.',
+                    message:
+                        'Carga los tipos base para clasificar obras y servicios.',
                   )
                 : ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: items.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
                       final item = items[index];
-                      return ListTile(
-                        leading: const Icon(Icons.category_rounded),
-                        title: Text(item.name),
-                        subtitle: Text(item.code),
-                        trailing: StatusBadge(status: item.active ? 'ACTIVO' : 'INACTIVO'),
+                      return AppEntityTile(
+                        icon: Icons.category_rounded,
+                        title: item.name,
+                        details: [item.code],
+                        status: item.active ? 'ACTIVE' : 'INACTIVE',
                       );
                     },
                   ),
@@ -430,7 +429,8 @@ class _ProjectCreateSheet extends ConsumerStatefulWidget {
   const _ProjectCreateSheet({required this.projectFamily});
 
   @override
-  ConsumerState<_ProjectCreateSheet> createState() => _ProjectCreateSheetState();
+  ConsumerState<_ProjectCreateSheet> createState() =>
+      _ProjectCreateSheetState();
 }
 
 class _ProjectCreateSheetState extends ConsumerState<_ProjectCreateSheet> {
@@ -450,7 +450,9 @@ class _ProjectCreateSheetState extends ConsumerState<_ProjectCreateSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final types = ref.watch(_projectTypesProvider(widget.projectFamily)).valueOrNull ?? const <_ProjectTypeDto>[];
+    final types =
+        ref.watch(_projectTypesProvider(widget.projectFamily)).valueOrNull ??
+            const <_ProjectTypeDto>[];
     return Padding(
       padding: EdgeInsets.only(
         left: 16,
@@ -465,17 +467,24 @@ class _ProjectCreateSheetState extends ConsumerState<_ProjectCreateSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Nuevo proyecto', style: TextStyle(color: AppColors.ink, fontSize: 18, fontWeight: FontWeight.w800)),
+              Text('Nuevo proyecto',
+                  style: TextStyle(
+                      color: AppColors.ink,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800)),
               const SizedBox(height: 16),
-              AppTextField(label: 'Codigo *', controller: _code, validator: _required),
+              AppTextField(
+                  label: 'Codigo *', controller: _code, validator: _required),
               const SizedBox(height: 12),
-              AppTextField(label: 'Nombre *', controller: _name, validator: _required),
+              AppTextField(
+                  label: 'Nombre *', controller: _name, validator: _required),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 initialValue: _typeId,
                 decoration: const InputDecoration(labelText: 'Tipo'),
                 items: types
-                    .map((type) => DropdownMenuItem<String>(value: type.id, child: Text(type.name)))
+                    .map((type) => DropdownMenuItem<String>(
+                        value: type.id, child: Text(type.name)))
                     .toList(),
                 onChanged: (value) => setState(() => _typeId = value),
               ),
@@ -485,10 +494,13 @@ class _ProjectCreateSheetState extends ConsumerState<_ProjectCreateSheet> {
                 decoration: const InputDecoration(labelText: 'Estado'),
                 items: const [
                   DropdownMenuItem(value: 'DRAFT', child: Text('Borrador')),
-                  DropdownMenuItem(value: 'PLANNED', child: Text('Planificado')),
-                  DropdownMenuItem(value: 'IN_PROGRESS', child: Text('En curso')),
+                  DropdownMenuItem(
+                      value: 'PLANNED', child: Text('Planificado')),
+                  DropdownMenuItem(
+                      value: 'IN_PROGRESS', child: Text('En curso')),
                 ],
-                onChanged: (value) => setState(() => _status = value ?? 'PLANNED'),
+                onChanged: (value) =>
+                    setState(() => _status = value ?? 'PLANNED'),
               ),
               const SizedBox(height: 16),
               AppButton(
@@ -507,12 +519,15 @@ class _ProjectCreateSheetState extends ConsumerState<_ProjectCreateSheet> {
     if (!_formKey.currentState!.validate()) return;
     final auth = ref.read(authNotifierProvider);
     if (auth.tenantId?.isNotEmpty != true && !auth.isAdminGlobal) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selecciona una empresa para crear proyectos.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Selecciona una empresa para crear proyectos.')));
       return;
     }
     setState(() => _saving = true);
     try {
-      await ref.read(dioProvider).post('/v1/project-management/projects', data: {
+      await ref
+          .read(dioProvider)
+          .post('/v1/project-management/projects', data: {
         'tenantId': auth.tenantId ?? 'global',
         'sellerId': auth.sellerId,
         'projectFamily': widget.projectFamily,
@@ -534,10 +549,12 @@ class _ProjectTypeCreateSheet extends ConsumerStatefulWidget {
   const _ProjectTypeCreateSheet({required this.projectFamily});
 
   @override
-  ConsumerState<_ProjectTypeCreateSheet> createState() => _ProjectTypeCreateSheetState();
+  ConsumerState<_ProjectTypeCreateSheet> createState() =>
+      _ProjectTypeCreateSheetState();
 }
 
-class _ProjectTypeCreateSheetState extends ConsumerState<_ProjectTypeCreateSheet> {
+class _ProjectTypeCreateSheetState
+    extends ConsumerState<_ProjectTypeCreateSheet> {
   final _formKey = GlobalKey<FormState>();
   final _code = TextEditingController();
   final _name = TextEditingController();
@@ -565,11 +582,17 @@ class _ProjectTypeCreateSheetState extends ConsumerState<_ProjectTypeCreateSheet
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Nuevo tipo', style: TextStyle(color: AppColors.ink, fontSize: 18, fontWeight: FontWeight.w800)),
+            Text('Nuevo tipo',
+                style: TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800)),
             const SizedBox(height: 16),
-            AppTextField(label: 'Codigo *', controller: _code, validator: _required),
+            AppTextField(
+                label: 'Codigo *', controller: _code, validator: _required),
             const SizedBox(height: 12),
-            AppTextField(label: 'Nombre *', controller: _name, validator: _required),
+            AppTextField(
+                label: 'Nombre *', controller: _name, validator: _required),
             const SizedBox(height: 16),
             AppButton(
               label: _saving ? 'Guardando...' : 'Guardar',
@@ -610,8 +633,10 @@ class _ProjectDetailDialog extends ConsumerWidget {
     final progress = ref.watch(_projectProgressProvider(project.id));
     final detail = ref.watch(_projectDetailProvider(project.id));
     final perms = ref.watch(permissionsProvider);
-    final canCreateTask = perms.hasAnyPermission(['Projects.Tasks.Create', 'Projects.Admin']);
-    final canCreateProgress = perms.hasAnyPermission(['Projects.Progress.Create', 'Projects.Admin']);
+    final canCreateTask =
+        perms.hasAnyPermission(['Projects.Tasks.Create', 'Projects.Admin']);
+    final canCreateProgress =
+        perms.hasAnyPermission(['Projects.Progress.Create', 'Projects.Admin']);
 
     return Dialog(
       insetPadding: const EdgeInsets.all(16),
@@ -628,8 +653,14 @@ class _ProjectDetailDialog extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(project.name, style: TextStyle(color: AppColors.ink, fontSize: 18, fontWeight: FontWeight.w800)),
-                        Text(project.code, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                        Text(project.name,
+                            style: TextStyle(
+                                color: AppColors.ink,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800)),
+                        Text(project.code,
+                            style: TextStyle(
+                                color: AppColors.textSecondary, fontSize: 12)),
                       ],
                     ),
                   ),
@@ -661,20 +692,29 @@ class _ProjectDetailDialog extends ConsumerWidget {
                                   context: context,
                                   isScrollControlled: true,
                                   useSafeArea: true,
-                                  builder: (_) => _TaskCreateSheet(projectId: project.id),
+                                  builder: (_) =>
+                                      _TaskCreateSheet(projectId: project.id),
                                 );
-                                ref.invalidate(_projectTasksProvider(project.id));
+                                ref.invalidate(
+                                    _projectTasksProvider(project.id));
                               },
                               icon: const Icon(Icons.add_task_rounded),
                             )
                           : null,
                     ),
                     tasks.when(
-                      loading: () => const Padding(padding: EdgeInsets.all(16), child: LoadingState()),
-                      error: (_, __) => const Text('No se pudieron cargar las tareas.'),
+                      loading: () => const Padding(
+                          padding: EdgeInsets.all(16), child: LoadingState()),
+                      error: (_, __) =>
+                          const Text('No se pudieron cargar las tareas.'),
                       data: (items) => items.isEmpty
-                          ? const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('Sin tareas cargadas.'))
-                          : Column(children: items.map((item) => _TaskRow(task: item)).toList()),
+                          ? const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Text('Sin tareas cargadas.'))
+                          : Column(
+                              children: items
+                                  .map((item) => _TaskRow(task: item))
+                                  .toList()),
                     ),
                     const SizedBox(height: 18),
                     _SectionHeader(
@@ -687,22 +727,33 @@ class _ProjectDetailDialog extends ConsumerWidget {
                                   context: context,
                                   isScrollControlled: true,
                                   useSafeArea: true,
-                                  builder: (_) => _ProgressCreateSheet(projectId: project.id),
+                                  builder: (_) => _ProgressCreateSheet(
+                                      projectId: project.id),
                                 );
-                                ref.invalidate(_projectProgressProvider(project.id));
-                                ref.invalidate(_projectTasksProvider(project.id));
-                                ref.invalidate(_projectDetailProvider(project.id));
+                                ref.invalidate(
+                                    _projectProgressProvider(project.id));
+                                ref.invalidate(
+                                    _projectTasksProvider(project.id));
+                                ref.invalidate(
+                                    _projectDetailProvider(project.id));
                               },
                               icon: const Icon(Icons.trending_up_rounded),
                             )
                           : null,
                     ),
                     progress.when(
-                      loading: () => const Padding(padding: EdgeInsets.all(16), child: LoadingState()),
-                      error: (_, __) => const Text('No se pudieron cargar los avances.'),
+                      loading: () => const Padding(
+                          padding: EdgeInsets.all(16), child: LoadingState()),
+                      error: (_, __) =>
+                          const Text('No se pudieron cargar los avances.'),
                       data: (items) => items.isEmpty
-                          ? const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('Sin avances registrados.'))
-                          : Column(children: items.map((item) => _ProgressRow(progress: item)).toList()),
+                          ? const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Text('Sin avances registrados.'))
+                          : Column(
+                              children: items
+                                  .map((item) => _ProgressRow(progress: item))
+                                  .toList()),
                     ),
                   ],
                 ),
@@ -725,7 +776,12 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: Text(title, style: TextStyle(color: AppColors.ink, fontSize: 15, fontWeight: FontWeight.w800))),
+        Expanded(
+            child: Text(title,
+                style: TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800))),
         if (action != null) action!,
       ],
     );
@@ -744,7 +800,8 @@ class _TaskRow extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       leading: const Icon(Icons.checklist_rounded),
       title: Text(task.name),
-      subtitle: LinearProgressIndicator(value: (task.progressPercent.clamp(0, 100) / 100).toDouble()),
+      subtitle: LinearProgressIndicator(
+          value: (task.progressPercent.clamp(0, 100) / 100).toDouble()),
       trailing: StatusBadge(status: task.status),
     );
   }
@@ -762,7 +819,8 @@ class _ProgressRow extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       leading: const Icon(Icons.insights_rounded),
       title: Text('${progress.progressPercent.toStringAsFixed(0)}%'),
-      subtitle: Text(progress.notes?.isNotEmpty == true ? progress.notes! : 'Sin notas'),
+      subtitle: Text(
+          progress.notes?.isNotEmpty == true ? progress.notes! : 'Sin notas'),
     );
   }
 }
@@ -776,14 +834,26 @@ class _EvolutionSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final cards = [
       ('Base', _money(detail.baselineBudgetTotal), Icons.flag_rounded),
-      ('Actual', _money(detail.currentBudgetTotal), Icons.request_quote_rounded),
-      ('Desvío', '${_money(detail.budgetDeviationAmount)} · ${detail.budgetDeviationPercent.toStringAsFixed(1)}%', Icons.trending_up_rounded),
+      (
+        'Actual',
+        _money(detail.currentBudgetTotal),
+        Icons.request_quote_rounded
+      ),
+      (
+        'Desvío',
+        '${_money(detail.budgetDeviationAmount)} · ${detail.budgetDeviationPercent.toStringAsFixed(1)}%',
+        Icons.trending_up_rounded
+      ),
       ('Real', _money(detail.realCostTotal), Icons.payments_rounded),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Evolución', style: TextStyle(color: AppColors.ink, fontSize: 15, fontWeight: FontWeight.w800)),
+        Text('Evolución',
+            style: TextStyle(
+                color: AppColors.ink,
+                fontSize: 15,
+                fontWeight: FontWeight.w800)),
         const SizedBox(height: 10),
         GridView.builder(
           shrinkWrap: true,
@@ -813,8 +883,18 @@ class _EvolutionSummary extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(card.$1, style: TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700)),
-                        Text(card.$2, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.ink, fontSize: 13, fontWeight: FontWeight.w900)),
+                        Text(card.$1,
+                            style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700)),
+                        Text(card.$2,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: AppColors.ink,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900)),
                       ],
                     ),
                   ),
@@ -829,8 +909,10 @@ class _EvolutionSummary extends StatelessWidget {
                 dense: true,
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.history_rounded),
-                title: Text(event.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                subtitle: Text(event.message ?? event.eventType, maxLines: 2, overflow: TextOverflow.ellipsis),
+                title: Text(event.title,
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(event.message ?? event.eventType,
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
               )),
         ],
       ],
@@ -863,20 +945,35 @@ class _TaskCreateSheetState extends ConsumerState<_TaskCreateSheet> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: MediaQuery.of(context).viewInsets.bottom + 16),
+      padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 16),
       child: Form(
         key: _formKey,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Nueva tarea', style: TextStyle(color: AppColors.ink, fontSize: 18, fontWeight: FontWeight.w800)),
+            Text('Nueva tarea',
+                style: TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800)),
             const SizedBox(height: 16),
-            AppTextField(label: 'Nombre *', controller: _name, validator: _required),
+            AppTextField(
+                label: 'Nombre *', controller: _name, validator: _required),
             const SizedBox(height: 12),
-            AppTextField(label: 'Avance %', controller: _progress, keyboardType: TextInputType.number),
+            AppTextField(
+                label: 'Avance %',
+                controller: _progress,
+                keyboardType: TextInputType.number),
             const SizedBox(height: 16),
-            AppButton(label: _saving ? 'Guardando...' : 'Guardar', icon: Icons.save_rounded, onPressed: _saving ? null : _save),
+            AppButton(
+                label: _saving ? 'Guardando...' : 'Guardar',
+                icon: Icons.save_rounded,
+                onPressed: _saving ? null : _save),
           ],
         ),
       ),
@@ -887,11 +984,14 @@ class _TaskCreateSheetState extends ConsumerState<_TaskCreateSheet> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      await ref.read(dioProvider).post('/v1/project-management/projects/${widget.projectId}/tasks', data: {
-        'name': _name.text.trim(),
-        'status': 'PENDING',
-        'progressPercent': double.tryParse(_progress.text.replaceAll(',', '.')) ?? 0,
-      });
+      await ref.read(dioProvider).post(
+          '/v1/project-management/projects/${widget.projectId}/tasks',
+          data: {
+            'name': _name.text.trim(),
+            'status': 'PENDING',
+            'progressPercent':
+                double.tryParse(_progress.text.replaceAll(',', '.')) ?? 0,
+          });
       if (mounted) Navigator.of(context).pop();
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -905,7 +1005,8 @@ class _ProgressCreateSheet extends ConsumerStatefulWidget {
   const _ProgressCreateSheet({required this.projectId});
 
   @override
-  ConsumerState<_ProgressCreateSheet> createState() => _ProgressCreateSheetState();
+  ConsumerState<_ProgressCreateSheet> createState() =>
+      _ProgressCreateSheetState();
 }
 
 class _ProgressCreateSheetState extends ConsumerState<_ProgressCreateSheet> {
@@ -924,20 +1025,35 @@ class _ProgressCreateSheetState extends ConsumerState<_ProgressCreateSheet> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: MediaQuery.of(context).viewInsets.bottom + 16),
+      padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 16),
       child: Form(
         key: _formKey,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Registrar avance', style: TextStyle(color: AppColors.ink, fontSize: 18, fontWeight: FontWeight.w800)),
+            Text('Registrar avance',
+                style: TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800)),
             const SizedBox(height: 16),
-            AppTextField(label: 'Avance % *', controller: _percent, keyboardType: TextInputType.number, validator: _required),
+            AppTextField(
+                label: 'Avance % *',
+                controller: _percent,
+                keyboardType: TextInputType.number,
+                validator: _required),
             const SizedBox(height: 12),
             AppTextField(label: 'Notas', controller: _notes, maxLines: 3),
             const SizedBox(height: 16),
-            AppButton(label: _saving ? 'Guardando...' : 'Guardar', icon: Icons.save_rounded, onPressed: _saving ? null : _save),
+            AppButton(
+                label: _saving ? 'Guardando...' : 'Guardar',
+                icon: Icons.save_rounded,
+                onPressed: _saving ? null : _save),
           ],
         ),
       ),
@@ -948,11 +1064,14 @@ class _ProgressCreateSheetState extends ConsumerState<_ProgressCreateSheet> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      await ref.read(dioProvider).post('/v1/project-management/projects/${widget.projectId}/progress', data: {
-        'progressDate': DateTime.now().toIso8601String(),
-        'progressPercent': double.tryParse(_percent.text.replaceAll(',', '.')) ?? 0,
-        'notes': _notes.text.trim(),
-      });
+      await ref.read(dioProvider).post(
+          '/v1/project-management/projects/${widget.projectId}/progress',
+          data: {
+            'progressDate': DateTime.now().toIso8601String(),
+            'progressPercent':
+                double.tryParse(_percent.text.replaceAll(',', '.')) ?? 0,
+            'notes': _notes.text.trim(),
+          });
       if (mounted) Navigator.of(context).pop();
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -967,7 +1086,12 @@ class _ProjectDto {
   final String status;
   final String? typeName;
 
-  const _ProjectDto({required this.id, required this.code, required this.name, required this.status, this.typeName});
+  const _ProjectDto(
+      {required this.id,
+      required this.code,
+      required this.name,
+      required this.status,
+      this.typeName});
 
   factory _ProjectDto.fromJson(Map<String, dynamic> json) => _ProjectDto(
         id: _str(json, 'id'),
@@ -984,9 +1108,14 @@ class _ProjectTypeDto {
   final String name;
   final bool active;
 
-  const _ProjectTypeDto({required this.id, required this.code, required this.name, required this.active});
+  const _ProjectTypeDto(
+      {required this.id,
+      required this.code,
+      required this.name,
+      required this.active});
 
-  factory _ProjectTypeDto.fromJson(Map<String, dynamic> json) => _ProjectTypeDto(
+  factory _ProjectTypeDto.fromJson(Map<String, dynamic> json) =>
+      _ProjectTypeDto(
         id: _str(json, 'id'),
         code: _str(json, 'code'),
         name: _str(json, 'name'),
@@ -1011,13 +1140,18 @@ class _ProjectResourceDto {
     required this.defaultCost,
   });
 
-  factory _ProjectResourceDto.fromJson(Map<String, dynamic> json) => _ProjectResourceDto(
+  factory _ProjectResourceDto.fromJson(Map<String, dynamic> json) =>
+      _ProjectResourceDto(
         id: _str(json, 'id'),
         code: _str(json, 'code'),
         name: _str(json, 'name'),
-        category: _str(json, 'resource_type', fallback: _str(json, 'resourceType')),
-        unitCode: _str(json, 'unit_of_measure', fallback: _str(json, 'unitOfMeasure', fallback: 'UN')),
-        defaultCost: _num(json, 'unit_cost') == 0 ? _num(json, 'unitCost') : _num(json, 'unit_cost'),
+        category:
+            _str(json, 'resource_type', fallback: _str(json, 'resourceType')),
+        unitCode: _str(json, 'unit_of_measure',
+            fallback: _str(json, 'unitOfMeasure', fallback: 'UN')),
+        defaultCost: _num(json, 'unit_cost') == 0
+            ? _num(json, 'unitCost')
+            : _num(json, 'unit_cost'),
       );
 }
 
@@ -1036,11 +1170,13 @@ class _ProjectTemplateDto {
     required this.active,
   });
 
-  factory _ProjectTemplateDto.fromJson(Map<String, dynamic> json) => _ProjectTemplateDto(
+  factory _ProjectTemplateDto.fromJson(Map<String, dynamic> json) =>
+      _ProjectTemplateDto(
         id: _str(json, 'id'),
         code: _str(json, 'code'),
         name: _str(json, 'name'),
-        typeName: _nullableStr(json, 'project_type_name') ?? _nullableStr(json, 'projectTypeName'),
+        typeName: _nullableStr(json, 'project_type_name') ??
+            _nullableStr(json, 'projectTypeName'),
         active: json['active'] != false,
       );
 }
@@ -1050,9 +1186,13 @@ class _ProjectTaskDto {
   final String status;
   final double progressPercent;
 
-  const _ProjectTaskDto({required this.name, required this.status, required this.progressPercent});
+  const _ProjectTaskDto(
+      {required this.name,
+      required this.status,
+      required this.progressPercent});
 
-  factory _ProjectTaskDto.fromJson(Map<String, dynamic> json) => _ProjectTaskDto(
+  factory _ProjectTaskDto.fromJson(Map<String, dynamic> json) =>
+      _ProjectTaskDto(
         name: _str(json, 'name'),
         status: _str(json, 'status', fallback: 'PENDING'),
         progressPercent: _num(json, 'progress_percent'),
@@ -1065,7 +1205,8 @@ class _ProjectProgressDto {
 
   const _ProjectProgressDto({required this.progressPercent, this.notes});
 
-  factory _ProjectProgressDto.fromJson(Map<String, dynamic> json) => _ProjectProgressDto(
+  factory _ProjectProgressDto.fromJson(Map<String, dynamic> json) =>
+      _ProjectProgressDto(
         progressPercent: _num(json, 'progress_percent'),
         notes: _nullableStr(json, 'notes'),
       );
@@ -1090,20 +1231,28 @@ class _ProjectDetailDto {
 
   factory _ProjectDetailDto.fromJson(Map<String, dynamic> json) {
     final evolutionRaw = json['evolution'];
-    final evolution = evolutionRaw is Map ? Map<String, dynamic>.from(evolutionRaw) : const <String, dynamic>{};
+    final evolution = evolutionRaw is Map
+        ? Map<String, dynamic>.from(evolutionRaw)
+        : const <String, dynamic>{};
     final timelineRaw = json['timeline'];
     final timeline = timelineRaw is List
         ? timelineRaw
             .whereType<Map>()
-            .map((item) => _ProjectTimelineEventDto.fromJson(Map<String, dynamic>.from(item)))
+            .map((item) => _ProjectTimelineEventDto.fromJson(
+                Map<String, dynamic>.from(item)))
             .toList()
         : <_ProjectTimelineEventDto>[];
     return _ProjectDetailDto(
-      baselineBudgetTotal: _numAny(evolution, const ['baseline_budget_total', 'baselineBudgetTotal']),
-      currentBudgetTotal: _numAny(evolution, const ['current_budget_total', 'currentBudgetTotal']),
-      budgetDeviationAmount: _numAny(evolution, const ['budget_deviation_amount', 'budgetDeviationAmount']),
-      budgetDeviationPercent: _numAny(evolution, const ['budget_deviation_percent', 'budgetDeviationPercent']),
-      realCostTotal: _numAny(evolution, const ['real_cost_total', 'realCostTotal']),
+      baselineBudgetTotal: _numAny(
+          evolution, const ['baseline_budget_total', 'baselineBudgetTotal']),
+      currentBudgetTotal: _numAny(
+          evolution, const ['current_budget_total', 'currentBudgetTotal']),
+      budgetDeviationAmount: _numAny(evolution,
+          const ['budget_deviation_amount', 'budgetDeviationAmount']),
+      budgetDeviationPercent: _numAny(evolution,
+          const ['budget_deviation_percent', 'budgetDeviationPercent']),
+      realCostTotal:
+          _numAny(evolution, const ['real_cost_total', 'realCostTotal']),
       timeline: timeline,
     );
   }
@@ -1120,19 +1269,25 @@ class _ProjectTimelineEventDto {
     this.message,
   });
 
-  factory _ProjectTimelineEventDto.fromJson(Map<String, dynamic> json) => _ProjectTimelineEventDto(
+  factory _ProjectTimelineEventDto.fromJson(Map<String, dynamic> json) =>
+      _ProjectTimelineEventDto(
         eventType: _str(json, 'event_type', fallback: _str(json, 'eventType')),
-        title: _str(json, 'title', fallback: _str(json, 'event_type', fallback: 'Hito')),
+        title: _str(json, 'title',
+            fallback: _str(json, 'event_type', fallback: 'Hito')),
         message: _nullableStr(json, 'message'),
       );
 }
 
 List<Map<String, dynamic>> _list(Object? data) {
   if (data is! List) return const [];
-  return data.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
+  return data
+      .whereType<Map>()
+      .map((item) => Map<String, dynamic>.from(item))
+      .toList();
 }
 
-String _str(Map<String, dynamic> json, String key, {String fallback = ''}) => json[key]?.toString() ?? fallback;
+String _str(Map<String, dynamic> json, String key, {String fallback = ''}) =>
+    json[key]?.toString() ?? fallback;
 
 String? _nullableStr(Map<String, dynamic> json, String key) {
   final value = json[key]?.toString();
@@ -1159,4 +1314,5 @@ String _money(double value) {
   return '\$ ${value.toStringAsFixed(0)}';
 }
 
-String? _required(String? value) => value == null || value.trim().isEmpty ? 'Requerido' : null;
+String? _required(String? value) =>
+    value == null || value.trim().isEmpty ? 'Requerido' : null;

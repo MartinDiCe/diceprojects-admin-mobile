@@ -267,12 +267,12 @@ class SellerScopeFilter extends ConsumerWidget {
                   isExpanded: true,
                   icon: Icon(Icons.keyboard_arrow_down_rounded,
                       color: AppColors.textSecondary),
-                  hint: const Text('Seller'),
+                  hint: const Text('Vendedor'),
                   items: [
                     if (allowAll)
                       const DropdownMenuItem<String?>(
                         value: null,
-                        child: Text('Todos los sellers'),
+                        child: Text('Todos los vendedores'),
                       ),
                     ...sellers.map(
                       (seller) => DropdownMenuItem<String?>(

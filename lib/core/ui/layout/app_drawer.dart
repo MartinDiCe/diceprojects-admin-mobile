@@ -406,7 +406,6 @@ class AppDrawer extends ConsumerWidget {
                 _navItem(context, '/manual', Icons.menu_book_rounded,
                     'Manuales de uso',
                     primary: true),
-                _navItem(context, '/chat', Icons.forum_rounded, 'Chat IA'),
               ],
             ),
           ),
