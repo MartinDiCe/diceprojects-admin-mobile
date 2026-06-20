@@ -8,6 +8,8 @@ import 'package:app_diceprojects_admin/core/ui/widgets/empty_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/status_badge.dart';
+import 'package:app_diceprojects_admin/features/context/operational_context_provider.dart';
+import 'package:app_diceprojects_admin/features/organization/presentation/widgets/tenant_scope_filter.dart';
 import 'package:app_diceprojects_admin/features/permissions/permissions_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -23,6 +25,8 @@ class ProductDto {
   final double? discountPercent;
   final String status;
   final String? imageUrl;
+  final String? tenantId;
+  final String? sellerId;
 
   const ProductDto({
     required this.id,
@@ -33,6 +37,8 @@ class ProductDto {
     this.discountPercent,
     required this.status,
     this.imageUrl,
+    this.tenantId,
+    this.sellerId,
   });
 
   factory ProductDto.fromJson(Map<String, dynamic> json) => ProductDto(
@@ -48,6 +54,8 @@ class ProductDto {
         // API returns 'statusCode', fallback to 'status'
         status: (json['statusCode'] ?? json['status'] ?? 'ACTIVE').toString(),
         imageUrl: _readImageUrl(json),
+        tenantId: (json['tenantId'] ?? json['companyId'])?.toString(),
+        sellerId: json['sellerId']?.toString(),
       );
 
   static double? _parseDouble(dynamic val) {
@@ -96,24 +104,47 @@ class ProductDto {
 
 class ProductsListNotifier extends ListNotifier<ProductDto> {
   final Dio _dio;
-  ProductsListNotifier(this._dio) : super();
+  final String? tenantId;
+  final String? sellerId;
+
+  ProductsListNotifier(this._dio, this.tenantId, this.sellerId) : super();
 
   @override
   Future<PaginatedResponse<ProductDto>> fetchPage(PageParams params) async {
+    final query = params.toQueryParams();
+    final scopedTenant = tenantId?.trim();
+    final scopedSeller = sellerId?.trim();
+    if (scopedTenant != null && scopedTenant.isNotEmpty) {
+      query['companyId'] = scopedTenant;
+    }
+    if (scopedSeller != null && scopedSeller.isNotEmpty) {
+      query['sellerId'] = scopedSeller;
+    }
     final resp = await _dio.get(
       '/v1/products',
-      queryParameters: params.toQueryParams(),
+      queryParameters: query,
+      options: tenantScopeOptions(scopedTenant, sellerId: scopedSeller),
     );
     return PaginatedResponse.fromJson(resp.data, ProductDto.fromJson);
   }
 
   Future<void> toggleActive(String id) async {
-    await _dio.patch('/v1/products/$id/active');
+    await _dio.patch(
+      '/v1/products/$id/active',
+      options: tenantScopeOptions(tenantId, sellerId: sellerId),
+    );
     reload();
   }
 
-  Future<void> delete(String id) async {
-    await _dio.delete('/v1/products/$id');
+  Future<void> delete(
+    String id, {
+    String? tenantId,
+    String? sellerId,
+  }) async {
+    await _dio.delete(
+      '/v1/products/$id',
+      options: tenantScopeOptions(tenantId, sellerId: sellerId),
+    );
     final nextTotal =
         state.totalElements > 0 ? state.totalElements - 1 : state.totalElements;
     state = state.copyWith(
@@ -123,18 +154,42 @@ class ProductsListNotifier extends ListNotifier<ProductDto> {
   }
 }
 
-final productsListNotifierProvider = StateNotifierProvider.autoDispose<
-    ProductsListNotifier, ListState<ProductDto>>(
-  (ref) => ProductsListNotifier(ref.watch(dioProvider)),
+final productsListNotifierProvider = StateNotifierProvider.autoDispose
+    .family<ProductsListNotifier, ListState<ProductDto>, _ProductsListArgs>(
+  (ref, args) => ProductsListNotifier(
+    ref.watch(dioProvider),
+    args.tenantId,
+    args.sellerId,
+  ),
 );
+
+class _ProductsListArgs {
+  final String? tenantId;
+  final String? sellerId;
+
+  const _ProductsListArgs(this.tenantId, this.sellerId);
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _ProductsListArgs &&
+          other.tenantId == tenantId &&
+          other.sellerId == sellerId;
+
+  @override
+  int get hashCode => Object.hash(tenantId, sellerId);
+}
 
 class ProductsListScreen extends ConsumerWidget {
   const ProductsListScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(productsListNotifierProvider);
-    final notifier = ref.read(productsListNotifierProvider.notifier);
+    final scopedTenantId = effectiveTenantId(ref);
+    final scopedSellerId = effectiveSellerId(ref);
+    final args = _ProductsListArgs(scopedTenantId, scopedSellerId);
+    final state = ref.watch(productsListNotifierProvider(args));
+    final notifier = ref.read(productsListNotifierProvider(args).notifier);
     final perms = ref.watch(permissionsProvider);
     final canCreate = perms.hasAnyPermission([
       'Products.Articles.Create',
@@ -147,6 +202,8 @@ class ProductsListScreen extends ConsumerWidget {
       'Products.Admin',
     ]);
     final canDelete = perms.hasAnyPermission([
+      'Products.Eliminar',
+      'Products.Products.Delete',
       'Products.Articles.Delete',
       'Producto.EliminarProducto',
       'Products.Admin',
@@ -165,12 +222,26 @@ class ProductsListScreen extends ConsumerWidget {
               label: 'Nuevo producto',
             )
           : null,
-      body: _buildBody(context, state, notifier, canEdit, canDelete),
+      body: _buildBody(
+        context,
+        state,
+        notifier,
+        canEdit,
+        canDelete,
+        scopedTenantId,
+        scopedSellerId,
+      ),
     );
   }
 
-  Widget _buildBody(BuildContext context, ListState<ProductDto> state,
-      ProductsListNotifier notifier, bool canEdit, bool canDelete) {
+  Widget _buildBody(
+      BuildContext context,
+      ListState<ProductDto> state,
+      ProductsListNotifier notifier,
+      bool canEdit,
+      bool canDelete,
+      String? scopedTenantId,
+      String? scopedSellerId) {
     if (state.isLoading) return const LoadingState();
     if (state.error != null && state.items.isEmpty) {
       return ErrorState(
@@ -215,7 +286,11 @@ class ProductsListScreen extends ConsumerWidget {
                 notifier.reload();
               },
               onToggle: () => notifier.toggleActive(product.id),
-              onDelete: () => notifier.delete(product.id),
+              onDelete: () => notifier.delete(
+                product.id,
+                tenantId: product.tenantId ?? scopedTenantId,
+                sellerId: product.sellerId ?? scopedSellerId,
+              ),
               canEdit: canEdit,
               canDelete: canDelete,
             );
