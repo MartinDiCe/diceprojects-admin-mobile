@@ -40,10 +40,17 @@ import 'package:app_diceprojects_admin/features/warehouse/presentation/screens/w
 import 'package:app_diceprojects_admin/features/products/presentation/screens/product_form_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/product_import_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/product_presentations_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/product_statuses_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/brands_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/price_types_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/presentation_types_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/publication_channels_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/stock_statuses_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/stock_strategies_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/product_types_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/products_list_screen.dart';
 import 'package:app_diceprojects_admin/features/products/presentation/screens/storage_conditions_screen.dart';
+import 'package:app_diceprojects_admin/features/products/presentation/screens/unit_of_measure_screen.dart';
 import 'package:app_diceprojects_admin/features/projects/presentation/screens/project_management_screen.dart';
 import 'package:app_diceprojects_admin/features/purchases/presentation/screens/purchase_requests_screen.dart';
 import 'package:app_diceprojects_admin/features/roles/presentation/screens/role_detail_screen.dart';
@@ -150,12 +157,22 @@ final routerProvider = Provider<GoRouter>((ref) {
                 const DashboardScreen(scope: DashboardScope.products),
           ),
           GoRoute(
+            path: '/products/dashboard',
+            builder: (_, __) =>
+                const DashboardScreen(scope: DashboardScope.products),
+          ),
+          GoRoute(
             path: '/dashboard/sales',
             builder: (_, __) =>
                 const DashboardScreen(scope: DashboardScope.sales),
           ),
           GoRoute(
             path: '/dashboard/marketing',
+            builder: (_, __) =>
+                const DashboardScreen(scope: DashboardScope.marketing),
+          ),
+          GoRoute(
+            path: '/marketing/dashboard',
             builder: (_, __) =>
                 const DashboardScreen(scope: DashboardScope.marketing),
           ),
@@ -170,12 +187,27 @@ final routerProvider = Provider<GoRouter>((ref) {
                 const DashboardScreen(scope: DashboardScope.purchases),
           ),
           GoRoute(
+            path: '/purchases/dashboard',
+            builder: (_, __) =>
+                const DashboardScreen(scope: DashboardScope.purchases),
+          ),
+          GoRoute(
             path: '/dashboard/projects',
             builder: (_, __) =>
                 const DashboardScreen(scope: DashboardScope.projects),
           ),
           GoRoute(
+            path: '/projects/dashboard',
+            builder: (_, __) =>
+                const DashboardScreen(scope: DashboardScope.projects),
+          ),
+          GoRoute(
             path: '/dashboard/integral-projects',
+            builder: (_, __) =>
+                const DashboardScreen(scope: DashboardScope.integralProjects),
+          ),
+          GoRoute(
+            path: '/integral-projects/dashboard',
             builder: (_, __) =>
                 const DashboardScreen(scope: DashboardScope.integralProjects),
           ),
@@ -277,11 +309,27 @@ final routerProvider = Provider<GoRouter>((ref) {
                 const PartiesListScreen(kind: PartyKind.supplier),
           ),
           GoRoute(
+            path: '/partners',
+            builder: (_, __) =>
+                const PartiesListScreen(kind: PartyKind.supplier),
+          ),
+          GoRoute(
             path: '/organization/suppliers/new',
             builder: (_, __) => const PartyFormScreen(kind: PartyKind.supplier),
           ),
           GoRoute(
+            path: '/partners/new',
+            builder: (_, __) => const PartyFormScreen(kind: PartyKind.supplier),
+          ),
+          GoRoute(
             path: '/organization/suppliers/:id/edit',
+            builder: (_, state) => PartyFormScreen(
+              kind: PartyKind.supplier,
+              id: state.pathParameters['id'],
+            ),
+          ),
+          GoRoute(
+            path: '/partners/:id/edit',
             builder: (_, state) => PartyFormScreen(
               kind: PartyKind.supplier,
               id: state.pathParameters['id'],
@@ -293,11 +341,27 @@ final routerProvider = Provider<GoRouter>((ref) {
                 const PartiesListScreen(kind: PartyKind.customer),
           ),
           GoRoute(
+            path: '/customers',
+            builder: (_, __) =>
+                const PartiesListScreen(kind: PartyKind.customer),
+          ),
+          GoRoute(
             path: '/organization/customers/new',
             builder: (_, __) => const PartyFormScreen(kind: PartyKind.customer),
           ),
           GoRoute(
+            path: '/customers/new',
+            builder: (_, __) => const PartyFormScreen(kind: PartyKind.customer),
+          ),
+          GoRoute(
             path: '/organization/customers/:id/edit',
+            builder: (_, state) => PartyFormScreen(
+              kind: PartyKind.customer,
+              id: state.pathParameters['id'],
+            ),
+          ),
+          GoRoute(
+            path: '/customers/:id/edit',
             builder: (_, state) => PartyFormScreen(
               kind: PartyKind.customer,
               id: state.pathParameters['id'],
@@ -337,6 +401,34 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/products/storage-conditions',
             builder: (_, __) => const StorageConditionsScreen(),
+          ),
+          GoRoute(
+            path: '/products/statuses',
+            builder: (_, __) => const ProductStatusesScreen(),
+          ),
+          GoRoute(
+            path: '/products/stock-statuses',
+            builder: (_, __) => const StockStatusesScreen(),
+          ),
+          GoRoute(
+            path: '/products/price-types',
+            builder: (_, __) => const PriceTypesScreen(),
+          ),
+          GoRoute(
+            path: '/products/publication-channels',
+            builder: (_, __) => const PublicationChannelsScreen(),
+          ),
+          GoRoute(
+            path: '/products/unit-of-measure',
+            builder: (_, __) => const UnitOfMeasureScreen(),
+          ),
+          GoRoute(
+            path: '/products/stock-strategies',
+            builder: (_, __) => const StockStrategiesScreen(),
+          ),
+          GoRoute(
+            path: '/products/presentation-types',
+            builder: (_, __) => const PresentationTypesScreen(),
           ),
           GoRoute(
             path: '/products/new',
@@ -390,6 +482,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ),
           GoRoute(
+            path: '/projects/management',
+            builder: (_, __) => const ProjectManagementScreen(
+              initialSection: ProjectManagementSection.projects,
+              projectFamily: 'WORK',
+            ),
+          ),
+          GoRoute(
             path: '/projects/types',
             builder: (_, __) => const ProjectManagementScreen(
               initialSection: ProjectManagementSection.types,
@@ -412,6 +511,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/integral-projects',
+            builder: (_, __) => const ProjectManagementScreen(
+              initialSection: ProjectManagementSection.projects,
+              projectFamily: 'INTEGRAL',
+            ),
+          ),
+          GoRoute(
+            path: '/integral-projects/management',
             builder: (_, __) => const ProjectManagementScreen(
               initialSection: ProjectManagementSection.projects,
               projectFamily: 'INTEGRAL',

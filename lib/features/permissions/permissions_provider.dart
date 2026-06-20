@@ -5,20 +5,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class PermissionsService {
   final Set<String> _permissions;
   final bool _isAdminGlobal;
+  final bool _hasAdministratorRole;
 
-  const PermissionsService(this._permissions, this._isAdminGlobal);
+  const PermissionsService(
+    this._permissions,
+    this._isAdminGlobal,
+    this._hasAdministratorRole,
+  );
 
   bool hasPermission(String code) =>
-      _isAdminGlobal || _permissions.contains(code);
+      _canBypassPermissionChecks || _permissions.contains(code);
 
   bool hasAnyPermission(List<String> codes) =>
-      _isAdminGlobal || codes.any(_permissions.contains);
+      _canBypassPermissionChecks || codes.any(_permissions.contains);
 
   bool hasAllPermissions(List<String> codes) =>
-      _isAdminGlobal || codes.every(_permissions.contains);
+      _canBypassPermissionChecks || codes.every(_permissions.contains);
 
   bool canAccessRoute(String route) {
-    if (_isAdminGlobal) return true;
+    if (_canBypassPermissionChecks) return true;
     if (_isAlwaysAllowedRoute(route)) return true;
 
     final gates = permissionGates.entries.toList()
@@ -34,21 +39,22 @@ class PermissionsService {
   String firstAllowedRoute() {
     const preferredRoutes = [
       '/dashboard',
-      '/dashboard/products',
+      '/products/dashboard',
       '/dashboard/sales',
+      '/marketing/dashboard',
       '/dashboard/warehouse',
-      '/dashboard/purchases',
-      '/dashboard/projects',
-      '/dashboard/integral-projects',
+      '/purchases/dashboard',
+      '/projects/dashboard',
+      '/integral-projects/dashboard',
       '/products',
       '/sales/quotes',
       '/purchases/requests',
-      '/projects',
-      '/integral-projects',
+      '/projects/management',
+      '/integral-projects/management',
       '/warehouse',
       '/people',
-      '/organization/customers',
-      '/organization/suppliers',
+      '/customers',
+      '/partners',
       '/organization/sellers',
       '/marketing/campaigns',
       '/notifications/center',
@@ -61,6 +67,9 @@ class PermissionsService {
     return '/manual';
   }
 
+  bool get _canBypassPermissionChecks =>
+      _isAdminGlobal || _hasAdministratorRole;
+
   bool _isAlwaysAllowedRoute(String route) =>
       route == '/403' ||
       route == '/chat' ||
@@ -72,5 +81,9 @@ class PermissionsService {
 
 final permissionsProvider = Provider<PermissionsService>((ref) {
   final auth = ref.watch(authNotifierProvider);
-  return PermissionsService(auth.permissions, auth.isAdminGlobal);
+  return PermissionsService(
+    auth.permissions,
+    auth.isAdminGlobal,
+    auth.hasAdministratorRole,
+  );
 });

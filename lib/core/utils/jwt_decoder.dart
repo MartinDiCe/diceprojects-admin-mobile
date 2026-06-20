@@ -28,12 +28,43 @@ class JwtDecoder {
 
   static List<String> getRoles(String token) {
     final payload = decode(token);
-    final roles = payload['roles'];
-    if (roles is List) return roles.map((r) => r.toString()).toList();
-    return [];
+    final values = <String>{};
+    for (final key in const [
+      'roles',
+      'role',
+      'authorities',
+      'authority',
+      'scope',
+      'scp',
+    ]) {
+      _collectRoleValues(payload[key], values);
+    }
+    return values.toList(growable: false);
   }
 
-    static String? getTenantId(String token) =>
+  static void _collectRoleValues(dynamic raw, Set<String> values) {
+    if (raw == null) return;
+    if (raw is List) {
+      for (final item in raw) {
+        _collectRoleValues(item, values);
+      }
+      return;
+    }
+    if (raw is Map) {
+      for (final key in const ['role', 'code', 'name', 'authority']) {
+        _collectRoleValues(raw[key], values);
+      }
+      return;
+    }
+    final text = raw.toString().trim();
+    if (text.isEmpty) return;
+    for (final part in text.split(RegExp(r'[\s,;]+'))) {
+      final normalized = part.trim();
+      if (normalized.isNotEmpty) values.add(normalized);
+    }
+  }
+
+  static String? getTenantId(String token) =>
       decode(token)['tenantId']?.toString();
 
   static String? getSellerId(String token) =>
@@ -45,7 +76,12 @@ class JwtDecoder {
   static List<String> getSellerIds(String token) {
     final payload = decode(token);
     final ids = payload['sellerIds'];
-    if (ids is List) return ids.map((id) => id.toString()).where((id) => id.trim().isNotEmpty).toList();
+    if (ids is List) {
+      return ids
+          .map((id) => id.toString())
+          .where((id) => id.trim().isNotEmpty)
+          .toList();
+    }
     final sellerId = payload['sellerId']?.toString();
     if (sellerId != null && sellerId.trim().isNotEmpty) return [sellerId];
     return [];

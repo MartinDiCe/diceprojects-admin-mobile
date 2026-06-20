@@ -11,6 +11,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -30,12 +31,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _biometricAvailable = false;
   bool _loadingBiometric = false;
   bool _autoPromptedBiometric = false;
+  String? _packageVersionLabel;
   StreamSubscription<Uri>? _appLinkSub;
 
   @override
   void initState() {
     super.initState();
     _hydrateSavedLogin();
+    _hydratePackageInfo();
     _listenOAuthCallback();
   }
 
@@ -271,7 +274,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _openContact() async {
-    final uri = Uri.parse(AppConfig.contactUrl);
+    final uri = Uri.parse(AppConfig.publicLeadFormUrl);
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -279,6 +282,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           content: Text('No se pudo abrir el contacto comercial.'),
         ),
       );
+    }
+  }
+
+  Future<void> _hydratePackageInfo() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (!mounted) return;
+      setState(() {
+        _packageVersionLabel = '${info.version}+${info.buildNumber}';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _packageVersionLabel =
+            '${AppConfig.appVersionName}+${AppConfig.appBuildNumber}';
+      });
     }
   }
 
@@ -643,7 +662,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-                                      'Versión ${AppConfig.appVersionName}+${AppConfig.appBuildNumber}',
+                                      'Versión ${_packageVersionLabel ?? '${AppConfig.appVersionName}+${AppConfig.appBuildNumber}'}',
                                       style: TextStyle(
                                         color: AppColors.textMuted,
                                         fontSize: 11,

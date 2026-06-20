@@ -1,39 +1,115 @@
-/// Mapa de rutas a permisos requeridos (al menos uno debe estar presente)
+/// Mapa de rutas a permisos requeridos (al menos uno debe estar presente).
+///
+/// La APK acepta las rutas canonicas de la webapp y mantiene aliases historicos
+/// para no romper accesos instalados en versiones anteriores.
 const Map<String, List<String>> permissionGates = {
+  '/dashboard': ['Dashboard.Operational.View', 'Dashboard.General.View'],
+
+  // Dashboards
+  '/products/dashboard': [
+    'Products.Dashboard.View',
+    'Producto.VerProducto',
+    'Products.Access',
+    'Products.Listar',
+    'Products.Ver',
+    'Products.Products.Access',
+    'Products.Products.List',
+    'Products.Products.View',
+    'Products.Articles.View',
+    'Products.Articles.List',
+    'Products.Admin',
+  ],
   '/dashboard/products': [
     'Products.Dashboard.View',
+    'Producto.VerProducto',
+    'Products.Access',
+    'Products.Listar',
+    'Products.Ver',
+    'Products.Products.Access',
+    'Products.Products.List',
+    'Products.Products.View',
     'Products.Articles.View',
     'Products.Articles.List',
     'Products.Admin',
   ],
   '/dashboard/sales': [
+    'Sales.Access',
     'Sales.Dashboard.View',
     'Sales.Quotes.View',
     'Sales.Quotes.List',
     'Sales.Admin',
   ],
-  '/dashboard/marketing': [
+  '/marketing/dashboard': [
+    'Marketing.Access',
+    'Marketing.Listar',
+    'Marketing.Ver',
     'Marketing.Dashboard.View',
+    'Marketing.Metrics.View',
+    'Marketing.Campaigns.View',
+    'Marketing.Leads.View',
+    'Marketing.Admin',
+  ],
+  '/dashboard/marketing': [
+    'Marketing.Access',
+    'Marketing.Listar',
+    'Marketing.Ver',
+    'Marketing.Dashboard.View',
+    'Marketing.Metrics.View',
     'Marketing.Campaigns.View',
     'Marketing.Leads.View',
     'Marketing.Admin',
   ],
   '/dashboard/warehouse': [
     'Warehouse.Dashboard.View',
+    'Warehouse.Warehouses.List',
+    'Warehouse.Warehouses.View',
     'Warehouse.Stock.View',
     'Warehouse.Stock.List',
+    'Warehouse.Stock.ViewMovements',
     'Warehouse.Admin',
+    'Warehouse.Editor',
+    'Warehouse.Viewer',
+  ],
+  '/warehouse/dashboard': [
+    'Warehouse.Dashboard.View',
+    'Warehouse.Warehouses.List',
+    'Warehouse.Warehouses.View',
+    'Warehouse.Stock.View',
+    'Warehouse.Stock.List',
+    'Warehouse.Stock.ViewMovements',
+    'Warehouse.Admin',
+    'Warehouse.Editor',
+    'Warehouse.Viewer',
+  ],
+  '/purchases/dashboard': [
+    'Purchases.Dashboard.View',
+    'Purchases.Access',
+    'Purchases.Admin',
   ],
   '/dashboard/purchases': [
     'Purchases.Dashboard.View',
     'Purchases.Access',
     'Purchases.Admin',
   ],
+  '/projects/dashboard': [
+    'Projects.Work.Dashboard.View',
+    'Projects.Work.Access',
+    'Projects.Work.Projects.List',
+    'Projects.Work.Projects.View',
+    'Projects.Admin',
+  ],
   '/dashboard/projects': [
     'Projects.Work.Dashboard.View',
     'Projects.Work.Access',
     'Projects.Work.Projects.List',
     'Projects.Work.Projects.View',
+    'Projects.Admin',
+  ],
+  '/integral-projects/dashboard': [
+    'Projects.Integral.Dashboard.View',
+    'Projects.Integral.Access',
+    'Projects.Integral.Projects.List',
+    'Projects.Integral.Projects.View',
     'Projects.Admin',
   ],
   '/dashboard/integral-projects': [
@@ -43,29 +119,35 @@ const Map<String, List<String>> permissionGates = {
     'Projects.Integral.Projects.View',
     'Projects.Admin',
   ],
-  '/dashboard': [
-    'Dashboard.Operational.View',
-    'Dashboard.General.View',
-  ],
+
+  // Seguridad
   '/iam/users/new': [
     'IAM.Users.Create',
     'IAM.Invitations.Send',
-    'IAM.Users.Admin'
+    'IAM.Users.Admin',
   ],
   '/iam/users': ['IAM.Users.List', 'IAM.Users.View', 'IAM.Users.Admin'],
   '/iam/invitations': ['IAM.Invitations.List', 'IAM.Invitations.Send'],
   '/authorization': ['IAM.Roles.List'],
+
+  // Logs
   '/logs/audit': ['IAM.Audit.List'],
-  '/logs/apitraces': ['Logs.ApiTraces.List'],
-  '/logs/notifications': ['Logs.NotificationLogs.List'],
-  '/admin/tenants/new': [
-    'Organization.Tenants.Create',
-    'Organization.Admin',
+  '/logs/apitraces': [
+    'Logs.ApiTraces.List',
+    'Core.Parameters.Access',
+    'Core.Parameters.Admin',
+    'IAM.Admin',
   ],
-  '/admin/tenants/': [
-    'Organization.Tenants.Edit',
-    'Organization.Admin',
+  '/logs/notifications': [
+    'Logs.NotificationLogs.List',
+    'Notificacion.VerLogs',
+    'Notification.Admin',
+    'IAM.Admin',
   ],
+
+  // Organizacion
+  '/admin/tenants/new': ['Organization.Tenants.Create', 'Organization.Admin'],
+  '/admin/tenants/': ['Organization.Tenants.Edit', 'Organization.Admin'],
   '/admin/tenants': [
     'Organization.Tenants.List',
     'Organization.Tenants.View',
@@ -86,85 +168,245 @@ const Map<String, List<String>> permissionGates = {
     'Organization.Admin',
   ],
   '/organization/sellers': [
+    'Organization.Sellers.Access',
     'Organization.Sellers.List',
     'Organization.Sellers.View',
+    'Organization.Sellers.Listar',
+    'Organization.Sellers.Admin',
     'Organization.Admin',
   ],
   '/organization/suppliers/new': [
+    'Partners.Create',
+    'Partners.Admin',
     'Organization.Suppliers.Create',
     'Organization.Admin',
   ],
   '/organization/suppliers/': [
+    'Partners.Edit',
+    'Partners.Admin',
     'Organization.Suppliers.Edit',
     'Organization.Admin',
   ],
   '/organization/suppliers': [
+    'Partners.Access',
+    'Partners.List',
+    'Partners.View',
+    'Partners.Admin',
+    'Organization.Suppliers.List',
+    'Organization.Suppliers.View',
+    'Organization.Admin',
+  ],
+  '/partners/new': [
+    'Partners.Create',
+    'Partners.Admin',
+    'Organization.Suppliers.Create',
+    'Organization.Admin',
+  ],
+  '/partners/': [
+    'Partners.Edit',
+    'Partners.Admin',
+    'Organization.Suppliers.Edit',
+    'Organization.Admin',
+  ],
+  '/partners': [
+    'Partners.Access',
+    'Partners.List',
+    'Partners.View',
+    'Partners.Admin',
     'Organization.Suppliers.List',
     'Organization.Suppliers.View',
     'Organization.Admin',
   ],
   '/organization/customers/new': [
+    'Customers.Create',
+    'Customers.Admin',
     'Organization.Customers.Create',
     'Organization.Admin',
   ],
   '/organization/customers/': [
+    'Customers.Edit',
+    'Customers.Admin',
     'Organization.Customers.Edit',
     'Organization.Admin',
   ],
   '/organization/customers': [
+    'Customers.Access',
+    'Customers.List',
+    'Customers.View',
+    'Customers.Admin',
     'Organization.Customers.List',
     'Organization.Customers.View',
     'Organization.Admin',
   ],
-  '/people/new': ['People.Create', 'People.Admin'],
-  '/people/': ['People.Edit', 'People.Admin'],
-  '/people': ['People.List', 'People.View', 'Persona.Ver', 'People.Admin'],
+  '/customers/new': [
+    'Customers.Create',
+    'Customers.Admin',
+    'Organization.Customers.Create',
+    'Organization.Admin',
+  ],
+  '/customers/': [
+    'Customers.Edit',
+    'Customers.Admin',
+    'Organization.Customers.Edit',
+    'Organization.Admin',
+  ],
+  '/customers': [
+    'Customers.Access',
+    'Customers.List',
+    'Customers.View',
+    'Customers.Admin',
+    'Organization.Customers.List',
+    'Organization.Customers.View',
+    'Organization.Admin',
+  ],
+
+  // Personas
+  '/people/new': ['People.Persons.Create', 'People.Create', 'People.Admin'],
+  '/people/': ['People.Persons.Edit', 'People.Edit', 'People.Admin'],
+  '/people': [
+    'Persona.Ver',
+    'People.Access',
+    'People.Listar',
+    'People.Ver',
+    'People.Persons.List',
+    'People.Persons.View',
+    'People.List',
+    'People.View',
+    'People.Admin',
+  ],
+
+  // Productos
   '/products/import': [
+    'Jobs.Execute',
+    'Jobs.Read',
+    'Products.Import.Execute',
+    'Products.Import.Access',
     'Products.Articles.Import',
     'Producto.ImportarProductos',
     'Products.Admin',
   ],
   '/products/new': [
+    'Products.Products.Create',
     'Products.Articles.Create',
     'Producto.CrearProducto',
     'Products.Admin',
   ],
   '/products/': [
+    'Products.Products.Edit',
     'Products.Articles.Edit',
     'Producto.EditarProducto',
     'Products.Admin',
   ],
   '/products': [
+    'Producto.VerProducto',
+    'Products.Access',
+    'Products.Listar',
+    'Products.Ver',
+    'Products.Products.Access',
+    'Products.Products.List',
+    'Products.Products.View',
     'Products.Articles.List',
     'Products.Articles.View',
-    'Producto.VerProducto',
     'Products.Admin',
   ],
   '/products/types': [
     'Products.Types.List',
     'Products.Types.View',
+    'Products.Types.Create',
+    'Products.Types.Edit',
+    'Products.Types.Delete',
     'Products.Articles.List',
     'Products.Admin',
   ],
   '/products/brands': [
     'Products.Brands.List',
     'Products.Brands.View',
+    'Products.Brands.Create',
+    'Products.Brands.Edit',
+    'Products.Brands.Delete',
     'Products.Articles.List',
     'Products.Admin',
   ],
   '/products/storage-conditions': [
+    'Products.Storage.List',
+    'Products.Storage.View',
+    'Products.Storage.Create',
+    'Products.Storage.Edit',
+    'Products.Storage.Delete',
     'Products.StorageConditions.List',
     'Products.StorageConditions.View',
     'Products.Articles.List',
     'Products.Admin',
   ],
-  '/sales/quotes': ['Sales.Quotes.List', 'Sales.Quotes.View', 'Sales.Admin'],
+  '/products/statuses': [
+    'Products.Statuses.List',
+    'Products.Statuses.Create',
+    'Products.Statuses.Edit',
+    'Products.Statuses.Delete',
+    'Products.Admin',
+    'Products.Editar',
+  ],
+  '/products/stock-statuses': [
+    'Products.StockStatuses.List',
+    'Products.StockStatuses.Create',
+    'Products.StockStatuses.Edit',
+    'Products.StockStatuses.Delete',
+    'Products.Admin',
+    'Products.Editar',
+  ],
+  '/products/price-types': [
+    'Products.PriceTypes.List',
+    'Products.PriceTypes.Create',
+    'Products.PriceTypes.Edit',
+    'Products.PriceTypes.Delete',
+    'Products.Admin',
+    'Products.Editar',
+  ],
+  '/products/publication-channels': [
+    'Products.PublicationChannels.List',
+    'Products.PublicationChannels.Create',
+    'Products.PublicationChannels.Edit',
+    'Products.PublicationChannels.Delete',
+    'Products.Admin',
+    'Products.Editar',
+  ],
+  '/products/unit-of-measure': [
+    'Products.UoM.List',
+    'Products.Admin',
+    'Products.Editar',
+  ],
+  '/products/stock-strategies': [
+    'Products.StockStrategies.List',
+    'Products.Admin',
+    'Products.Editar',
+  ],
+  '/products/presentation-types': [
+    'Products.PresentationTypes.List',
+    'Products.Admin',
+    'Products.Editar',
+  ],
+
+  // Ventas y compras
+  '/sales/quotes': [
+    'Sales.Quotes.Access',
+    'Sales.Quotes.List',
+    'Sales.Quotes.View',
+    'Sales.Admin',
+  ],
   '/purchases/requests': [
     'Purchases.Access',
     'Purchases.Requests.Access',
     'Purchases.Requests.List',
     'Purchases.Requests.View',
     'Purchases.Admin',
+  ],
+
+  // Proyectos
+  '/projects/management': [
+    'Projects.Work.Access',
+    'Projects.Work.Projects.List',
+    'Projects.Work.Projects.View',
+    'Projects.Admin',
   ],
   '/projects': [
     'Projects.Work.Access',
@@ -185,6 +427,12 @@ const Map<String, List<String>> permissionGates = {
   '/projects/templates': [
     'Projects.Work.ProjectTemplates.List',
     'Projects.Work.ProjectTemplates.View',
+    'Projects.Admin',
+  ],
+  '/integral-projects/management': [
+    'Projects.Integral.Access',
+    'Projects.Integral.Projects.List',
+    'Projects.Integral.Projects.View',
     'Projects.Admin',
   ],
   '/integral-projects': [
@@ -208,6 +456,8 @@ const Map<String, List<String>> permissionGates = {
     'Projects.Integral.ProjectTemplates.View',
     'Projects.Admin',
   ],
+
+  // Warehouse
   '/warehouse/stock': [
     'Warehouse.Stock.List',
     'Warehouse.Stock.View',
@@ -224,6 +474,7 @@ const Map<String, List<String>> permissionGates = {
   '/warehouse/types': [
     'Warehouse.Types.List',
     'Warehouse.Types.View',
+    'Warehouse.Types.Admin',
     'Warehouse.Admin',
   ],
   '/warehouse/': [
@@ -235,9 +486,19 @@ const Map<String, List<String>> permissionGates = {
   '/warehouse': [
     'Warehouse.Warehouses.List',
     'Warehouse.Warehouses.View',
+    'Warehouse.Warehouses.Create',
+    'Warehouse.Warehouses.Edit',
+    'Warehouse.Warehouses.Delete',
+    'Warehouse.Stock.View',
+    'Warehouse.Stock.ViewMovements',
     'Warehouse.Admin',
   ],
+
+  // Marketing
   '/marketing/campaigns': [
+    'Marketing.Access',
+    'Marketing.Listar',
+    'Marketing.Ver',
     'Marketing.Campaigns.List',
     'Marketing.Campaigns.View',
     'Marketing.Campaign.List',
@@ -246,6 +507,9 @@ const Map<String, List<String>> permissionGates = {
     'Marketing.Admin',
   ],
   '/marketing/coupons': [
+    'Marketing.Access',
+    'Marketing.Listar',
+    'Marketing.Ver',
     'Marketing.Coupons.List',
     'Marketing.Coupons.View',
     'Marketing.Coupon.List',
@@ -254,17 +518,27 @@ const Map<String, List<String>> permissionGates = {
     'Marketing.Admin',
   ],
   '/marketing/leads': [
+    'Marketing.Access',
+    'Marketing.Listar',
+    'Marketing.Ver',
     'Marketing.Leads.List',
     'Marketing.Leads.View',
     'Marketing.VerLead',
     'Marketing.Admin',
   ],
   '/marketing/destacados': [
+    'Marketing.Access',
+    'Marketing.Listar',
+    'Marketing.Ver',
     'Marketing.FeaturedProducts.List',
     'Marketing.FeaturedProducts.View',
+    'Marketing.Featured.List',
+    'Marketing.Featured.View',
     'Marketing.VerDestacados',
     'Marketing.Admin',
   ],
+
+  // Notificaciones
   '/notifications/center': [
     'Notification.Inbox',
     'Notification.Access',
@@ -278,28 +552,68 @@ const Map<String, List<String>> permissionGates = {
   '/notifications/types': [
     'Notification.Listar',
     'Notification.Admin',
-    'Notificacion.VerTipos'
+    'Notificacion.VerTipos',
   ],
   '/notifications/templates': [
     'Notification.Listar',
     'Notification.Admin',
-    'Notificacion.VerPlantillas'
+    'Notificacion.VerPlantillas',
   ],
   '/notifications/sender-profiles': [
     'Notification.Listar',
-    'Notification.Admin'
+    'Notification.Admin',
   ],
   '/notifications/variables': [
     'Notification.Listar',
     'Notification.Admin',
     'Notificacion.VerPlantillas',
   ],
-  '/core/currencies': ['Core.VerMoneda', 'Currencies.Admin'],
-  '/core/sectors': ['Core.VerSector', 'Core.Sectors.List', 'Core.Admin'],
-  '/core/languages': ['Core.VerIdioma', 'Languages.Admin'],
-  '/core/geo/countries': ['Core.VerGeografia', 'Countries.Admin'],
-  '/core/geo/states': ['Core.VerGeografia'],
-  '/core/geo/cities': ['Core.VerGeografia'],
-  '/core/toggles': ['Core.VerToggle', 'Core.Toggles.Admin'],
-  '/core/parameters': ['Core.Parameters.Ver'],
+
+  // Core
+  '/core/currencies': [
+    'Core.VerMoneda',
+    'Currencies.Listar',
+    'Currencies.Ver',
+    'Currencies.Admin',
+  ],
+  '/core/sectors': [
+    'Sector.Listar',
+    'Sector.Ver',
+    'Sector.Admin',
+    'Core.VerSector',
+    'Core.Sectors.List',
+    'Core.Admin',
+  ],
+  '/core/languages': [
+    'Core.VerIdioma',
+    'Languages.Listar',
+    'Languages.Ver',
+    'Languages.Admin',
+  ],
+  '/core/geo/countries': [
+    'Core.VerGeografia',
+    'Countries.Listar',
+    'Countries.Ver',
+    'Countries.Admin',
+  ],
+  '/core/geo/states': [
+    'Core.VerGeografia',
+    'States.Listar',
+    'States.Ver',
+    'States.Admin',
+  ],
+  '/core/geo/cities': [
+    'Core.VerGeografia',
+    'Cities.Listar',
+    'Cities.Ver',
+    'Cities.Admin',
+  ],
+  '/core/toggles': [
+    'Core.VerToggle',
+    'Core.Toggles.Listar',
+    'Core.Toggles.Ver',
+    'Core.Toggles.Admin',
+    'Core.Toggles.Admin',
+  ],
+  '/core/parameters': ['Core.VerParametro', 'Core.Parameters.Ver'],
 };

@@ -85,6 +85,30 @@ Salida esperada del AAB:
 build/app/outputs/bundle/release/app-release.aab
 ```
 
+Para generar un AAB de Play Store incrementando automaticamente el build number:
+
+```powershell
+.\tools\build-release-aab.ps1
+```
+
+El script lee `version` desde `pubspec.yaml`, suma `+1` al build, sincroniza `AppConfig`, limpia, compila y copia el AAB al Escritorio como:
+
+```text
+diceprojects-backoffice-<version>-<build>.aab
+```
+
+Para verificar que version usaria sin compilar:
+
+```powershell
+.\tools\build-release-aab.ps1 -DryRun
+```
+
+Si una compilacion anterior ya incremento la version pero fallo antes de copiar el AAB, recompila esa misma version sin volver a sumar:
+
+```powershell
+.\tools\build-release-aab.ps1 -NoIncrement
+```
+
 Si `flutter build appbundle --release` falla localmente en el paso de strip de símbolos nativos, validar el Android SDK con:
 
 ```powershell

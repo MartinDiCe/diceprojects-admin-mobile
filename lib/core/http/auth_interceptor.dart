@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:app_diceprojects_admin/core/config/app_config.dart';
 import 'package:app_diceprojects_admin/core/storage/secure_storage.dart';
+import 'package:app_diceprojects_admin/core/utils/jwt_decoder.dart';
 import 'package:dio/dio.dart';
 
 class AuthInterceptor extends Interceptor {
@@ -56,6 +57,7 @@ class AuthInterceptor extends Interceptor {
 
       // Inject tenantId for multi-tenant scope (mirrors web buildParams logic)
       final claims = _decodeJwt(token);
+      final roles = JwtDecoder.getRoles(token);
       final tenantId = claims['tenantId']?.toString();
       final sellerId = claims['sellerId']?.toString();
       final sellerIds = claims['sellerIds'];
@@ -63,6 +65,9 @@ class AuthInterceptor extends Interceptor {
       if (!isAdminGlobal && tenantId.trim().isNotEmpty) {
         options.queryParameters.putIfAbsent('tenantId', () => tenantId.trim());
         options.headers.putIfAbsent('X-Tenant-Id', () => tenantId.trim());
+      }
+      if (roles.isNotEmpty) {
+        options.headers.putIfAbsent('X-Roles', () => roles.join(','));
       }
       if (sellerId != null && sellerId.trim().isNotEmpty) {
         options.queryParameters.putIfAbsent('sellerId', () => sellerId.trim());

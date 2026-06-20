@@ -40,29 +40,50 @@ class AppDrawer extends ConsumerWidget {
     final headerSubtleBorder = isDarkTheme
         ? AppColors.white.withValues(alpha: 0.10)
         : AppColors.border.withValues(alpha: 0.70);
-    final canSecurity = perms.canAccessRoute('/iam/users');
+    final canSecurity = perms.canAccessRoute('/iam/users') ||
+        perms.canAccessRoute('/authorization') ||
+        perms.canAccessRoute('/iam/invitations');
+    final canLogs = perms.canAccessRoute('/logs/audit') ||
+        perms.canAccessRoute('/logs/apitraces') ||
+        perms.canAccessRoute('/logs/notifications');
     final canOrganization = perms.canAccessRoute('/admin/tenants') ||
         perms.canAccessRoute('/admin/branches') ||
         perms.canAccessRoute('/organization/sellers') ||
-        perms.canAccessRoute('/organization/suppliers') ||
-        perms.canAccessRoute('/organization/customers') ||
+        perms.canAccessRoute('/partners') ||
+        perms.canAccessRoute('/customers') ||
         perms.canAccessRoute('/people');
     final canWarehouse = perms.canAccessRoute('/warehouse') ||
         perms.canAccessRoute('/warehouse/stock') ||
-        perms.canAccessRoute('/warehouse/operations');
-    final canProducts = perms.canAccessRoute('/products');
-    final canSales = perms.canAccessRoute('/sales/quotes');
+        perms.canAccessRoute('/warehouse/operations') ||
+        perms.canAccessRoute('/warehouse/types');
+    final canProducts = perms.canAccessRoute('/products') ||
+        perms.canAccessRoute('/products/import') ||
+        perms.canAccessRoute('/products/types') ||
+        perms.canAccessRoute('/products/brands') ||
+        perms.canAccessRoute('/products/storage-conditions') ||
+        perms.canAccessRoute('/products/statuses') ||
+        perms.canAccessRoute('/products/stock-statuses') ||
+        perms.canAccessRoute('/products/price-types') ||
+        perms.canAccessRoute('/products/publication-channels') ||
+        perms.canAccessRoute('/products/unit-of-measure') ||
+        perms.canAccessRoute('/products/stock-strategies') ||
+        perms.canAccessRoute('/products/presentation-types');
+    final canSales = perms.canAccessRoute('/dashboard/sales') ||
+        perms.canAccessRoute('/sales/quotes');
     final canGeneralDashboard = perms.canAccessRoute('/dashboard');
-    final canPurchases = perms.canAccessRoute('/purchases/requests');
-    final canWorkProjects = perms.canAccessRoute('/projects') ||
+    final canPurchases = perms.canAccessRoute('/purchases/dashboard') ||
+        perms.canAccessRoute('/purchases/requests');
+    final canWorkProjects = perms.canAccessRoute('/projects/management') ||
         perms.canAccessRoute('/projects/types') ||
         perms.canAccessRoute('/projects/resources') ||
         perms.canAccessRoute('/projects/templates');
-    final canIntegralProjects = perms.canAccessRoute('/integral-projects') ||
-        perms.canAccessRoute('/integral-projects/types') ||
-        perms.canAccessRoute('/integral-projects/resources') ||
-        perms.canAccessRoute('/integral-projects/templates');
-    final canMarketing = perms.canAccessRoute('/marketing/campaigns') ||
+    final canIntegralProjects =
+        perms.canAccessRoute('/integral-projects/management') ||
+            perms.canAccessRoute('/integral-projects/types') ||
+            perms.canAccessRoute('/integral-projects/resources') ||
+            perms.canAccessRoute('/integral-projects/templates');
+    final canMarketing = perms.canAccessRoute('/marketing/dashboard') ||
+        perms.canAccessRoute('/marketing/campaigns') ||
         perms.canAccessRoute('/marketing/coupons') ||
         perms.canAccessRoute('/marketing/leads') ||
         perms.canAccessRoute('/marketing/destacados');
@@ -170,26 +191,26 @@ class AppDrawer extends ConsumerWidget {
                   _navItem(context, '/dashboard', Icons.dashboard_rounded,
                       'Dashboard',
                       primary: true),
-                if (perms.canAccessRoute('/dashboard/products'))
-                  _navItem(context, '/dashboard/products',
+                if (perms.canAccessRoute('/products/dashboard'))
+                  _navItem(context, '/products/dashboard',
                       Icons.inventory_2_rounded, 'Dashboard Productos'),
                 if (perms.canAccessRoute('/dashboard/sales'))
                   _navItem(context, '/dashboard/sales',
                       Icons.request_quote_rounded, 'Dashboard Ventas'),
-                if (perms.canAccessRoute('/dashboard/marketing'))
-                  _navItem(context, '/dashboard/marketing',
+                if (perms.canAccessRoute('/marketing/dashboard'))
+                  _navItem(context, '/marketing/dashboard',
                       Icons.campaign_rounded, 'Dashboard Marketing'),
                 if (perms.canAccessRoute('/dashboard/warehouse'))
                   _navItem(context, '/dashboard/warehouse',
                       Icons.warehouse_rounded, 'Dashboard Almacenes'),
-                if (perms.canAccessRoute('/dashboard/purchases'))
-                  _navItem(context, '/dashboard/purchases',
+                if (perms.canAccessRoute('/purchases/dashboard'))
+                  _navItem(context, '/purchases/dashboard',
                       Icons.assignment_turned_in_rounded, 'Dashboard Compras'),
-                if (perms.canAccessRoute('/dashboard/projects'))
-                  _navItem(context, '/dashboard/projects',
+                if (perms.canAccessRoute('/projects/dashboard'))
+                  _navItem(context, '/projects/dashboard',
                       Icons.engineering_rounded, 'Dashboard Obras'),
-                if (perms.canAccessRoute('/dashboard/integral-projects'))
-                  _navItem(context, '/dashboard/integral-projects',
+                if (perms.canAccessRoute('/integral-projects/dashboard'))
+                  _navItem(context, '/integral-projects/dashboard',
                       Icons.account_tree_rounded, 'Dashboard Servicios'),
 
                 // ── Seguridad ───────────────────────────────────
@@ -199,6 +220,27 @@ class AppDrawer extends ConsumerWidget {
                     _navItem(
                         context, '/iam/users', Icons.people_rounded, 'Usuarios',
                         primary: true),
+                  if (perms.canAccessRoute('/authorization'))
+                    _navItem(context, '/authorization',
+                        Icons.admin_panel_settings_rounded, 'Roles'),
+                  if (perms.canAccessRoute('/iam/invitations'))
+                    _navItem(context, '/iam/invitations',
+                        Icons.mark_email_unread_rounded, 'Invitaciones'),
+                ],
+
+                // ── Logs ────────────────────────────────────────
+                if (canLogs) ...[
+                  const _SectionHeader(label: 'Logs'),
+                  if (perms.canAccessRoute('/logs/audit'))
+                    _navItem(context, '/logs/audit', Icons.fact_check_rounded,
+                        'Auditoría',
+                        primary: true),
+                  if (perms.canAccessRoute('/logs/apitraces'))
+                    _navItem(context, '/logs/apitraces', Icons.route_rounded,
+                        'API traces'),
+                  if (perms.canAccessRoute('/logs/notifications'))
+                    _navItem(context, '/logs/notifications',
+                        Icons.notifications_active_rounded, 'Notificaciones'),
                 ],
 
                 // ── Organización ────────────────────────────────
@@ -214,12 +256,12 @@ class AppDrawer extends ConsumerWidget {
                   if (perms.canAccessRoute('/organization/sellers'))
                     _navItem(context, '/organization/sellers',
                         Icons.storefront_rounded, 'Vendedores'),
-                  if (perms.canAccessRoute('/organization/suppliers'))
-                    _navItem(context, '/organization/suppliers',
-                        Icons.local_shipping_rounded, 'Proveedores'),
-                  if (perms.canAccessRoute('/organization/customers'))
-                    _navItem(context, '/organization/customers',
-                        Icons.handshake_rounded, 'Clientes'),
+                  if (perms.canAccessRoute('/partners'))
+                    _navItem(context, '/partners', Icons.local_shipping_rounded,
+                        'Proveedores'),
+                  if (perms.canAccessRoute('/customers'))
+                    _navItem(context, '/customers', Icons.handshake_rounded,
+                        'Clientes'),
                   if (perms.canAccessRoute('/people'))
                     _navItem(
                         context, '/people', Icons.badge_rounded, 'Personas',
@@ -239,6 +281,9 @@ class AppDrawer extends ConsumerWidget {
                   if (perms.canAccessRoute('/warehouse/operations'))
                     _navItem(context, '/warehouse/operations',
                         Icons.sync_alt_rounded, 'Operaciones'),
+                  if (perms.canAccessRoute('/warehouse/types'))
+                    _navItem(context, '/warehouse/types',
+                        Icons.category_rounded, 'Tipos de depósito'),
                 ],
 
                 // ── Productos ────────────────────────────────────
@@ -248,6 +293,39 @@ class AppDrawer extends ConsumerWidget {
                     _navItem(context, '/products', Icons.inventory_2_rounded,
                         'Artículos',
                         primary: true),
+                  if (perms.canAccessRoute('/products/import'))
+                    _navItem(context, '/products/import',
+                        Icons.file_upload_rounded, 'Importar productos'),
+                  if (perms.canAccessRoute('/products/types'))
+                    _navItem(context, '/products/types', Icons.category_rounded,
+                        'Tipos de producto'),
+                  if (perms.canAccessRoute('/products/brands'))
+                    _navItem(context, '/products/brands', Icons.sell_rounded,
+                        'Marcas'),
+                  if (perms.canAccessRoute('/products/storage-conditions'))
+                    _navItem(context, '/products/storage-conditions',
+                        Icons.ac_unit_rounded, 'Condiciones de guarda'),
+                  if (perms.canAccessRoute('/products/statuses'))
+                    _navItem(context, '/products/statuses', Icons.flag_rounded,
+                        'Estados de producto'),
+                  if (perms.canAccessRoute('/products/stock-statuses'))
+                    _navItem(context, '/products/stock-statuses',
+                        Icons.inventory_rounded, 'Estados de stock'),
+                  if (perms.canAccessRoute('/products/price-types'))
+                    _navItem(context, '/products/price-types',
+                        Icons.price_change_rounded, 'Tipos de precio'),
+                  if (perms.canAccessRoute('/products/publication-channels'))
+                    _navItem(context, '/products/publication-channels',
+                        Icons.public_rounded, 'Canales de publicación'),
+                  if (perms.canAccessRoute('/products/unit-of-measure'))
+                    _navItem(context, '/products/unit-of-measure',
+                        Icons.straighten_rounded, 'Unidades de medida'),
+                  if (perms.canAccessRoute('/products/stock-strategies'))
+                    _navItem(context, '/products/stock-strategies',
+                        Icons.account_tree_rounded, 'Estrategias de stock'),
+                  if (perms.canAccessRoute('/products/presentation-types'))
+                    _navItem(context, '/products/presentation-types',
+                        Icons.view_in_ar_rounded, 'Tipos de presentación'),
                 ],
                 // ── Ventas ──────────────────────────────────────
                 if (canSales) ...[
@@ -273,9 +351,9 @@ class AppDrawer extends ConsumerWidget {
                 // ── Proyectos ───────────────────────────────────
                 if (canWorkProjects) ...[
                   const _SectionHeader(label: 'Proyectos'),
-                  if (perms.canAccessRoute('/projects'))
-                    _navItem(context, '/projects', Icons.engineering_rounded,
-                        'Obras y proyectos',
+                  if (perms.canAccessRoute('/projects/management'))
+                    _navItem(context, '/projects/management',
+                        Icons.engineering_rounded, 'Obras y proyectos',
                         primary: true),
                   if (perms.canAccessRoute('/projects/types'))
                     _navItem(context, '/projects/types', Icons.layers_rounded,
@@ -291,8 +369,8 @@ class AppDrawer extends ConsumerWidget {
                 // ── Servicios integrales ───────────────────────
                 if (canIntegralProjects) ...[
                   const _SectionHeader(label: 'Servicios integrales'),
-                  if (perms.canAccessRoute('/integral-projects'))
-                    _navItem(context, '/integral-projects',
+                  if (perms.canAccessRoute('/integral-projects/management'))
+                    _navItem(context, '/integral-projects/management',
                         Icons.account_tree_rounded, 'Proyectos integrales',
                         primary: true),
                   if (perms.canAccessRoute('/integral-projects/types'))

@@ -22,6 +22,7 @@ class AuthState {
   final String sellerScope;
   final List<String> sellerIds;
   final bool isAdminGlobal;
+  final bool hasAdministratorRole;
   final Set<String> permissions;
   final bool isLoading;
   final bool isInitialized;
@@ -36,14 +37,14 @@ class AuthState {
     this.sellerScope = 'NONE',
     this.sellerIds = const [],
     this.isAdminGlobal = false,
+    this.hasAdministratorRole = false,
     this.permissions = const {},
     this.isLoading = false,
     this.isInitialized = false,
     this.error,
   });
 
-  bool get isAuthenticated =>
-      token != null && isInitialized && !isLoading;
+  bool get isAuthenticated => token != null && isInitialized && !isLoading;
 
   AuthState copyWith({
     String? token,
@@ -54,6 +55,7 @@ class AuthState {
     String? sellerScope,
     List<String>? sellerIds,
     bool? isAdminGlobal,
+    bool? hasAdministratorRole,
     Set<String>? permissions,
     bool? isLoading,
     bool? isInitialized,
@@ -69,10 +71,11 @@ class AuthState {
       sellerId: clearToken ? null : (sellerId ?? this.sellerId),
       sellerScope: clearToken ? 'NONE' : (sellerScope ?? this.sellerScope),
       sellerIds: clearToken ? const [] : (sellerIds ?? this.sellerIds),
-      isAdminGlobal:
-          clearToken ? false : (isAdminGlobal ?? this.isAdminGlobal),
-      permissions:
-          clearToken ? const {} : (permissions ?? this.permissions),
+      isAdminGlobal: clearToken ? false : (isAdminGlobal ?? this.isAdminGlobal),
+      hasAdministratorRole: clearToken
+          ? false
+          : (hasAdministratorRole ?? this.hasAdministratorRole),
+      permissions: clearToken ? const {} : (permissions ?? this.permissions),
       isLoading: isLoading ?? this.isLoading,
       isInitialized: isInitialized ?? this.isInitialized,
       error: clearError ? null : (error ?? this.error),
@@ -99,9 +102,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           JwtDecoder.isExpired(token)) {
         await _storage.delete(AppConfig.tokenKey);
         state = state.copyWith(
-            isLoading: false,
-            isInitialized: true,
-            clearToken: true);
+            isLoading: false, isInitialized: true, clearToken: true);
         return;
       }
       await _buildStateFromToken(token);
@@ -144,7 +145,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _buildStateFromToken(token);
       return true;
     } on DioException catch (e) {
-      debugPrint('[AUTH] DioException: status=${e.response?.statusCode} msg=${e.message}');
+      debugPrint(
+          '[AUTH] DioException: status=${e.response?.statusCode} msg=${e.message}');
       // Try to extract the real backend message for better diagnostics
       final responseData = e.response?.data;
       final backendMsg = responseData is Map
@@ -157,9 +159,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
         // In non-release mode, show real backend error (could be service-down vs wrong password)
         message = kReleaseMode
             ? 'Credenciales inválidas. Verificá tu usuario y contraseña.'
-            : (backendMsg?.isNotEmpty == true ? backendMsg! : 'Credenciales inválidas (HTTP 401). Verificá usuario/contraseña o estado de los servicios.');
+            : (backendMsg?.isNotEmpty == true
+                ? backendMsg!
+                : 'Credenciales inválidas (HTTP 401). Verificá usuario/contraseña o estado de los servicios.');
       } else {
-        message = backendMsg?.isNotEmpty == true ? backendMsg! : ErrorHandler.handle(e).message;
+        message = backendMsg?.isNotEmpty == true
+            ? backendMsg!
+            : ErrorHandler.handle(e).message;
       }
       state = state.copyWith(isLoading: false, error: message);
       return false;
@@ -260,6 +266,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final sellerScope = JwtDecoder.getSellerScope(token);
     final sellerIds = JwtDecoder.getSellerIds(token);
     final isAdminGlobal = tenantId == null || tenantId.trim().isEmpty;
+    var hasAdministratorRole = _hasAdministratorRole(roles);
 
     // Prefer effective permissions for current principal.
     // Fallback to per-role permissions (legacy/web strategy) if backend doesn't support it.
@@ -270,12 +277,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final data = resp.data;
       final perms = data is Map ? data['permissions'] as List? : null;
       if (perms != null) {
-        allPermissions.addAll(
-          perms
-              .whereType<Map>()
-              .where((p) => p['code'] != null)
-              .map((p) => p['code'].toString()),
-        );
+        allPermissions.addAll(_parsePermissionCodes(perms));
       }
       mePermissionsFetched = true;
     } catch (_) {
@@ -291,11 +293,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
             // Response shape: { roleCode: string, permissions: [...] }
             final perms = data is Map ? data['permissions'] as List? : null;
             if (perms != null) {
-              return perms
-                  .whereType<Map>()
-                  .where((p) => p['code'] != null)
-                  .map((p) => p['code'].toString())
-                  .toSet();
+              return _parsePermissionCodes(perms);
             }
           } catch (_) {
             // graceful degradation — same as web
@@ -308,6 +306,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
     }
 
+    hasAdministratorRole =
+        hasAdministratorRole || _hasAdministratorPermissions(allPermissions);
+
     state = AuthState(
       token: token,
       username: username,
@@ -317,6 +318,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       sellerScope: sellerScope,
       sellerIds: sellerIds,
       isAdminGlobal: isAdminGlobal,
+      hasAdministratorRole: hasAdministratorRole,
       permissions: allPermissions,
       isLoading: false,
       isInitialized: true,
@@ -360,12 +362,61 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await _storage.write(AppConfig.refreshDeviceIdKey, deviceId);
     return deviceId;
   }
+
+  static bool _hasAdministratorRole(List<String> roles) {
+    return roles.any((role) {
+      final normalized = _normalizePrivilegeToken(role);
+      return normalized == 'ADMINISTRADOR' ||
+          normalized == 'ROLE_ADMINISTRADOR' ||
+          normalized == 'ADMIN' ||
+          normalized == 'ROLE_ADMIN' ||
+          normalized == 'SUPER_ADMIN' ||
+          normalized == 'SUPERADMIN';
+    });
+  }
+
+  static bool _hasAdministratorPermissions(Set<String> permissions) {
+    return permissions.any((permission) {
+      final normalized = _normalizePrivilegeToken(permission);
+      return normalized == 'ADMINISTRADOR' ||
+          normalized == 'ROLE_ADMINISTRADOR' ||
+          normalized == 'ADMIN' ||
+          normalized == 'SUPER_ADMIN' ||
+          normalized == 'IAM_ADMIN' ||
+          normalized == 'IAM.ADMIN' ||
+          normalized == 'IAM.ADMINISTRADOR' ||
+          normalized == 'IAM.ROLES.CREATE' ||
+          normalized == 'IAM.ROLES.EDIT' ||
+          normalized == 'IAM.USERS.CREATE' ||
+          normalized == 'IAM.USERS.EDIT' ||
+          normalized == 'AUTORIZACION.EDITARROLES' ||
+          normalized == 'AUTORIZACION.ASIGNARROL';
+    });
+  }
+
+  static String _normalizePrivilegeToken(String value) {
+    return value.trim().toUpperCase().replaceAll('-', '_').replaceAll(' ', '_');
+  }
+
+  static Set<String> _parsePermissionCodes(List<dynamic> permissions) {
+    return permissions
+        .map((permission) {
+          if (permission is String) return permission;
+          if (permission is Map && permission['code'] != null) {
+            return permission['code'].toString();
+          }
+          return null;
+        })
+        .whereType<String>()
+        .map((code) => code.trim())
+        .where((code) => code.isNotEmpty)
+        .toSet();
+  }
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
-final authNotifierProvider =
-    StateNotifierProvider<AuthNotifier, AuthState>(
+final authNotifierProvider = StateNotifierProvider<AuthNotifier, AuthState>(
   (ref) => AuthNotifier(
     ref.read(secureStorageProvider),
     ref.read(dioProvider),

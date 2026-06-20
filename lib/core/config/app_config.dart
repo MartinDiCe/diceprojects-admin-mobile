@@ -9,15 +9,24 @@ class AppConfig {
   );
   static const String contactUrl = String.fromEnvironment(
     'CONTACT_URL',
-    defaultValue: 'https://diceprojects.com/contacto',
+    defaultValue:
+        'https://backoffice.diceprojects.com/public/lead-forms/diceprojects-backoffice-access',
+  );
+  static const String leadFormKey = String.fromEnvironment(
+    'BACKOFFICE_ACCESS_LEAD_FORM_KEY',
+    defaultValue: 'diceprojects-backoffice-access',
+  );
+  static const String publicWebBaseUrl = String.fromEnvironment(
+    'PUBLIC_WEB_BASE_URL',
+    defaultValue: 'https://backoffice.diceprojects.com',
   );
   static const String appVersionName = String.fromEnvironment(
     'APP_VERSION_NAME',
-    defaultValue: '1.0.5',
+    defaultValue: '1.0.6',
   );
   static const String appBuildNumber = String.fromEnvironment(
     'APP_BUILD_NUMBER',
-    defaultValue: '21',
+    defaultValue: '29',
   );
   static const String reviewerUsername = String.fromEnvironment(
     'REVIEWER_USERNAME',
@@ -40,4 +49,15 @@ class AppConfig {
   static const String rememberedPasswordKey = 'auth_remembered_password';
 
   static const int defaultPageSize = 10;
+
+  static String get publicLeadFormUrl {
+    final explicit = contactUrl.trim();
+    if (explicit.isNotEmpty && !explicit.endsWith('/contacto')) {
+      return explicit;
+    }
+    final base = publicWebBaseUrl.endsWith('/')
+        ? publicWebBaseUrl.substring(0, publicWebBaseUrl.length - 1)
+        : publicWebBaseUrl;
+    return '$base/public/lead-forms/$leadFormKey';
+  }
 }
