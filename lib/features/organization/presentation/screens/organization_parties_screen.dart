@@ -178,18 +178,44 @@ class PartiesListScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final args = _PartiesListArgs(
-      kind,
-      effectiveTenantId(ref),
-      effectiveSellerId(ref),
-    );
-    final state = ref.watch(partiesListProvider(args));
-    final notifier = ref.read(partiesListProvider(args).notifier);
+    final auth = ref.watch(authNotifierProvider);
+    final tenantId = effectiveTenantId(ref);
+    final sellerId = effectiveSellerId(ref);
+    final mustChooseTenant =
+        auth.isAdminGlobal && (tenantId == null || tenantId.isEmpty);
     final perms = ref.watch(permissionsProvider);
     final canCreate = perms.hasAnyPermission(
         ['${kind.permissionPrefix}.Create', 'Organization.Admin']);
     final canEdit = perms.hasAnyPermission(
         ['${kind.permissionPrefix}.Edit', 'Organization.Admin']);
+
+    if (mustChooseTenant) {
+      return AppPageScaffold(
+        title: kind.title,
+        searchHint: 'Buscar ${kind.singular.toLowerCase()}...',
+        body: Column(
+          children: [
+            const _PartyScopeBar(),
+            Expanded(
+              child: EmptyState(
+                icon: Icons.business_rounded,
+                title: 'Seleccioná una empresa',
+                message:
+                    'Elegí una empresa para cargar ${kind.title.toLowerCase()}.',
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final args = _PartiesListArgs(
+      kind,
+      tenantId,
+      sellerId,
+    );
+    final state = ref.watch(partiesListProvider(args));
+    final notifier = ref.read(partiesListProvider(args).notifier);
 
     return AppPageScaffold(
       title: kind.title,
@@ -204,7 +230,12 @@ class PartiesListScreen extends ConsumerWidget {
               },
             )
           : null,
-      body: _body(context, state, notifier, canEdit),
+      body: Column(
+        children: [
+          if (auth.isAdminGlobal) const _PartyScopeBar(),
+          Expanded(child: _body(context, state, notifier, canEdit)),
+        ],
+      ),
     );
   }
 
@@ -258,6 +289,99 @@ class PartiesListScreen extends ConsumerWidget {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+class _PartyScopeBar extends ConsumerWidget {
+  const _PartyScopeBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = ref.watch(operationalContextProvider);
+    final tenants = ref.watch(tenantScopeOptionsProvider);
+    final sellers = ref.watch(sellerScopeOptionsProvider(selected.tenantId));
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          tenants.when(
+            loading: () => const LinearProgressIndicator(),
+            error: (_, __) => const Text(
+              'No pudimos cargar empresas.',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            data: (items) => DropdownButtonFormField<String>(
+              initialValue: items.any((item) => item.id == selected.tenantId)
+                  ? selected.tenantId
+                  : null,
+              decoration: const InputDecoration(labelText: 'Empresa *'),
+              isExpanded: true,
+              items: items
+                  .map(
+                    (tenant) => DropdownMenuItem<String>(
+                      value: tenant.id,
+                      child: Text(
+                        tenant.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) => ref
+                  .read(operationalContextProvider.notifier)
+                  .setTenant(value),
+            ),
+          ),
+          sellers.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (items) {
+              if (items.isEmpty || selected.tenantId == null) {
+                return const SizedBox.shrink();
+              }
+              return Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: DropdownButtonFormField<String>(
+                  initialValue:
+                      items.any((item) => item.id == selected.sellerId)
+                          ? selected.sellerId
+                          : null,
+                  decoration: const InputDecoration(labelText: 'Vendedor'),
+                  isExpanded: true,
+                  items: [
+                    const DropdownMenuItem<String>(
+                      value: '',
+                      child: Text('Todos los vendedores'),
+                    ),
+                    ...items.map(
+                      (seller) => DropdownMenuItem<String>(
+                        value: seller.id,
+                        child: Text(
+                          seller.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) => ref
+                      .read(operationalContextProvider.notifier)
+                      .setSeller(value),
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }

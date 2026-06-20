@@ -23,40 +23,40 @@ class _CopilotFloatingWidgetState extends State<CopilotFloatingWidget> {
   }
 
   void _minimize() {
-    setState(() => _isOpen = false);
-  }
-
-  void _close() {
+    if (!mounted || !_isOpen) return;
     setState(() => _isOpen = false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Positioned.fill(
-      child: Stack(
-        children: [
-          IgnorePointer(
-            ignoring: !_isOpen,
-            child: AnimatedOpacity(
-              opacity: _isOpen ? 1 : 0,
-              duration: const Duration(milliseconds: 180),
-              child: GestureDetector(
-                onTap: _minimize,
-                child: Container(color: Colors.black.withValues(alpha: 0.18)),
+      child: PopScope(
+        canPop: !_isOpen,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && _isOpen) {
+            _minimize();
+          }
+        },
+        child: Stack(
+          children: [
+            if (_isOpen)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _minimize,
+                  child: Container(color: Colors.black.withValues(alpha: 0.18)),
+                ),
               ),
-            ),
-          ),
-          IgnorePointer(
-            ignoring: !_isOpen,
-            child: _FloatingPanel(
-              isOpen: _isOpen,
-              hasEverOpened: _hasEverOpened,
-              onClose: _close,
-              onMinimize: _minimize,
-            ),
-          ),
-          _CopilotFab(isOpen: _isOpen, onTap: _open),
-        ],
+            if (_isOpen || _hasEverOpened)
+              _FloatingPanel(
+                isOpen: _isOpen,
+                hasEverOpened: _hasEverOpened,
+                onClose: _minimize,
+                onMinimize: _minimize,
+              ),
+            if (!_isOpen) _CopilotFab(onTap: _open),
+          ],
+        ),
       ),
     );
   }
@@ -86,49 +86,42 @@ class _FloatingPanel extends StatelessWidget {
         : math.min(height - 120, 640.0);
 
     return AnimatedPositioned(
-      duration: const Duration(milliseconds: 260),
+      duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
       left: width < 720 ? 10 : null,
       right: 10,
       bottom: isOpen ? 0 : -panelHeight - 24,
       width: width < 720 ? null : panelWidth,
       height: panelHeight,
-      child: AnimatedOpacity(
-        opacity: isOpen ? 1 : 0,
-        duration: const Duration(milliseconds: 180),
-        child: Material(
-          color: AppColors.background,
-          elevation: 20,
-          shadowColor: Colors.black.withValues(alpha: 0.35),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-          clipBehavior: Clip.antiAlias,
-          child: hasEverOpened
-              ? BackofficeCopilotPanel(
-                  showHeader: true,
-                  onClose: onClose,
-                  onMinimize: onMinimize,
-                )
-              : const SizedBox.shrink(),
-        ),
+      child: Material(
+        color: AppColors.background,
+        elevation: 20,
+        shadowColor: Colors.black.withValues(alpha: 0.35),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+        clipBehavior: Clip.antiAlias,
+        child: hasEverOpened
+            ? BackofficeCopilotPanel(
+                showHeader: true,
+                onClose: onClose,
+                onMinimize: onMinimize,
+              )
+            : const SizedBox.shrink(),
       ),
     );
   }
 }
 
 class _CopilotFab extends StatelessWidget {
-  final bool isOpen;
   final VoidCallback onTap;
 
-  const _CopilotFab({required this.isOpen, required this.onTap});
+  const _CopilotFab({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
+    return Positioned(
       right: 18,
-      bottom: isOpen ? -88 : bottomPadding + 22,
+      bottom: bottomPadding + 22,
       child: SafeArea(
         top: false,
         child: FloatingActionButton.extended(
