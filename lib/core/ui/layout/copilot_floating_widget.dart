@@ -124,16 +124,19 @@ class _CopilotFab extends StatelessWidget {
       bottom: bottomPadding + 22,
       child: SafeArea(
         top: false,
-        child: FloatingActionButton.extended(
-          heroTag: 'copilot-floating-fab',
-          onPressed: onTap,
-          backgroundColor: AppColors.accent,
-          foregroundColor: AppColors.white,
-          elevation: 10,
-          icon: const Icon(Icons.auto_awesome_rounded),
-          label: const Text(
-            'Chat IA',
-            style: TextStyle(fontWeight: FontWeight.w800),
+        child: Tooltip(
+          message: 'Copiloto IA',
+          child: Semantics(
+            button: true,
+            label: 'Abrir Copiloto IA',
+            child: FloatingActionButton(
+              heroTag: 'copilot-floating-fab',
+              onPressed: onTap,
+              backgroundColor: AppColors.accent,
+              foregroundColor: AppColors.white,
+              elevation: 10,
+              child: const Icon(Icons.auto_awesome_rounded),
+            ),
           ),
         ),
       ),
