@@ -2,6 +2,8 @@ import 'package:app_diceprojects_admin/app/locale_provider.dart';
 import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
 import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
 import 'package:app_diceprojects_admin/features/auth/presentation/controllers/auth_notifier.dart';
+import 'package:app_diceprojects_admin/features/context/operational_context_provider.dart';
+import 'package:app_diceprojects_admin/features/organization/presentation/widgets/tenant_scope_filter.dart';
 import 'package:app_diceprojects_admin/features/permissions/permissions_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -107,7 +109,7 @@ class _BackofficeCopilotPanelState
       fromUser: false,
       title: 'Copiloto Backoffice',
       body:
-          'Puedo orientarte con manuales, permisos y contexto activo. Trabajo sin LLM: uso reglas, guías curadas y accesos del usuario. Si más adelante se activa IA, esta misma base sirve como contexto seguro.',
+          'Te ayudo a operar el backoffice con contexto, permisos y guías verificadas. Puedo ubicar módulos, explicar flujos, sugerir próximos pasos y abrir la pantalla correcta cuando tengas acceso.',
       actions: [
         _ChatAction('Qué puedo hacer', null, 'que podes hacer'),
         _ChatAction('Crear proyecto', null, 'crear proyecto'),
@@ -127,8 +129,9 @@ class _BackofficeCopilotPanelState
     if (text.isEmpty) return;
     _controller.clear();
     final auth = ref.read(authNotifierProvider);
+    final scope = _copilotScope(ref, auth);
     final perms = ref.read(permissionsProvider);
-    final answer = _answerFor(text, auth, perms);
+    final answer = _answerFor(text, auth, perms, scope);
     setState(() {
       _messages.add(_ChatMessage(fromUser: true, body: text));
       _messages.add(answer);
@@ -138,6 +141,7 @@ class _BackofficeCopilotPanelState
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authNotifierProvider);
+    final scope = _copilotScope(ref, auth);
     final locale = ref.watch(appLocaleProvider).languageCode;
 
     return Column(
@@ -147,7 +151,7 @@ class _BackofficeCopilotPanelState
             onClose: widget.onClose,
             onMinimize: widget.onMinimize,
           ),
-        _CopilotContextCard(auth: auth),
+        _CopilotContextCard(scope: scope),
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
@@ -229,17 +233,18 @@ class _BackofficeCopilotPanelState
     String raw,
     AuthState auth,
     PermissionsService perms,
+    _CopilotScope scope,
   ) {
     final text = _normalize(raw);
-    final contextLine = _contextLine(auth);
+    final contextLine = scope.contextLine;
 
-    if (auth.isAdminGlobal && auth.tenantId == null) {
-      return const _ChatMessage(
+    if (auth.isAdminGlobal && scope.needsCompany) {
+      return _ChatMessage(
         fromUser: false,
-        title: 'Necesito contexto operativo',
+        title: 'Elegí una empresa para operar',
         body:
-            'Estás en modo global. Para consultar datos o ejecutar acciones reales, primero elegí una empresa desde el selector de contexto. Puedo explicar funcionalidades globales, pero no debo mezclar información de tenants.',
-        actions: [
+            '$contextLine\n\nPuedo explicarte módulos globales y permisos, pero para operar clientes, proveedores, productos, ventas o proyectos necesito que elijas una empresa. Así evito mezclar datos entre organizaciones.',
+        actions: const [
           _ChatAction('Ver manuales', '/manual', null),
           _ChatAction('Ir al dashboard', '/dashboard', null),
         ],
@@ -249,9 +254,9 @@ class _BackofficeCopilotPanelState
     if (_hasAny(text, ['token', 'tokens', 'costo ia', 'gastar'])) {
       return _ChatMessage(
         fromUser: false,
-        title: 'Cómo cuidamos tokens',
+        title: 'Cómo decide el copiloto',
         body:
-            '$contextLine\n\nEl copiloto primero usa manuales, permisos, memoria curada y reglas determinísticas. Recién si la consulta exige razonamiento abierto se puede escalar a LLM. Esto baja costo, evita respuestas fuera de scope y mantiene trazabilidad por empresa, seller y usuario.',
+            '$contextLine\n\nPrimero cruza tu rol, el contexto activo, permisos y manuales curados. Con eso puede responder flujos comunes, abrir módulos y advertir faltantes sin inventar datos. Si una acción toca información operativa, te lleva a la pantalla correspondiente para confirmar.',
         actions: [
           const _ChatAction(
               'Manual AI Orchestrator', '/manual/ai-orchestrator', null),
@@ -392,9 +397,9 @@ class _BackofficeCopilotPanelState
 
     return _ChatMessage(
       fromUser: false,
-      title: 'Te puedo guiar mejor si me das una pista',
+      title: 'Puedo ayudarte con estos flujos',
       body:
-          '$contextLine\n\nPuedo responder sobre usuarios, permisos, clientes, proveedores, productos, cotizaciones, compras, obras, proyectos integrales, marketing, notificaciones, almacenes, agenda, salud y AI Orchestrator.',
+          '$contextLine\n\nDecime qué querés lograr y te marco el camino: crear o buscar clientes, proveedores y productos; revisar usuarios, roles e invitaciones; cotizar ventas; pedir precios; armar obras o proyectos; revisar marketing, notificaciones, agenda, salud o almacenes.',
       actions: [
         const _ChatAction('Qué puedo hacer', null, 'que podes hacer'),
         const _ChatAction('Ver manuales', '/manual', null),
@@ -427,13 +432,12 @@ class _BackofficeCopilotPanelState
 }
 
 class _CopilotContextCard extends StatelessWidget {
-  final AuthState auth;
+  final _CopilotScope scope;
 
-  const _CopilotContextCard({required this.auth});
+  const _CopilotContextCard({required this.scope});
 
   @override
   Widget build(BuildContext context) {
-    final label = _contextLine(auth);
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 4),
@@ -450,7 +454,7 @@ class _CopilotContextCard extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              label,
+              scope.contextLine,
               style: const TextStyle(
                 color: Color(0xFF234B6B),
                 height: 1.35,
@@ -888,16 +892,93 @@ _ManualDefinition? _manualById(String? id) {
   return null;
 }
 
-String _contextLine(AuthState auth) {
-  final tenant = auth.tenantId?.trim();
-  final seller = auth.sellerId?.trim();
-  if (auth.isAdminGlobal && (tenant == null || tenant.isEmpty)) {
-    return 'Contexto: Global. Para operar datos, elegí una empresa.';
+class _CopilotScope {
+  final bool needsCompany;
+  final String contextLine;
+
+  const _CopilotScope({
+    required this.needsCompany,
+    required this.contextLine,
+  });
+}
+
+_CopilotScope _copilotScope(WidgetRef ref, AuthState auth) {
+  final opContext = ref.watch(operationalContextProvider);
+  final tenants = ref.watch(tenantScopeOptionsProvider).valueOrNull ?? const [];
+  final sellersTenantId =
+      auth.isAdminGlobal ? opContext.tenantId : auth.tenantId;
+  final sellers =
+      ref.watch(sellerScopeOptionsProvider(sellersTenantId)).valueOrNull ??
+          const [];
+
+  final tenantId =
+      auth.isAdminGlobal ? opContext.tenantId?.trim() : auth.tenantId?.trim();
+  final sellerId =
+      auth.isAdminGlobal ? opContext.sellerId?.trim() : auth.sellerId?.trim();
+  final needsCompany =
+      auth.isAdminGlobal && (tenantId == null || tenantId.isEmpty);
+
+  if (needsCompany) {
+    return const _CopilotScope(
+      needsCompany: true,
+      contextLine: 'Contexto: global. Elegí una empresa para operar datos.',
+    );
   }
-  if (seller != null && seller.isNotEmpty) {
-    return 'Contexto: empresa $tenant y seller $seller. Las consultas se responden dentro de ese alcance.';
+
+  final tenantLabel = _labelForId(
+    tenantId,
+    tenants.map((item) => MapEntry(item.id, item.label)),
+    fallback: auth.isAdminGlobal ? 'empresa seleccionada' : 'empresa asignada',
+  );
+  final sellerLabel = _labelForId(
+    sellerId,
+    sellers.map((item) => MapEntry(item.id, item.label)),
+    fallback: 'vendedor seleccionado',
+  );
+
+  if (sellerId != null && sellerId.isNotEmpty) {
+    return _CopilotScope(
+      needsCompany: false,
+      contextLine:
+          'Contexto: $tenantLabel, vendedor $sellerLabel. Respondo dentro de ese alcance.',
+    );
   }
-  return 'Contexto: empresa ${tenant ?? 'seleccionada'} y todos los sellers permitidos.';
+  return _CopilotScope(
+    needsCompany: false,
+    contextLine:
+        'Contexto: $tenantLabel, todos los vendedores permitidos. Respondo dentro de ese alcance.',
+  );
+}
+
+String _labelForId(
+  String? id,
+  Iterable<MapEntry<String, String>> options, {
+  required String fallback,
+}) {
+  final normalized = id?.trim();
+  if (normalized == null || normalized.isEmpty) return fallback;
+  for (final option in options) {
+    if (option.key == normalized) {
+      return _cleanBusinessLabel(option.value, fallback);
+    }
+  }
+  return _looksLikeUuid(normalized) ? fallback : normalized;
+}
+
+String _cleanBusinessLabel(String value, String fallback) {
+  final parts = value
+      .split(' - ')
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty && !_looksLikeUuid(part))
+      .toList();
+  if (parts.isEmpty) return fallback;
+  return parts.last;
+}
+
+bool _looksLikeUuid(String value) {
+  return RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  ).hasMatch(value.trim());
 }
 
 String _normalize(String value) {
