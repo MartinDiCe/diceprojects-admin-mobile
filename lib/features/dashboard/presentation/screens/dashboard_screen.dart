@@ -1558,8 +1558,11 @@ class DashboardScreen extends ConsumerWidget {
     final auth = ref.watch(authNotifierProvider);
     final perms = ref.watch(permissionsProvider);
     final tenantId = ref.watch(dashboardTenantFilterProvider);
-    final waitForTenant = _dashboardRequiresTenantSelection(auth, tenantId);
-    final data = waitForTenant ? null : ref.watch(dashboardDataProvider);
+    final waitForTenant = scope != DashboardScope.general &&
+        _dashboardRequiresTenantSelection(auth, tenantId);
+    final data = scope == DashboardScope.general || waitForTenant
+        ? null
+        : ref.watch(dashboardDataProvider);
     final username = (auth.username?.trim().isNotEmpty ?? false)
         ? auth.username!.trim()
         : 'Usuario';
@@ -1584,63 +1587,72 @@ class DashboardScreen extends ConsumerWidget {
 
     return AppPageScaffold(
       title: _dashboardTitle(scope),
-      actions: [
-        IconButton(
-          tooltip: 'Actualizar',
-          onPressed: refreshDashboard,
-          icon: const Icon(Icons.refresh_rounded),
-        ),
-      ],
+      actions: scope == DashboardScope.general
+          ? const []
+          : [
+              IconButton(
+                tooltip: 'Actualizar',
+                onPressed: refreshDashboard,
+                icon: const Icon(Icons.refresh_rounded),
+              ),
+            ],
       body: RefreshIndicator(
-        onRefresh: () async => refreshDashboard(),
+        onRefresh: () async {
+          if (scope != DashboardScope.general) refreshDashboard();
+        },
         child: waitForTenant
             ? _TenantSelectionDashboard(
                 scope: scope,
                 username: username,
               )
-            : data!.when(
-                data: (value) => _DashboardContent(
-                  data: value,
-                  username: username,
-                  permissions: perms,
-                  scope: scope,
-                ),
-                loading: () => const _DashboardLoading(),
-                error: (_, __) => _DashboardContent(
-                  data: const DashboardData(
-                    products: 0,
-                    activeProducts: 0,
-                    draftProducts: 0,
-                    featuredProducts: 0,
-                    quotes: 0,
-                    quoteDrafts: 0,
-                    quoteSent: 0,
-                    quoteWon: 0,
-                    quoteAmount: 0,
-                    leads: 0,
-                    featured: 0,
-                    campaigns: 0,
-                    coupons: 0,
-                    sellers: 0,
-                    people: 0,
-                    users: 0,
-                    warehouses: 0,
-                    stockRows: 0,
-                    apiRequests: 0,
-                    api2xx: 0,
-                    apiErrors: 0,
-                    apiP95Ms: 0,
-                    apiAvgMs: 0,
-                    services: [],
-                    traces: [],
-                    recentQuotes: [],
-                    productsById: {},
+            : scope == DashboardScope.general
+                ? _DashboardHome(
+                    username: username,
+                    permissions: perms,
+                  )
+                : data!.when(
+                    data: (value) => _DashboardContent(
+                      data: value,
+                      username: username,
+                      permissions: perms,
+                      scope: scope,
+                    ),
+                    loading: () => const _DashboardLoading(),
+                    error: (_, __) => _DashboardContent(
+                      data: const DashboardData(
+                        products: 0,
+                        activeProducts: 0,
+                        draftProducts: 0,
+                        featuredProducts: 0,
+                        quotes: 0,
+                        quoteDrafts: 0,
+                        quoteSent: 0,
+                        quoteWon: 0,
+                        quoteAmount: 0,
+                        leads: 0,
+                        featured: 0,
+                        campaigns: 0,
+                        coupons: 0,
+                        sellers: 0,
+                        people: 0,
+                        users: 0,
+                        warehouses: 0,
+                        stockRows: 0,
+                        apiRequests: 0,
+                        api2xx: 0,
+                        apiErrors: 0,
+                        apiP95Ms: 0,
+                        apiAvgMs: 0,
+                        services: [],
+                        traces: [],
+                        recentQuotes: [],
+                        productsById: {},
+                      ),
+                      username: username,
+                      permissions: perms,
+                      scope: scope,
+                    ),
                   ),
-                  username: username,
-                  permissions: perms,
-                  scope: scope,
-                ),
-              ),
       ),
     );
   }
@@ -1751,6 +1763,67 @@ class _DashboardContent extends ConsumerWidget {
           _SectionTitle('Última actividad'),
           const SizedBox(height: 10),
           ...data.traces.map((trace) => _TraceTile(trace: trace)),
+        ],
+      ],
+    );
+  }
+}
+
+class _DashboardHome extends StatelessWidget {
+  final String username;
+  final PermissionsService permissions;
+
+  const _DashboardHome({
+    required this.username,
+    required this.permissions,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dashboards =
+        _dashboardCards(permissions).where((item) => item.visible).toList();
+    final modules = _modules(permissions);
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+      children: [
+        _HeroHeader(username: username),
+        const SizedBox(height: 14),
+        const _DashboardScopeSelector(),
+        const SizedBox(height: 18),
+        if (dashboards.isNotEmpty) ...[
+          _SectionTitle('Dashboards'),
+          const SizedBox(height: 10),
+          _DashboardShortcutGrid(cards: dashboards),
+          const SizedBox(height: 18),
+        ],
+        if (modules.isNotEmpty) ...[
+          _SectionTitle('Módulos'),
+          const SizedBox(height: 10),
+          _ModuleGrid(modules: modules),
+        ] else ...[
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: _cardDecoration(),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline_rounded, color: AppColors.accent),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'No encontramos módulos habilitados para este usuario. El inicio queda disponible mientras se revisan los permisos.',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ],
     );
@@ -3423,54 +3496,6 @@ class _KpiCard extends StatelessWidget {
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SalesPanel extends StatelessWidget {
-  final DashboardData data;
-  const _SalesPanel({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    final pending = data.quoteDrafts + data.quoteSent;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration(),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                  child: _MiniBlock('Monto visible', _money(data.quoteAmount),
-                      Icons.receipt_long_rounded, const Color(0xFF0F172A))),
-              const SizedBox(width: 10),
-              Expanded(
-                  child: _MiniBlock(
-                      'Pendientes',
-                      _n(pending),
-                      Icons.notifications_active_rounded,
-                      const Color(0xFFF59E0B))),
-            ],
-          ),
-          const SizedBox(height: 14),
-          _ProgressLine(
-              label: 'Borrador',
-              value: data.quoteDrafts,
-              total: math.max(1, data.quotes),
-              color: const Color(0xFF94A3B8)),
-          _ProgressLine(
-              label: 'Enviadas',
-              value: data.quoteSent,
-              total: math.max(1, data.quotes),
-              color: const Color(0xFF0EA5E9)),
-          _ProgressLine(
-              label: 'Ganadas',
-              value: data.quoteWon,
-              total: math.max(1, data.quotes),
-              color: const Color(0xFF00A676)),
         ],
       ),
     );

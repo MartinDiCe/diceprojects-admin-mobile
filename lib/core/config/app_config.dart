@@ -26,7 +26,7 @@ class AppConfig {
   );
   static const String appBuildNumber = String.fromEnvironment(
     'APP_BUILD_NUMBER',
-    defaultValue: '43',
+    defaultValue: '44',
   );
   static const String reviewerUsername = String.fromEnvironment(
     'REVIEWER_USERNAME',
