@@ -13,6 +13,7 @@ class ListState<T> {
   final bool hasMore;
   final int totalElements;
   final String searchQuery;
+  final int pageSize;
 
   const ListState({
     this.items = const [],
@@ -23,6 +24,7 @@ class ListState<T> {
     this.hasMore = false,
     this.totalElements = 0,
     this.searchQuery = '',
+    this.pageSize = 10,
   });
 
   ListState<T> copyWith({
@@ -34,6 +36,7 @@ class ListState<T> {
     bool? hasMore,
     int? totalElements,
     String? searchQuery,
+    int? pageSize,
     bool clearError = false,
   }) {
     return ListState<T>(
@@ -45,6 +48,7 @@ class ListState<T> {
       hasMore: hasMore ?? this.hasMore,
       totalElements: totalElements ?? this.totalElements,
       searchQuery: searchQuery ?? this.searchQuery,
+      pageSize: pageSize ?? this.pageSize,
     );
   }
 }
@@ -71,22 +75,18 @@ abstract class ListNotifier<T> extends StateNotifier<ListState<T>> {
       state = state.copyWith(isLoading: true, clearError: true);
     }
     try {
-      final params =
-          PageParams(page: page, size: 10, search: state.searchQuery);
+      final params = PageParams(
+          page: page, size: state.pageSize, search: state.searchQuery);
       final response = await fetchPage(params);
       state = state.copyWith(
-        items: append
-            ? [...state.items, ...response.items]
-            : response.items,
+        items: append ? [...state.items, ...response.items] : response.items,
         page: page,
         hasMore: response.hasMore,
         totalElements: response.totalElements,
         isLoading: false,
         isLoadingMore: false,
       );
-    } catch (e, st) {
-      debugPrint('[ListNotifier] ERROR type=${e.runtimeType} msg=$e');
-      debugPrint('[ListNotifier] STACK $st');
+    } catch (e) {
       state = state.copyWith(
         isLoading: false,
         isLoadingMore: false,
@@ -101,6 +101,11 @@ abstract class ListNotifier<T> extends StateNotifier<ListState<T>> {
   }
 
   void reload() => loadPage(0);
+
+  void setPageSize(int pageSize) {
+    state = state.copyWith(pageSize: pageSize);
+    loadPage(0);
+  }
 
   void loadMore() {
     if (!state.isLoadingMore && state.hasMore) {

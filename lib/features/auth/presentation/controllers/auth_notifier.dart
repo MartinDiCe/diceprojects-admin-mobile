@@ -126,13 +126,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
         },
       );
 
-      debugPrint('[AUTH] login response: status=${response.statusCode}');
-
       // Defensive parsing — avoids hard-cast TypeError if response shape is unexpected
       final data = response.data;
       final token = data is Map ? data['token']?.toString() : null;
       if (token == null || token.isEmpty) {
-        debugPrint('[AUTH] login failed — token field missing.');
         state = state.copyWith(
           isLoading: false,
           error: 'Respuesta inesperada del servidor. Contactá soporte.',
@@ -145,8 +142,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _buildStateFromToken(token);
       return true;
     } on DioException catch (e) {
-      debugPrint(
-          '[AUTH] DioException: status=${e.response?.statusCode} msg=${e.message}');
       // Try to extract the real backend message for better diagnostics
       final responseData = e.response?.data;
       final backendMsg = responseData is Map
@@ -169,8 +164,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
       state = state.copyWith(isLoading: false, error: message);
       return false;
-    } catch (e, s) {
-      debugPrint('[AUTH] unexpected login error: $e\n$s');
+    } catch (e) {
       state = state.copyWith(
         isLoading: false,
         error: kDebugMode
@@ -272,42 +266,39 @@ class AuthNotifier extends StateNotifier<AuthState> {
     // Fallback to per-role permissions (legacy/web strategy) if backend doesn't support it.
     final allPermissions = <String>{};
     var mePermissionsFetched = false;
-    try {
-      final resp = await _dio.get('/v1/me/permissions');
-      final data = resp.data;
-      final perms = data is Map ? data['permissions'] as List? : null;
-      if (perms != null) {
+    if (!hasAdministratorRole) {
+      try {
+        final resp = await _dio.get('/v1/me/permissions');
+        final data = resp.data;
+        final perms = data is Map ? data['permissions'] : data;
         allPermissions.addAll(_parsePermissionCodes(perms));
+        mePermissionsFetched = true;
+      } catch (_) {
+        // ignore — fallback below
       }
-      mePermissionsFetched = true;
-    } catch (_) {
-      // ignore — fallback below
-    }
 
-    if (!mePermissionsFetched) {
-      final results = await Future.wait(
-        roles.map((roleCode) async {
-          try {
-            final resp = await _dio.get('/v1/roles/$roleCode/permissions');
-            final data = resp.data;
-            // Response shape: { roleCode: string, permissions: [...] }
-            final perms = data is Map ? data['permissions'] as List? : null;
-            if (perms != null) {
+      if (!mePermissionsFetched) {
+        final results = await Future.wait(
+          roles.map((roleCode) async {
+            try {
+              final resp = await _dio.get('/v1/roles/$roleCode/permissions');
+              final data = resp.data;
+              // Response shape: { roleCode: string, permissions: [...] }
+              final perms = data is Map ? data['permissions'] : data;
               return _parsePermissionCodes(perms);
+            } catch (_) {
+              // graceful degradation — same as web
             }
-          } catch (_) {
-            // graceful degradation — same as web
-          }
-          return <String>{};
-        }),
-      );
-      for (final set in results) {
-        allPermissions.addAll(set);
+            return <String>{};
+          }),
+        );
+        for (final set in results) {
+          allPermissions.addAll(set);
+        }
       }
-    }
 
-    hasAdministratorRole =
-        hasAdministratorRole || _hasAdministratorPermissions(allPermissions);
+      hasAdministratorRole = _hasAdministratorPermissions(allPermissions);
+    }
 
     state = AuthState(
       token: token,
@@ -373,7 +364,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
           normalized == 'ADMIN' ||
           normalized == 'ROLE_ADMIN' ||
           normalized == 'SUPER_ADMIN' ||
-          normalized == 'SUPERADMIN';
+          normalized == 'SUPERADMIN' ||
+          normalized.contains('ADMINISTRADOR') ||
+          normalized.contains('ADMINISTRATOR');
     });
   }
 
@@ -403,19 +396,25 @@ class AuthNotifier extends StateNotifier<AuthState> {
     return value.trim().toUpperCase().replaceAll('-', '_').replaceAll(' ', '_');
   }
 
-  static Set<String> _parsePermissionCodes(List<dynamic> permissions) {
-    return permissions
-        .map((permission) {
-          if (permission is String) return permission;
-          if (permission is Map && permission['code'] != null) {
-            return permission['code'].toString();
-          }
-          return null;
-        })
+  static Set<String> _parsePermissionCodes(dynamic permissions) {
+    final rows = permissions is List ? permissions : const [];
+    return rows
+        .map((permission) => _permissionCode(permission))
         .whereType<String>()
         .map((code) => code.trim())
         .where((code) => code.isNotEmpty)
         .toSet();
+  }
+
+  static String? _permissionCode(dynamic permission) {
+    if (permission is String) return permission;
+    if (permission is Map) {
+      for (final key in const ['code', 'permissionCode', 'name', 'authority']) {
+        final value = permission[key]?.toString().trim();
+        if (value != null && value.isNotEmpty) return value;
+      }
+    }
+    return null;
   }
 }
 

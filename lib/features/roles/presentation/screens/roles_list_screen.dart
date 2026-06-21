@@ -5,6 +5,7 @@ import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
 import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/empty_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
+import 'package:app_diceprojects_admin/core/ui/widgets/list_page_size_control.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/status_badge.dart';
 import 'package:dio/dio.dart';
@@ -57,13 +58,13 @@ class RolesListNotifier extends ListNotifier<RoleDto> {
 
   @override
   Future<PaginatedResponse<RoleDto>> fetchPage(PageParams params) async {
-    debugPrint('[ROLES] fetchPage - calling GET /v1/roles (returns plain Flux/array, no pagination)');
-    // Backend returns Flux<RoleWithPermissionsDTO> → plain JSON array, no pagination params needed
+    // Backend returns Flux<RoleWithPermissionsDTO> as a plain JSON array.
     final resp = await _dio.get('/v1/roles');
-    debugPrint('[ROLES] status=${resp.statusCode} dataType=${resp.data?.runtimeType}');
-    final raw = resp.data?.toString() ?? '';
-    debugPrint('[ROLES] data=${raw.substring(0, raw.length > 300 ? 300 : raw.length)}');
-    return PaginatedResponse.fromJson(resp.data, RoleDto.fromJson);
+    return PaginatedResponse.fromJson(
+      resp.data,
+      RoleDto.fromJson,
+      params: params,
+    );
   }
 }
 
@@ -111,26 +112,37 @@ class RolesListScreen extends ConsumerWidget {
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: () async => notifier.reload(),
-      child: NotificationListener<ScrollNotification>(
-        onNotification: notifier.onScrollNotification,
-        child: ListView.separated(
-          padding: const EdgeInsets.all(16),
-          itemCount: state.items.length + (state.isLoadingMore ? 1 : 0),
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (ctx, i) {
-            if (i == state.items.length) {
-              return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: LoadingState(),
-              );
-            }
-            final role = state.items[i];
-            return _RoleTile(role: role);
-          },
+    return Column(
+      children: [
+        ListPageSizeControl(
+          pageSize: state.pageSize,
+          totalElements: state.totalElements,
+          onChanged: notifier.setPageSize,
         ),
-      ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async => notifier.reload(),
+            child: NotificationListener<ScrollNotification>(
+              onNotification: notifier.onScrollNotification,
+              child: ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: state.items.length + (state.isLoadingMore ? 1 : 0),
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (ctx, i) {
+                  if (i == state.items.length) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: LoadingState(),
+                    );
+                  }
+                  final role = state.items[i];
+                  return _RoleTile(role: role);
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -176,13 +188,14 @@ class _RoleTile extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(role.name,
-                          style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                              color: AppColors.ink),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      Text(
+                        role.name,
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color: AppColors.ink),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 3),
                       Text(

@@ -29,21 +29,19 @@ class MobilePushRegistrationService {
         if (nextToken.isBlank) return;
         _sendToken(nextToken);
       });
-    } catch (error) {
-      debugPrint('[PUSH] No se pudo registrar FCM: $error');
-    }
+    } catch (_) {}
   }
 
   Future<void> _sendToken(String token) async {
     try {
       await _dio.post('/v1/notifications/push/mobile/devices', data: {
-        'platform': Platform.isAndroid ? 'ANDROID' : Platform.operatingSystem.toUpperCase(),
+        'platform': Platform.isAndroid
+            ? 'ANDROID'
+            : Platform.operatingSystem.toUpperCase(),
         'deviceToken': token,
         'deviceName': 'DiceProjects Mobile',
       });
-    } catch (error) {
-      debugPrint('[PUSH] No se pudo enviar device token: $error');
-    }
+    } catch (_) {}
   }
 }
 

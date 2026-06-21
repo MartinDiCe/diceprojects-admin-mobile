@@ -6,6 +6,7 @@ import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/create_fab.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/empty_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
+import 'package:app_diceprojects_admin/core/ui/widgets/list_page_size_control.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/status_badge.dart';
 import 'package:app_diceprojects_admin/features/context/operational_context_provider.dart';
@@ -125,7 +126,11 @@ class ProductsListNotifier extends ListNotifier<ProductDto> {
       queryParameters: query,
       options: tenantScopeOptions(scopedTenant, sellerId: scopedSeller),
     );
-    return PaginatedResponse.fromJson(resp.data, ProductDto.fromJson);
+    return PaginatedResponse.fromJson(
+      resp.data,
+      ProductDto.fromJson,
+      params: params,
+    );
   }
 
   Future<void> toggleActive(String id) async {
@@ -258,45 +263,56 @@ class ProductsListScreen extends ConsumerWidget {
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: () async => notifier.reload(),
-      child: NotificationListener<ScrollNotification>(
-        onNotification: notifier.onScrollNotification,
-        child: ListView.separated(
-          padding: const EdgeInsets.all(16),
-          itemCount: state.items.length + (state.isLoadingMore ? 1 : 0),
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (ctx, i) {
-            if (i == state.items.length) {
-              return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: LoadingState());
-            }
-            final product = state.items[i];
-            return _ProductTile(
-              product: product,
-              onEdit: () async {
-                await ctx.push('/products/${product.id}/edit');
-                notifier.reload();
-              },
-              onPresentations: () async {
-                await ctx.push(
-                  '/products/${product.id}/presentations?name=${Uri.encodeComponent(product.name)}',
-                );
-                notifier.reload();
-              },
-              onToggle: () => notifier.toggleActive(product.id),
-              onDelete: () => notifier.delete(
-                product.id,
-                tenantId: product.tenantId ?? scopedTenantId,
-                sellerId: product.sellerId ?? scopedSellerId,
-              ),
-              canEdit: canEdit,
-              canDelete: canDelete,
-            );
-          },
+    return Column(
+      children: [
+        ListPageSizeControl(
+          pageSize: state.pageSize,
+          totalElements: state.totalElements,
+          onChanged: notifier.setPageSize,
         ),
-      ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async => notifier.reload(),
+            child: NotificationListener<ScrollNotification>(
+              onNotification: notifier.onScrollNotification,
+              child: ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: state.items.length + (state.isLoadingMore ? 1 : 0),
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (ctx, i) {
+                  if (i == state.items.length) {
+                    return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: LoadingState());
+                  }
+                  final product = state.items[i];
+                  return _ProductTile(
+                    product: product,
+                    onEdit: () async {
+                      await ctx.push('/products/${product.id}/edit');
+                      notifier.reload();
+                    },
+                    onPresentations: () async {
+                      await ctx.push(
+                        '/products/${product.id}/presentations?name=${Uri.encodeComponent(product.name)}',
+                      );
+                      notifier.reload();
+                    },
+                    onToggle: () => notifier.toggleActive(product.id),
+                    onDelete: () => notifier.delete(
+                      product.id,
+                      tenantId: product.tenantId ?? scopedTenantId,
+                      sellerId: product.sellerId ?? scopedSellerId,
+                    ),
+                    canEdit: canEdit,
+                    canDelete: canDelete,
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -395,6 +411,8 @@ class _ProductTile extends StatelessWidget {
     final finalPrice = hasDiscount
         ? product.price! * (1 - (discountRate / 100))
         : product.price;
+    final imageCacheSize =
+        (48 * MediaQuery.devicePixelRatioOf(context)).round().clamp(48, 192);
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -424,6 +442,8 @@ class _ProductTile extends StatelessWidget {
                           product.imageUrl!,
                           width: 48,
                           height: 48,
+                          cacheWidth: imageCacheSize,
+                          cacheHeight: imageCacheSize,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => _placeholder(),
                         )

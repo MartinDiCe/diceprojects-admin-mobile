@@ -13,14 +13,21 @@ class PermissionsService {
     this._hasAdministratorRole,
   );
 
-  bool hasPermission(String code) =>
-      _canBypassPermissionChecks || _permissions.contains(code);
+  bool hasPermission(String code) {
+    if (_canBypassPermissionChecks) return true;
+    if (_permissions.contains(code)) return true;
+
+    final normalized = _normalizePermission(code);
+    if (_normalizedPermissions.contains(normalized)) return true;
+
+    return _hasModuleAdminFor(normalized);
+  }
 
   bool hasAnyPermission(List<String> codes) =>
-      _canBypassPermissionChecks || codes.any(_permissions.contains);
+      _canBypassPermissionChecks || codes.any(hasPermission);
 
   bool hasAllPermissions(List<String> codes) =>
-      _canBypassPermissionChecks || codes.every(_permissions.contains);
+      _canBypassPermissionChecks || codes.every(hasPermission);
 
   bool canAccessRoute(String route) {
     if (_canBypassPermissionChecks) return true;
@@ -69,6 +76,21 @@ class PermissionsService {
 
   bool get _canBypassPermissionChecks =>
       _isAdminGlobal || _hasAdministratorRole;
+
+  Set<String> get _normalizedPermissions =>
+      _permissions.map(_normalizePermission).toSet();
+
+  bool _hasModuleAdminFor(String normalizedPermission) {
+    final separator = normalizedPermission.indexOf('.');
+    if (separator <= 0) return false;
+
+    final module = normalizedPermission.substring(0, separator);
+    return _normalizedPermissions.contains('$module.ADMIN') ||
+        _normalizedPermissions.contains('$module.ADMINISTRADOR');
+  }
+
+  static String _normalizePermission(String value) =>
+      value.trim().toUpperCase().replaceAll('-', '_').replaceAll(' ', '_');
 
   bool _isAlwaysAllowedRoute(String route) =>
       route == '/403' ||

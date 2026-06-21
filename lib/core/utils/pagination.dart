@@ -15,8 +15,9 @@ class PaginatedResponse<T> {
 
   factory PaginatedResponse.fromJson(
     dynamic raw,
-    T Function(Map<String, dynamic>) fromJson,
-  ) {
+    T Function(Map<String, dynamic>) fromJson, {
+    PageParams? params,
+  }) {
     // Null / empty body → return empty page
     if (raw == null) {
       return const PaginatedResponse(
@@ -29,19 +30,28 @@ class PaginatedResponse<T> {
     }
     // Some endpoints return a bare array instead of a Spring Page object
     if (raw is List) {
-      final items = raw
+      final allItems = raw
           .map((item) => fromJson(
                 item is Map<String, dynamic>
                     ? item
                     : Map<String, dynamic>.from(item as Map),
               ))
           .toList();
+      final totalElements = allItems.length;
+      final pageSize = params?.size ?? totalElements;
+      final currentPage = params?.page ?? 0;
+      final start = pageSize > 0 ? currentPage * pageSize : 0;
+      final end = pageSize > 0 ? (start + pageSize).clamp(0, totalElements) : 0;
+      final items =
+          start < totalElements ? allItems.sublist(start, end) : <T>[];
+      final totalPages =
+          pageSize > 0 ? ((totalElements + pageSize - 1) ~/ pageSize) : 1;
       return PaginatedResponse(
         items: items,
-        totalElements: items.length,
-        totalPages: 1,
-        currentPage: 0,
-        hasMore: false,
+        totalElements: totalElements,
+        totalPages: totalPages,
+        currentPage: currentPage,
+        hasMore: currentPage < totalPages - 1,
       );
     }
     // Unexpected non-Map type (e.g. HTML error body parsed as String)
@@ -54,45 +64,46 @@ class PaginatedResponse<T> {
         hasMore: false,
       );
     }
-    final json = raw is Map<String, dynamic>
-      ? raw
-      : Map<String, dynamic>.from(raw);
+    final json =
+        raw is Map<String, dynamic> ? raw : Map<String, dynamic>.from(raw);
 
     // Shapes supported:
     // - content[] (Spring & custom)
     // - items[] (audit, invitations)
-    final rawList = (json['content'] as List?) ?? (json['items'] as List?) ?? [];
+    final rawList =
+        (json['content'] as List?) ?? (json['items'] as List?) ?? [];
 
     final items = rawList
-      .map((item) => fromJson(
-          item is Map<String, dynamic>
-            ? item
-            : Map<String, dynamic>.from(item as Map),
-        ))
-      .toList();
+        .map((item) => fromJson(
+              item is Map<String, dynamic>
+                  ? item
+                  : Map<String, dynamic>.from(item as Map),
+            ))
+        .toList();
 
     // 'page' (custom) or 'number' (Spring)
-    final currentPage =
-      (json['page'] as num?)?.toInt() ?? (json['number'] as num?)?.toInt() ?? 0;
+    final currentPage = (json['page'] as num?)?.toInt() ??
+        (json['number'] as num?)?.toInt() ??
+        0;
 
     // 'pageSize' (custom) or 'size' (Spring)
     final pageSize = (json['pageSize'] as num?)?.toInt() ??
-      (json['size'] as num?)?.toInt() ??
-      (items.isNotEmpty ? items.length : 20);
+        (json['size'] as num?)?.toInt() ??
+        (items.isNotEmpty ? items.length : 20);
 
     // 'totalElements' (Spring/custom) or 'total' (items-array style)
     final totalElements = (json['totalElements'] as num?)?.toInt() ??
-      (json['total'] as num?)?.toInt() ??
-      (items.isNotEmpty ? items.length : 0);
+        (json['total'] as num?)?.toInt() ??
+        (items.isNotEmpty ? items.length : 0);
 
     final totalPagesFromServer = (json['totalPages'] as num?)?.toInt();
     final totalPages = totalPagesFromServer ??
-      (pageSize > 0 ? ((totalElements + pageSize - 1) ~/ pageSize) : 1);
+        (pageSize > 0 ? ((totalElements + pageSize - 1) ~/ pageSize) : 1);
 
     // Some endpoints provide 'last' (Spring). If missing, infer from page/totalPages.
     final last = json.containsKey('last')
-      ? (json['last'] as bool? ?? true)
-      : (currentPage >= (totalPages - 1));
+        ? (json['last'] as bool? ?? true)
+        : (currentPage >= (totalPages - 1));
 
     final hasMore = !last && items.isNotEmpty;
 

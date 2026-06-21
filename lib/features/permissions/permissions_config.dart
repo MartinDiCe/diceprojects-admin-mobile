@@ -128,7 +128,13 @@ const Map<String, List<String>> permissionGates = {
   ],
   '/iam/users': ['IAM.Users.List', 'IAM.Users.View', 'IAM.Users.Admin'],
   '/iam/invitations': ['IAM.Invitations.List', 'IAM.Invitations.Send'],
-  '/authorization': ['IAM.Roles.List'],
+  '/authorization': [
+    'IAM.Roles.List',
+    'IAM.Roles.View',
+    'IAM.Roles.Admin',
+    'IAM.Admin',
+    'Authorization.Admin',
+  ],
 
   // Logs
   '/logs/audit': ['IAM.Audit.List'],

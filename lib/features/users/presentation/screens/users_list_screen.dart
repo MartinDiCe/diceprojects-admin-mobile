@@ -7,6 +7,7 @@ import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/create_fab.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/empty_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
+import 'package:app_diceprojects_admin/core/ui/widgets/list_page_size_control.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/status_badge.dart';
 import 'package:app_diceprojects_admin/features/permissions/permissions_provider.dart';
@@ -31,12 +32,14 @@ class _RoleLookupDto {
   final String code;
   final String name;
 
-  const _RoleLookupDto({required this.id, required this.code, required this.name});
+  const _RoleLookupDto(
+      {required this.id, required this.code, required this.name});
 
   factory _RoleLookupDto.fromJson(Map<String, dynamic> json) => _RoleLookupDto(
         id: (json['id'])?.toString() ?? '',
         code: (json['code'])?.toString() ?? '',
-        name: (json['code'] ?? json['name'] ?? json['description'] ?? '').toString(),
+        name: (json['code'] ?? json['name'] ?? json['description'] ?? '')
+            .toString(),
       );
 }
 
@@ -88,7 +91,7 @@ class UserDto {
 
   String get fullName {
     final parts = [firstName, lastName]
-        .where((p) => p != null && p!.trim().isNotEmpty)
+        .where((p) => p != null && p.trim().isNotEmpty)
         .map((p) => p!.trim())
         .toList();
     return parts.join(' ');
@@ -114,8 +117,12 @@ class UserDto {
       roles: (json['roles'] as List<dynamic>? ?? [])
           .map((r) => r.toString())
           .toList(),
-      firstName: (json['firstName'] ?? json['personFirstName'] ?? person?['firstName'])?.toString(),
-      lastName: (json['lastName'] ?? json['personLastName'] ?? person?['lastName'])?.toString(),
+      firstName:
+          (json['firstName'] ?? json['personFirstName'] ?? person?['firstName'])
+              ?.toString(),
+      lastName:
+          (json['lastName'] ?? json['personLastName'] ?? person?['lastName'])
+              ?.toString(),
     );
   }
 }
@@ -135,13 +142,16 @@ class UsersListNotifier extends ListNotifier<UserDto> {
       query['search'] = params.search;
     }
     final resp = await _dio.get('/v1/users', queryParameters: query);
-    return PaginatedResponse.fromJson(resp.data, UserDto.fromJson);
+    return PaginatedResponse.fromJson(
+      resp.data,
+      UserDto.fromJson,
+      params: params,
+    );
   }
 
   Future<void> toggleStatus(String userId, String currentStatus) async {
-    final newStatus = currentStatus.toLowerCase() == 'active'
-        ? 'INACTIVE'
-        : 'ACTIVE';
+    final newStatus =
+        currentStatus.toLowerCase() == 'active' ? 'INACTIVE' : 'ACTIVE';
     await _dio.patch('/v1/users/$userId/status', data: {'status': newStatus});
     reload();
   }
@@ -167,7 +177,8 @@ class UsersListScreen extends ConsumerWidget {
     final state = ref.watch(usersListNotifierProvider);
     final notifier = ref.read(usersListNotifierProvider.notifier);
     final rolesLookupAsync = ref.watch(_rolesLookupProvider);
-    final rolesLookup = rolesLookupAsync.maybeWhen(data: (d) => d, orElse: () => null);
+    final rolesLookup =
+        rolesLookupAsync.maybeWhen(data: (d) => d, orElse: () => null);
     final perms = ref.watch(permissionsProvider);
     final canCreate = perms.hasAnyPermission([
       'IAM.Users.Create',
@@ -228,32 +239,43 @@ class UsersListScreen extends ConsumerWidget {
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: () async => notifier.reload(),
-      child: NotificationListener<ScrollNotification>(
-        onNotification: notifier.onScrollNotification,
-        child: ListView.separated(
-          padding: const EdgeInsets.all(16),
-          itemCount: state.items.length + (state.isLoadingMore ? 1 : 0),
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (ctx, i) {
-            if (i == state.items.length) {
-              return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: LoadingState(),
-              );
-            }
-            final user = state.items[i];
-            return _UserTile(
-              user: user,
-              notifier: notifier,
-              rolesLookup: rolesLookup,
-              canUpdate: canUpdate,
-              canDelete: canDelete,
-            );
-          },
+    return Column(
+      children: [
+        ListPageSizeControl(
+          pageSize: state.pageSize,
+          totalElements: state.totalElements,
+          onChanged: notifier.setPageSize,
         ),
-      ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async => notifier.reload(),
+            child: NotificationListener<ScrollNotification>(
+              onNotification: notifier.onScrollNotification,
+              child: ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: state.items.length + (state.isLoadingMore ? 1 : 0),
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (ctx, i) {
+                  if (i == state.items.length) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: LoadingState(),
+                    );
+                  }
+                  final user = state.items[i];
+                  return _UserTile(
+                    user: user,
+                    notifier: notifier,
+                    rolesLookup: rolesLookup,
+                    canUpdate: canUpdate,
+                    canDelete: canDelete,
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -279,19 +301,16 @@ class _UserTile extends StatelessWidget {
       context: context,
       builder: (_) => AlertDialog(
         title: Text(_isActive ? 'Desactivar usuario' : 'Activar usuario'),
-        content: Text(
-          _isActive
+        content: Text(_isActive
             ? '¿Desactivar a "${user.displayName}"?'
-            : '¿Activar a "${user.displayName}"?'
-        ),
+            : '¿Activar a "${user.displayName}"?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.of(context).pop(false),
               child: const Text('Cancelar')),
           ElevatedButton(
               style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      _isActive ? Colors.red : AppColors.accent),
+                  backgroundColor: _isActive ? Colors.red : AppColors.accent),
               onPressed: () => Navigator.of(context).pop(true),
               child: Text(_isActive ? 'Desactivar' : 'Activar')),
         ],
@@ -315,7 +334,8 @@ class _UserTile extends StatelessWidget {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Eliminar usuario'),
-        content: Text('¿Eliminar a "${user.displayName}"? Esta acción no se puede deshacer.'),
+        content: Text(
+            '¿Eliminar a "${user.displayName}"? Esta acción no se puede deshacer.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -343,14 +363,14 @@ class _UserTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final roleLabels = user.roles
-      .map((r) => _resolveRoleLabel(r, rolesLookup))
-      .where((r) => r.trim().isNotEmpty)
-      .toList();
+        .map((r) => _resolveRoleLabel(r, rolesLookup))
+        .where((r) => r.trim().isNotEmpty)
+        .toList();
     final rolesText = roleLabels.isEmpty
-      ? 'Sin roles'
-      : (roleLabels.length <= 2
-        ? roleLabels.join(' · ')
-        : '${roleLabels.take(2).join(' · ')} · +${roleLabels.length - 2}');
+        ? 'Sin roles'
+        : (roleLabels.length <= 2
+            ? roleLabels.join(' · ')
+            : '${roleLabels.take(2).join(' · ')} · +${roleLabels.length - 2}');
 
     return Container(
       decoration: BoxDecoration(
@@ -358,9 +378,7 @@ class _UserTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [
           BoxShadow(
-              color: Color(0x0D000000),
-              blurRadius: 16,
-              offset: Offset(0, 4)),
+              color: Color(0x0D000000), blurRadius: 16, offset: Offset(0, 4)),
         ],
       ),
       child: Material(
