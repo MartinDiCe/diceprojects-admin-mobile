@@ -211,16 +211,19 @@ class ProductsListScreen extends ConsumerWidget {
     final notifier = ref.read(productsListNotifierProvider(args).notifier);
     final perms = ref.watch(permissionsProvider);
     final canCreate = perms.hasAnyPermission([
+      'Products.Create',
       'Products.Articles.Create',
       'Producto.CrearProducto',
       'Products.Admin',
     ]);
     final canEdit = perms.hasAnyPermission([
+      'Products.Edit',
       'Products.Articles.Edit',
       'Producto.EditarProducto',
       'Products.Admin',
     ]);
     final canDelete = perms.hasAnyPermission([
+      'Products.Delete',
       'Products.Eliminar',
       'Products.Products.Delete',
       'Products.Articles.Delete',

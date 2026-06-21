@@ -285,6 +285,7 @@ const Map<String, List<String>> permissionGates = {
   '/products/import': [
     'Jobs.Execute',
     'Jobs.Read',
+    'Products.Import',
     'Products.Import.Execute',
     'Products.Import.Access',
     'Products.Articles.Import',
@@ -292,12 +293,14 @@ const Map<String, List<String>> permissionGates = {
     'Products.Admin',
   ],
   '/products/new': [
+    'Products.Create',
     'Products.Products.Create',
     'Products.Articles.Create',
     'Producto.CrearProducto',
     'Products.Admin',
   ],
   '/products/': [
+    'Products.Edit',
     'Products.Products.Edit',
     'Products.Articles.Edit',
     'Producto.EditarProducto',

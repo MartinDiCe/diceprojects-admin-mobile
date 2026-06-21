@@ -264,15 +264,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
     // Prefer effective permissions for current principal.
     // Fallback to per-role permissions (legacy/web strategy) if backend doesn't support it.
-    final allPermissions = <String>{...JwtDecoder.getPermissions(token)};
+    final allPermissions = <String>{
+      ...JwtDecoder.getPermissions(token),
+      ...roles,
+    };
     var mePermissionsFetched = false;
     if (!hasAdministratorRole) {
       try {
         final resp = await _dio.get('/v1/me/permissions');
         final data = resp.data;
         final perms = data is Map ? data['permissions'] : data;
-        allPermissions.addAll(_parsePermissionCodes(perms));
-        mePermissionsFetched = true;
+        final parsed = _parsePermissionCodes(perms);
+        allPermissions.addAll(parsed);
+        mePermissionsFetched = parsed.isNotEmpty;
       } catch (_) {
         // ignore — fallback below
       }

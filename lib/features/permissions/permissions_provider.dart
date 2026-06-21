@@ -37,7 +37,8 @@ class PermissionsService {
       ..sort((a, b) => b.key.length.compareTo(a.key.length));
     for (final entry in gates) {
       if (route == entry.key || route.startsWith('${entry.key}/')) {
-        return hasAnyPermission(entry.value);
+        return hasAnyPermission(entry.value) ||
+            _hasRouteModuleAccess(route, entry.value);
       }
     }
     return false;
@@ -86,16 +87,52 @@ class PermissionsService {
       _permissions.map(_normalizePermission).toSet();
 
   bool _hasModuleAdminFor(String normalizedPermission) {
-    final separator = normalizedPermission.indexOf('.');
-    if (separator <= 0) return false;
-
-    final module = normalizedPermission.substring(0, separator);
+    final module = _moduleToken(normalizedPermission);
+    if (module == null) return false;
     return _normalizedPermissions.contains('$module.ADMIN') ||
         _normalizedPermissions.contains('$module.ADMINISTRADOR');
   }
 
-  static String _normalizePermission(String value) =>
-      value.trim().toUpperCase().replaceAll('-', '_').replaceAll(' ', '_');
+  bool _hasRouteModuleAccess(String route, List<String> requiredCodes) {
+    if (!_allowsModuleFallback(route)) return false;
+
+    final requiredModules = requiredCodes
+        .map(_normalizePermission)
+        .map(_moduleToken)
+        .whereType<String>()
+        .toSet();
+    if (requiredModules.isEmpty) return false;
+
+    return _normalizedPermissions.any((permission) {
+      final module = _moduleToken(permission);
+      return module != null && requiredModules.contains(module);
+    });
+  }
+
+  bool _allowsModuleFallback(String route) {
+    final normalized = route.toLowerCase();
+    return !normalized.contains('/new') &&
+        !normalized.contains('/edit') &&
+        !normalized.contains('/import');
+  }
+
+  String? _moduleToken(String normalizedPermission) {
+    final first = normalizedPermission.split('.').first.trim();
+    if (first.isEmpty) return null;
+    return switch (first) {
+      'PRODUCTO' => 'PRODUCTS',
+      'PRODUCTOS' => 'PRODUCTS',
+      'VENTA' => 'SALES',
+      'VENTAS' => 'SALES',
+      _ => first,
+    };
+  }
+
+  static String _normalizePermission(String value) => value
+      .trim()
+      .toUpperCase()
+      .replaceAll(RegExp(r'[-_:\s]+'), '.')
+      .replaceAll(RegExp(r'\.+'), '.');
 
   bool _isAlwaysAllowedRoute(String route) =>
       route == '/403' ||
