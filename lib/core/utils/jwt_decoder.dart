@@ -42,6 +42,22 @@ class JwtDecoder {
     return values.toList(growable: false);
   }
 
+  static Set<String> getPermissions(String token) {
+    final payload = decode(token);
+    final values = <String>{};
+    for (final key in const [
+      'permissions',
+      'permission',
+      'perms',
+      'privileges',
+      'privilege',
+      'access',
+    ]) {
+      _collectRoleValues(payload[key], values);
+    }
+    return values;
+  }
+
   static void _collectRoleValues(dynamic raw, Set<String> values) {
     if (raw == null) return;
     if (raw is List) {

@@ -126,7 +126,10 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       if (loc != '/403') {
         final permissions = ref.read(permissionsProvider);
-        if (!permissions.canAccessRoute(loc)) return '/403';
+        if (permissions.hasLocalPermissionData &&
+            !permissions.canAccessRoute(loc)) {
+          return '/403';
+        }
       }
 
       return null;

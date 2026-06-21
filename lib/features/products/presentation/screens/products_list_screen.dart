@@ -134,9 +134,12 @@ class ProductsListNotifier extends ListNotifier<ProductDto> {
   }
 
   Future<void> toggleActive(String id) async {
+    final scopedTenant = tenantId?.trim();
+    final scopedSeller = sellerId?.trim();
     await _dio.patch(
       '/v1/products/$id/active',
-      options: tenantScopeOptions(tenantId, sellerId: sellerId),
+      queryParameters: _scopeQuery(scopedTenant, scopedSeller),
+      options: tenantScopeOptions(scopedTenant, sellerId: scopedSeller),
     );
     reload();
   }
@@ -146,9 +149,12 @@ class ProductsListNotifier extends ListNotifier<ProductDto> {
     String? tenantId,
     String? sellerId,
   }) async {
+    final scopedTenant = tenantId?.trim();
+    final scopedSeller = sellerId?.trim();
     await _dio.delete(
       '/v1/products/$id',
-      options: tenantScopeOptions(tenantId, sellerId: sellerId),
+      queryParameters: _scopeQuery(scopedTenant, scopedSeller),
+      options: tenantScopeOptions(scopedTenant, sellerId: scopedSeller),
     );
     final nextTotal =
         state.totalElements > 0 ? state.totalElements - 1 : state.totalElements;
@@ -157,6 +163,14 @@ class ProductsListNotifier extends ListNotifier<ProductDto> {
       totalElements: nextTotal,
     );
   }
+
+  Map<String, dynamic> _scopeQuery(String? tenantId, String? sellerId) => {
+        if (tenantId != null && tenantId.isNotEmpty) ...{
+          'tenantId': tenantId,
+          'companyId': tenantId,
+        },
+        if (sellerId != null && sellerId.isNotEmpty) 'sellerId': sellerId,
+      };
 }
 
 final productsListNotifierProvider = StateNotifierProvider.autoDispose
@@ -339,18 +353,18 @@ class _ProductTile extends StatelessWidget {
   Future<void> _confirmDelete(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Eliminar producto'),
         content: Text(
             '¿Estás seguro que querés eliminar "${product.name}"? Esta acción no se puede deshacer.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Cancelar'),
           ),
           TextButton(
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text('Eliminar'),
           ),
         ],

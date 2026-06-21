@@ -264,7 +264,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
     // Prefer effective permissions for current principal.
     // Fallback to per-role permissions (legacy/web strategy) if backend doesn't support it.
-    final allPermissions = <String>{};
+    final allPermissions = <String>{...JwtDecoder.getPermissions(token)};
     var mePermissionsFetched = false;
     if (!hasAdministratorRole) {
       try {
@@ -363,6 +363,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
           normalized == 'ROLE_ADMINISTRATOR' ||
           normalized == 'ADMIN' ||
           normalized == 'ROLE_ADMIN' ||
+          normalized == 'TENANT_ADMIN' ||
+          normalized == 'ROLE_TENANT_ADMIN' ||
           normalized == 'SUPER_ADMIN' ||
           normalized == 'SUPERADMIN' ||
           normalized.contains('ADMINISTRADOR') ||
@@ -397,24 +399,41 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   static Set<String> _parsePermissionCodes(dynamic permissions) {
-    final rows = permissions is List ? permissions : const [];
-    return rows
-        .map((permission) => _permissionCode(permission))
-        .whereType<String>()
-        .map((code) => code.trim())
-        .where((code) => code.isNotEmpty)
-        .toSet();
+    final out = <String>{};
+    _collectPermissionCodes(permissions, out);
+    return out;
   }
 
-  static String? _permissionCode(dynamic permission) {
-    if (permission is String) return permission;
-    if (permission is Map) {
-      for (final key in const ['code', 'permissionCode', 'name', 'authority']) {
-        final value = permission[key]?.toString().trim();
-        if (value != null && value.isNotEmpty) return value;
+  static void _collectPermissionCodes(dynamic raw, Set<String> out) {
+    if (raw == null) return;
+    if (raw is String) {
+      for (final part in raw.split(RegExp(r'[\s,;]+'))) {
+        final value = part.trim();
+        if (value.isNotEmpty) out.add(value);
+      }
+      return;
+    }
+    if (raw is List) {
+      for (final item in raw) {
+        _collectPermissionCodes(item, out);
+      }
+      return;
+    }
+    if (raw is Map) {
+      for (final key in const [
+        'permissions',
+        'permission',
+        'perms',
+        'privileges',
+        'privilege',
+        'code',
+        'permissionCode',
+        'name',
+        'authority',
+      ]) {
+        _collectPermissionCodes(raw[key], out);
       }
     }
-    return null;
   }
 }
 

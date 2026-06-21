@@ -44,6 +44,8 @@ class PermissionsService {
   }
 
   String firstAllowedRoute() {
+    if (!hasLocalPermissionData) return '/dashboard';
+
     const preferredRoutes = [
       '/dashboard',
       '/products/dashboard',
@@ -76,6 +78,9 @@ class PermissionsService {
 
   bool get _canBypassPermissionChecks =>
       _isAdminGlobal || _hasAdministratorRole;
+
+  bool get hasLocalPermissionData =>
+      _canBypassPermissionChecks || _permissions.isNotEmpty;
 
   Set<String> get _normalizedPermissions =>
       _permissions.map(_normalizePermission).toSet();
