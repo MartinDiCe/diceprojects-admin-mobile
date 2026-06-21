@@ -58,7 +58,13 @@ class AuthInterceptor extends Interceptor {
       // Inject tenantId for multi-tenant scope (mirrors web buildParams logic)
       final claims = _decodeJwt(token);
       final roles = JwtDecoder.getRoles(token);
-      final tenantId = claims['tenantId']?.toString();
+      final tenantId = _firstClaim(claims, const [
+        'tenantId',
+        'companyId',
+        'tenant',
+        'company',
+        'organizationId',
+      ]);
       final sellerId = claims['sellerId']?.toString();
       final sellerIds = claims['sellerIds'];
       final isAdminGlobal = tenantId == null || tenantId.trim().isEmpty;
@@ -108,4 +114,12 @@ Map<String, dynamic> _decodeJwt(String token) {
   } catch (_) {
     return const {};
   }
+}
+
+String? _firstClaim(Map<String, dynamic> claims, List<String> keys) {
+  for (final key in keys) {
+    final value = claims[key]?.toString().trim();
+    if (value != null && value.isNotEmpty) return value;
+  }
+  return null;
 }

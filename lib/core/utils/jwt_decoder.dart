@@ -64,8 +64,20 @@ class JwtDecoder {
     }
   }
 
-  static String? getTenantId(String token) =>
-      decode(token)['tenantId']?.toString();
+  static String? getTenantId(String token) {
+    final payload = decode(token);
+    for (final key in const [
+      'tenantId',
+      'companyId',
+      'tenant',
+      'company',
+      'organizationId',
+    ]) {
+      final value = payload[key]?.toString().trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+    return null;
+  }
 
   static String? getSellerId(String token) =>
       decode(token)['sellerId']?.toString();

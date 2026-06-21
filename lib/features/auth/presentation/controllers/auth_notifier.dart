@@ -368,6 +368,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final normalized = _normalizePrivilegeToken(role);
       return normalized == 'ADMINISTRADOR' ||
           normalized == 'ROLE_ADMINISTRADOR' ||
+          normalized == 'ADMINISTRATOR' ||
+          normalized == 'ROLE_ADMINISTRATOR' ||
           normalized == 'ADMIN' ||
           normalized == 'ROLE_ADMIN' ||
           normalized == 'SUPER_ADMIN' ||
@@ -380,6 +382,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final normalized = _normalizePrivilegeToken(permission);
       return normalized == 'ADMINISTRADOR' ||
           normalized == 'ROLE_ADMINISTRADOR' ||
+          normalized == 'ADMINISTRATOR' ||
+          normalized == 'ROLE_ADMINISTRATOR' ||
           normalized == 'ADMIN' ||
           normalized == 'SUPER_ADMIN' ||
           normalized == 'IAM_ADMIN' ||
@@ -390,7 +394,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
           normalized == 'IAM.USERS.CREATE' ||
           normalized == 'IAM.USERS.EDIT' ||
           normalized == 'AUTORIZACION.EDITARROLES' ||
-          normalized == 'AUTORIZACION.ASIGNARROL';
+          normalized == 'AUTORIZACION.ASIGNARROL' ||
+          normalized.endsWith('.ADMIN');
     });
   }
 
