@@ -65,6 +65,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         !uri.path.startsWith('/callback')) {
       return;
     }
+    await closeInAppWebView();
     final fragment = Uri.splitQueryString(uri.fragment);
     final token = fragment['access_token'] ?? fragment['accessToken'];
     final authError = fragment['authError'];
@@ -254,7 +255,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ? AppConfig.apiBaseUrl.substring(0, AppConfig.apiBaseUrl.length - 1)
         : AppConfig.apiBaseUrl;
     final uri = Uri.parse('$baseUrl/auth/oauth2/google?client=mobile');
-    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final opened = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No se pudo abrir Gmail / Google.')),
@@ -832,7 +833,7 @@ class _SecondaryLoginButton extends StatelessWidget {
           ),
         ),
         icon: isLoading
-            ? SizedBox(
+            ? const SizedBox(
                 width: 16,
                 height: 16,
                 child: CircularProgressIndicator(
@@ -874,7 +875,7 @@ class _GmailIconPainter extends CustomPainter {
     final h = size.height;
 
     stroke.color = const Color(0xFF4285F4);
-    canvas.drawLine(Offset(1.5, 3), Offset(1.5, h - 1.5), stroke);
+    canvas.drawLine(const Offset(1.5, 3), Offset(1.5, h - 1.5), stroke);
 
     stroke.color = const Color(0xFF34A853);
     canvas.drawLine(Offset(1.5, h - 1.5), Offset(w * 0.33, h - 1.5), stroke);

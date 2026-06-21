@@ -136,6 +136,7 @@ class PermissionsService {
 
   bool _isAlwaysAllowedRoute(String route) =>
       route == '/403' ||
+      route == '/dashboard' ||
       route == '/chat' ||
       route == '/manual' ||
       route.startsWith('/manual/') ||
