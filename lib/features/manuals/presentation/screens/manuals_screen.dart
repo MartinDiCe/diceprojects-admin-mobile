@@ -713,7 +713,7 @@ class _BackofficeCopilotPanelState
       fromUser: false,
       title: 'Proyectos: $operation',
       body:
-          '$contextLine\n\nPuedo guiar esta operación sin LLM con reglas cerradas: para partidas, abrí el proyecto y revisá template, recursos y cantidades; para validar precio, compará costo vigente, presupuesto proveedor y precio de venta; para margen, aplicá porcentaje sobre partida o servicio y confirmá el total antes de guardar.\n\n${canProjects ? 'Tenés acceso para operar proyectos.' : 'No veo permiso para operar proyectos; te dejo sólo la guía disponible.'}',
+          '$contextLine\n\nPuedo guiar esta operación como asistente base con reglas cerradas: para partidas, abrí el proyecto y revisá template, recursos y cantidades; para validar precio, compará costo vigente, presupuesto proveedor y precio de venta; para margen, aplicá porcentaje sobre partida o servicio y confirmá el total antes de guardar.\n\n${canProjects ? 'Tenés acceso para operar proyectos.' : 'No veo permiso para operar proyectos; te dejo sólo la guía disponible.'}',
       actions: actions,
     );
   }
