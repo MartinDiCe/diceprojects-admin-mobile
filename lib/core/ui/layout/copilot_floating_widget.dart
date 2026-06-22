@@ -207,15 +207,26 @@ class _CopilotFab extends StatelessWidget {
             button: true,
             label: 'Abrir Copiloto IA',
             child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onTap,
               onPanUpdate: onPanUpdate,
               onPanEnd: onPanEnd,
-              child: FloatingActionButton(
-                heroTag: 'copilot-floating-fab',
-                onPressed: onTap,
-                backgroundColor: AppColors.accent,
-                foregroundColor: AppColors.white,
+              child: Material(
+                color: AppColors.accent,
                 elevation: 10,
-                child: const Icon(Icons.auto_awesome_rounded),
+                shadowColor: Colors.black.withValues(alpha: 0.28),
+                shape: const CircleBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  child: const SizedBox.square(
+                    dimension: 56,
+                    child: Icon(
+                      Icons.auto_awesome_rounded,
+                      color: AppColors.white,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
