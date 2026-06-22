@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:app_diceprojects_admin/core/http/dio_client.dart';
 import 'package:app_diceprojects_admin/app/locale_provider.dart';
 import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
 import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
@@ -104,6 +107,7 @@ class BackofficeCopilotPanel extends ConsumerStatefulWidget {
 class _BackofficeCopilotPanelState
     extends ConsumerState<BackofficeCopilotPanel> {
   final _controller = TextEditingController();
+  final _scrollController = ScrollController();
   final _messages = <_ChatMessage>[
     const _ChatMessage(
       fromUser: false,
@@ -121,20 +125,44 @@ class _BackofficeCopilotPanelState
   @override
   void dispose() {
     _controller.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  void _send([String? preset]) {
+  Future<void> _send([String? preset]) async {
     final text = (preset ?? _controller.text).trim();
     if (text.isEmpty) return;
     _controller.clear();
     final auth = ref.read(authNotifierProvider);
     final scope = _copilotScope(ref, auth);
     final perms = ref.read(permissionsProvider);
-    final answer = _answerFor(text, auth, perms, scope);
     setState(() {
       _messages.add(_ChatMessage(fromUser: true, body: text));
-      _messages.add(answer);
+      _messages.add(
+        const _ChatMessage(
+          fromUser: false,
+          title: 'Consultando contexto',
+          body: 'Reviso permisos, empresa activa y datos disponibles...',
+        ),
+      );
+    });
+    _scrollToBottom();
+    final answer = await _answerFor(text, auth, perms, scope);
+    if (!mounted) return;
+    setState(() {
+      _messages[_messages.length - 1] = answer;
+    });
+    _scrollToBottom();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
     });
   }
 
@@ -154,6 +182,7 @@ class _BackofficeCopilotPanelState
         _CopilotContextCard(scope: scope),
         Expanded(
           child: ListView.builder(
+            controller: _scrollController,
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
             itemCount: _messages.length,
             itemBuilder: (context, index) {
@@ -164,7 +193,7 @@ class _BackofficeCopilotPanelState
                     context.go(action.route!);
                     widget.onMinimize?.call();
                   } else if (action.prompt != null) {
-                    _send(action.prompt);
+                    unawaited(_send(action.prompt));
                   }
                 },
               );
@@ -218,7 +247,7 @@ class _BackofficeCopilotPanelState
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                  onPressed: _send,
+                  onPressed: () => unawaited(_send()),
                   child: const Icon(Icons.send_rounded),
                 ),
               ],
@@ -229,12 +258,12 @@ class _BackofficeCopilotPanelState
     );
   }
 
-  _ChatMessage _answerFor(
+  Future<_ChatMessage> _answerFor(
     String raw,
     AuthState auth,
     PermissionsService perms,
     _CopilotScope scope,
-  ) {
+  ) async {
     final text = _normalize(raw);
     final contextLine = scope.contextLine;
 
@@ -288,6 +317,19 @@ class _BackofficeCopilotPanelState
     }
 
     if (_hasAny(text, ['proveedor', 'partner', 'supplier'])) {
+      if (_hasAny(text,
+          ['que', 'cuales', 'listar', 'lista', 'tengo', 'ver', 'buscar'])) {
+        return _dataListAnswer(
+          contextLine: contextLine,
+          perms: perms,
+          route: '/partners',
+          endpoint: '/v1/suppliers',
+          title: 'Proveedores disponibles',
+          emptyTitle: 'No encontré proveedores',
+          formatter: _partyLine,
+          manualId: 'partners',
+        );
+      }
       return _moduleAnswer(
         contextLine: contextLine,
         perms: perms,
@@ -299,6 +341,26 @@ class _BackofficeCopilotPanelState
     }
 
     if (_hasAny(text, ['cliente', 'customer'])) {
+      if (_hasAny(text, ['alta', 'crear', 'nuevo', 'nueva', 'registrar'])) {
+        return _createCustomerAnswer(
+          raw: raw,
+          contextLine: contextLine,
+          perms: perms,
+        );
+      }
+      if (_hasAny(text,
+          ['que', 'cuales', 'listar', 'lista', 'tengo', 'ver', 'buscar'])) {
+        return _dataListAnswer(
+          contextLine: contextLine,
+          perms: perms,
+          route: '/customers',
+          endpoint: '/v1/customers',
+          title: 'Clientes disponibles',
+          emptyTitle: 'No encontré clientes',
+          formatter: _partyLine,
+          manualId: 'customers',
+        );
+      }
       return _moduleAnswer(
         contextLine: contextLine,
         perms: perms,
@@ -310,6 +372,31 @@ class _BackofficeCopilotPanelState
     }
 
     if (_hasAny(text, ['producto', 'articulo', 'sku', 'catalogo'])) {
+      if (_hasAny(text, [
+        'que',
+        'cuales',
+        'listar',
+        'lista',
+        'tengo',
+        'ver',
+        'buscar',
+        'precio'
+      ])) {
+        return _dataListAnswer(
+          contextLine: contextLine,
+          perms: perms,
+          route: '/products',
+          endpoint: '/v1/products',
+          title: 'Productos disponibles',
+          emptyTitle: 'No encontré productos',
+          formatter: _productLine,
+          manualId: 'products',
+          extraActions: [
+            if (perms.canAccessRoute('/sales/quotes'))
+              const _ChatAction('Crear cotización', '/sales/quotes', null),
+          ],
+        );
+      }
       return _moduleAnswer(
         contextLine: contextLine,
         perms: perms,
@@ -321,6 +408,14 @@ class _BackofficeCopilotPanelState
     }
 
     if (_hasAny(text, ['cotizacion', 'cotizar', 'venta'])) {
+      if (_hasAny(
+          text, ['generar', 'crear', 'nueva', 'nuevo', 'hacer', 'armar'])) {
+        return _quoteActionAnswer(
+          raw: raw,
+          contextLine: contextLine,
+          perms: perms,
+        );
+      }
       return _moduleAnswer(
         contextLine: contextLine,
         perms: perms,
@@ -332,6 +427,19 @@ class _BackofficeCopilotPanelState
     }
 
     if (_hasAny(text, ['presupuesto', 'compra', 'compras'])) {
+      if (_hasAny(text,
+          ['que', 'cuales', 'listar', 'lista', 'tengo', 'ver', 'buscar'])) {
+        return _dataListAnswer(
+          contextLine: contextLine,
+          perms: perms,
+          route: '/purchases/requests',
+          endpoint: '/v1/purchase-requests',
+          title: 'Presupuestos y solicitudes',
+          emptyTitle: 'No encontré solicitudes de presupuesto',
+          formatter: _purchaseLine,
+          manualId: 'purchases',
+        );
+      }
       return _moduleAnswer(
         contextLine: contextLine,
         perms: perms,
@@ -339,6 +447,21 @@ class _BackofficeCopilotPanelState
         route: '/purchases/requests',
         action:
             'Compras permite pedir precios, comparar respuestas y adjudicar. Es ideal para validar costo antes de cerrar una venta u obra.',
+      );
+    }
+
+    if (_hasAny(text, [
+      'partida',
+      'partidas',
+      'margen',
+      'validar precio',
+      'precio valido',
+      'servicio'
+    ])) {
+      return _projectOperationsAnswer(
+        raw: raw,
+        contextLine: contextLine,
+        perms: perms,
       );
     }
 
@@ -405,6 +528,193 @@ class _BackofficeCopilotPanelState
         const _ChatAction('Ver manuales', '/manual', null),
         const _ChatAction('Buscar producto', null, 'buscar producto'),
       ],
+    );
+  }
+
+  Future<_ChatMessage> _dataListAnswer({
+    required String contextLine,
+    required PermissionsService perms,
+    required String route,
+    required String endpoint,
+    required String title,
+    required String emptyTitle,
+    required String Function(Map<String, dynamic>) formatter,
+    required String manualId,
+    List<_ChatAction> extraActions = const [],
+  }) async {
+    final manual = _manualById(manualId);
+    if (!perms.canAccessRoute(route)) {
+      return _ChatMessage(
+        fromUser: false,
+        title: 'No tenés permiso para consultar ese módulo',
+        body:
+            '$contextLine\n\nPuedo explicarte cómo funciona, pero no voy a consultar ni mostrar datos de $title porque tu sesión no tiene acceso a ese módulo.',
+        actions: [
+          if (manual != null)
+            _ChatAction('Ver manual', '/manual/${manual.id}', null),
+        ],
+      );
+    }
+
+    final tenantId = effectiveTenantId(ref);
+    final sellerId = effectiveSellerId(ref);
+    if (_requiresTenant(route) && (tenantId == null || tenantId.isEmpty)) {
+      return _ChatMessage(
+        fromUser: false,
+        title: 'Falta elegir empresa',
+        body:
+            '$contextLine\n\nPara consultar datos operativos necesito una empresa activa. Elegí una empresa en el dashboard y vuelvo a consultar dentro de ese alcance.',
+        actions: const [_ChatAction('Ir al dashboard', '/dashboard', null)],
+      );
+    }
+
+    try {
+      final dio = ref.read(dioProvider);
+      final query = <String, dynamic>{
+        'page': 0,
+        'size': 10,
+        'pageSize': 10,
+      };
+      if (tenantId != null && tenantId.isNotEmpty) {
+        query['tenantId'] = tenantId;
+        query['companyId'] = tenantId;
+      }
+      if (sellerId != null && sellerId.isNotEmpty) {
+        query['sellerId'] = sellerId;
+      }
+      final resp = await dio.get(
+        endpoint,
+        queryParameters: query,
+        options: tenantScopeOptions(tenantId, sellerId: sellerId),
+      );
+      final items = _itemsFromPayload(resp.data).take(10).toList();
+      if (items.isEmpty) {
+        return _ChatMessage(
+          fromUser: false,
+          title: emptyTitle,
+          body:
+              '$contextLine\n\nConsulté el módulo y no encontré registros para el alcance actual.',
+          actions: [
+            _ChatAction('Abrir módulo', route, null),
+            if (manual != null)
+              _ChatAction('Ver manual', '/manual/${manual.id}', null),
+            ...extraActions,
+          ],
+        );
+      }
+      return _ChatMessage(
+        fromUser: false,
+        title: title,
+        body:
+            '$contextLine\n\nEncontré estos registros en tu alcance:\n\n${items.map(formatter).join('\n')}\n\nMostré hasta 10 para mantenerlo rápido. Desde el módulo podés filtrar, paginar o editar.',
+        actions: [
+          _ChatAction('Abrir módulo', route, null),
+          if (manual != null)
+            _ChatAction('Ver manual', '/manual/${manual.id}', null),
+          ...extraActions,
+        ],
+      );
+    } catch (_) {
+      return _ChatMessage(
+        fromUser: false,
+        title: 'No pude consultar datos ahora',
+        body:
+            '$contextLine\n\nLa operación no respondió correctamente. Te dejo el módulo para reintentar desde la pantalla con filtros y paginación.',
+        actions: [
+          _ChatAction('Abrir módulo', route, null),
+          if (manual != null)
+            _ChatAction('Ver manual', '/manual/${manual.id}', null),
+        ],
+      );
+    }
+  }
+
+  _ChatMessage _createCustomerAnswer({
+    required String raw,
+    required String contextLine,
+    required PermissionsService perms,
+  }) {
+    if (!perms.canAccessRoute('/customers/new')) {
+      return _ChatMessage(
+        fromUser: false,
+        title: 'No tenés permiso para crear clientes',
+        body:
+            '$contextLine\n\nPuedo ayudarte a revisar el flujo, pero no voy a iniciar un alta si tu sesión no tiene permiso de creación.',
+        actions: const [_ChatAction('Ver manual', '/manual/customers', null)],
+      );
+    }
+    final hints = _extractContactHints(raw);
+    return _ChatMessage(
+      fromUser: false,
+      title: 'Alta de cliente',
+      body:
+          '$contextLine\n\nPuedo acompañarte con el alta. Detecté: ${hints.isEmpty ? 'sin datos estructurados suficientes' : hints.join(', ')}.\n\nPara evitar cargar mal datos sensibles, abro el formulario y confirmás nombre, CUIT, email, teléfono, empresa y seller antes de guardar.',
+      actions: const [
+        _ChatAction('Nuevo cliente', '/customers/new', null),
+        _ChatAction('Ver clientes', '/customers', null),
+      ],
+    );
+  }
+
+  _ChatMessage _quoteActionAnswer({
+    required String raw,
+    required String contextLine,
+    required PermissionsService perms,
+  }) {
+    if (!perms.canAccessRoute('/sales/quotes')) {
+      return _ChatMessage(
+        fromUser: false,
+        title: 'No tenés permiso para cotizar',
+        body:
+            '$contextLine\n\nPuedo explicar el flujo de ventas, pero no puedo abrir cotizaciones con esta sesión.',
+        actions: const [_ChatAction('Ver manual', '/manual/sales', null)],
+      );
+    }
+    final hints = _extractQuoteHints(raw);
+    return _ChatMessage(
+      fromUser: false,
+      title: 'Generar cotización',
+      body:
+          '$contextLine\n\nPuedo iniciar el flujo de cotización. ${hints.isEmpty ? 'Indicame cliente, producto/SKU, cantidad y precio si querés que te guíe paso a paso.' : 'Detecté: ${hints.join(', ')}.'}\n\nLa creación se confirma en Ventas para revisar totales, margen, datos del cliente y link/PDF antes de compartir.',
+      actions: const [
+        _ChatAction('Abrir cotizaciones', '/sales/quotes', null),
+        _ChatAction('Ver productos', '/products', null),
+      ],
+    );
+  }
+
+  _ChatMessage _projectOperationsAnswer({
+    required String raw,
+    required String contextLine,
+    required PermissionsService perms,
+  }) {
+    final text = _normalize(raw);
+    final canProjects = perms.canAccessRoute('/projects/management');
+    final canPurchases = perms.canAccessRoute('/purchases/requests');
+    final canSales = perms.canAccessRoute('/sales/quotes');
+    final actions = <_ChatAction>[
+      if (canProjects)
+        const _ChatAction('Abrir proyectos', '/projects/management', null),
+      if (canPurchases)
+        const _ChatAction('Pedir presupuesto', '/purchases/requests', null),
+      if (canSales) const _ChatAction('Cotizar venta', '/sales/quotes', null),
+      const _ChatAction('Manual proyectos', '/manual/projects', null),
+    ];
+
+    final operation = _hasAny(text, ['margen'])
+        ? 'margen'
+        : _hasAny(text, ['validar precio', 'precio valido', 'validar'])
+            ? 'validación de precio'
+            : _hasAny(text, ['partida', 'servicio'])
+                ? 'partidas y servicios'
+                : 'operación de proyecto';
+
+    return _ChatMessage(
+      fromUser: false,
+      title: 'Proyectos: $operation',
+      body:
+          '$contextLine\n\nPuedo guiar esta operación sin LLM con reglas cerradas: para partidas, abrí el proyecto y revisá template, recursos y cantidades; para validar precio, compará costo vigente, presupuesto proveedor y precio de venta; para margen, aplicá porcentaje sobre partida o servicio y confirmá el total antes de guardar.\n\n${canProjects ? 'Tenés acceso para operar proyectos.' : 'No veo permiso para operar proyectos; te dejo sólo la guía disponible.'}',
+      actions: actions,
     );
   }
 
@@ -994,6 +1304,146 @@ String _normalize(String value) {
 
 bool _hasAny(String text, List<String> terms) {
   return terms.any((term) => text.contains(_normalize(term)));
+}
+
+bool _requiresTenant(String route) {
+  return route.startsWith('/products') ||
+      route.startsWith('/customers') ||
+      route.startsWith('/partners') ||
+      route.startsWith('/sales') ||
+      route.startsWith('/purchases') ||
+      route.startsWith('/projects');
+}
+
+List<Map<String, dynamic>> _itemsFromPayload(dynamic data) {
+  dynamic raw = data;
+  if (data is Map) {
+    raw = data['items'] ??
+        data['content'] ??
+        data['data'] ??
+        data['results'] ??
+        data['records'];
+  }
+  if (raw is! List) return const [];
+  return raw
+      .whereType<Map>()
+      .map((item) => Map<String, dynamic>.from(item))
+      .toList();
+}
+
+String _productLine(Map<String, dynamic> item) {
+  final name = _stringAny(item, const ['name', 'productName', 'title'],
+      fallback: 'Producto');
+  final sku = _stringAny(item, const ['sku', 'code', 'productSku']);
+  final price = _moneyAny(
+    item,
+    const ['basePrice', 'price', 'salePrice', 'unitPrice'],
+  );
+  final status = _stringAny(item, const ['status', 'statusCode']);
+  return '- $name${sku == null ? '' : ' · SKU $sku'}'
+      '${price == null ? '' : ' · $price'}'
+      '${status == null ? '' : ' · $status'}';
+}
+
+String _partyLine(Map<String, dynamic> item) {
+  final name = _stringAny(
+    item,
+    const [
+      'businessName',
+      'tradeName',
+      'name',
+      'fullName',
+      'displayName',
+      'firstName',
+    ],
+    fallback: 'Contacto',
+  );
+  final code = _stringAny(item, const ['code', 'taxId', 'cuit', 'document']);
+  final email = _stringAny(item, const ['email', 'mail']);
+  final phone = _stringAny(item, const ['phone', 'phoneNumber', 'mobile']);
+  return '- $name${code == null ? '' : ' · $code'}'
+      '${email == null ? '' : ' · $email'}'
+      '${phone == null ? '' : ' · $phone'}';
+}
+
+String _purchaseLine(Map<String, dynamic> item) {
+  final number = _stringAny(
+    item,
+    const ['number', 'code', 'requestNumber', 'documentNumber'],
+    fallback: 'Solicitud',
+  );
+  final supplier =
+      _stringAny(item, const ['supplierName', 'providerName', 'partnerName']);
+  final status = _stringAny(item, const ['status', 'statusCode']);
+  final total = _moneyAny(item, const ['total', 'totalAmount', 'amount']);
+  return '- $number${supplier == null ? '' : ' · $supplier'}'
+      '${status == null ? '' : ' · $status'}'
+      '${total == null ? '' : ' · $total'}';
+}
+
+String? _stringAny(
+  Map<String, dynamic> item,
+  List<String> keys, {
+  String? fallback,
+}) {
+  for (final key in keys) {
+    final value = item[key];
+    if (value == null) continue;
+    final text = value.toString().trim();
+    if (text.isNotEmpty && text.toLowerCase() != 'null') return text;
+  }
+  final firstName = item['firstName']?.toString().trim();
+  final lastName = item['lastName']?.toString().trim();
+  final fullName = [
+    if (firstName != null && firstName.isNotEmpty) firstName,
+    if (lastName != null && lastName.isNotEmpty) lastName,
+  ].join(' ').trim();
+  if (fullName.isNotEmpty) return fullName;
+  return fallback;
+}
+
+String? _moneyAny(Map<String, dynamic> item, List<String> keys) {
+  for (final key in keys) {
+    final value = item[key];
+    if (value == null) continue;
+    final number = value is num ? value : num.tryParse(value.toString());
+    if (number == null) continue;
+    return '\$${number.toStringAsFixed(number % 1 == 0 ? 0 : 2)}';
+  }
+  return null;
+}
+
+List<String> _extractContactHints(String raw) {
+  final hints = <String>[];
+  final email = RegExp(
+    r'[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}',
+    caseSensitive: false,
+  ).firstMatch(raw)?.group(0);
+  if (email != null) hints.add('email $email');
+  final phone = RegExp(r'\+?\d[\d\s().-]{6,}\d').firstMatch(raw)?.group(0);
+  if (phone != null) hints.add('teléfono ${phone.trim()}');
+  final taxId = RegExp(r'\b\d{2}-?\d{8}-?\d\b').firstMatch(raw)?.group(0);
+  if (taxId != null) hints.add('CUIT $taxId');
+  return hints;
+}
+
+List<String> _extractQuoteHints(String raw) {
+  final hints = <String>[];
+  final sku = RegExp(r'\bSKU[-\s:]?([A-Z0-9._-]+)\b', caseSensitive: false)
+      .firstMatch(raw)
+      ?.group(1);
+  if (sku != null) hints.add('SKU $sku');
+  final qty = RegExp(r'\b(\d+(?:[.,]\d+)?)\s*(unidades|unidad|u|mts|m2|kg)?\b',
+          caseSensitive: false)
+      .firstMatch(raw)
+      ?.group(0);
+  if (qty != null) hints.add('cantidad $qty');
+  final money = RegExp(r'[$]\s*\d+(?:[.,]\d+)?|\b\d+(?:[.,]\d+)?\s*(ars|usd)\b',
+          caseSensitive: false)
+      .firstMatch(raw)
+      ?.group(0);
+  if (money != null) hints.add('precio $money');
+  return hints;
 }
 
 String _t(String locale, String es, String en, String pt) {
