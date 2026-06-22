@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:app_diceprojects_admin/core/ui/app_colors.dart';
 import 'package:app_diceprojects_admin/features/manuals/presentation/screens/manuals_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class CopilotFloatingWidget extends StatefulWidget {
   const CopilotFloatingWidget({super.key});
@@ -12,8 +13,28 @@ class CopilotFloatingWidget extends StatefulWidget {
 }
 
 class _CopilotFloatingWidgetState extends State<CopilotFloatingWidget> {
+  static const _fabXKey = 'copilot.fab.x';
+  static const _fabYKey = 'copilot.fab.y';
+  static const _fabSize = 56.0;
+  static const _fabMargin = 18.0;
+
   bool _isOpen = false;
   bool _hasEverOpened = false;
+  Offset? _fabOffset;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFabOffset();
+  }
+
+  Future<void> _loadFabOffset() async {
+    final prefs = await SharedPreferences.getInstance();
+    final x = prefs.getDouble(_fabXKey);
+    final y = prefs.getDouble(_fabYKey);
+    if (!mounted || x == null || y == null) return;
+    setState(() => _fabOffset = Offset(x, y));
+  }
 
   void _open() {
     setState(() {
@@ -27,8 +48,51 @@ class _CopilotFloatingWidgetState extends State<CopilotFloatingWidget> {
     setState(() => _isOpen = false);
   }
 
+  Offset _defaultFabOffset(Size size, EdgeInsets padding) {
+    return Offset(
+      size.width - _fabSize - _fabMargin,
+      size.height - padding.bottom - _fabSize - 22,
+    );
+  }
+
+  Offset _clampFabOffset(Offset offset, Size size, EdgeInsets padding) {
+    const minX = _fabMargin;
+    final maxX = math.max(minX, size.width - _fabSize - _fabMargin);
+    final minY = padding.top + 8;
+    final maxY = math.max(minY, size.height - padding.bottom - _fabSize - 8);
+
+    return Offset(
+      offset.dx.clamp(minX, maxX),
+      offset.dy.clamp(minY, maxY),
+    );
+  }
+
+  void _moveFab(DragUpdateDetails details, Size size, EdgeInsets padding) {
+    final current = _fabOffset ?? _defaultFabOffset(size, padding);
+    setState(() {
+      _fabOffset = _clampFabOffset(current + details.delta, size, padding);
+    });
+  }
+
+  Future<void> _saveFabOffset() async {
+    final offset = _fabOffset;
+    if (offset == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_fabXKey, offset.dx);
+    await prefs.setDouble(_fabYKey, offset.dy);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final size = media.size;
+    final padding = media.padding;
+    final fabOffset = _clampFabOffset(
+      _fabOffset ?? _defaultFabOffset(size, padding),
+      size,
+      padding,
+    );
+
     return Positioned.fill(
       child: PopScope(
         canPop: !_isOpen,
@@ -54,7 +118,13 @@ class _CopilotFloatingWidgetState extends State<CopilotFloatingWidget> {
                 onClose: _minimize,
                 onMinimize: _minimize,
               ),
-            if (!_isOpen) _CopilotFab(onTap: _open),
+            if (!_isOpen)
+              _CopilotFab(
+                offset: fabOffset,
+                onTap: _open,
+                onPanUpdate: (details) => _moveFab(details, size, padding),
+                onPanEnd: (_) => _saveFabOffset(),
+              ),
           ],
         ),
       ),
@@ -112,16 +182,23 @@ class _FloatingPanel extends StatelessWidget {
 }
 
 class _CopilotFab extends StatelessWidget {
+  final Offset offset;
   final VoidCallback onTap;
+  final GestureDragUpdateCallback onPanUpdate;
+  final GestureDragEndCallback onPanEnd;
 
-  const _CopilotFab({required this.onTap});
+  const _CopilotFab({
+    required this.offset,
+    required this.onTap,
+    required this.onPanUpdate,
+    required this.onPanEnd,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
     return Positioned(
-      right: 18,
-      bottom: bottomPadding + 22,
+      left: offset.dx,
+      top: offset.dy,
       child: SafeArea(
         top: false,
         child: Tooltip(
@@ -129,13 +206,17 @@ class _CopilotFab extends StatelessWidget {
           child: Semantics(
             button: true,
             label: 'Abrir Copiloto IA',
-            child: FloatingActionButton(
-              heroTag: 'copilot-floating-fab',
-              onPressed: onTap,
-              backgroundColor: AppColors.accent,
-              foregroundColor: AppColors.white,
-              elevation: 10,
-              child: const Icon(Icons.auto_awesome_rounded),
+            child: GestureDetector(
+              onPanUpdate: onPanUpdate,
+              onPanEnd: onPanEnd,
+              child: FloatingActionButton(
+                heroTag: 'copilot-floating-fab',
+                onPressed: onTap,
+                backgroundColor: AppColors.accent,
+                foregroundColor: AppColors.white,
+                elevation: 10,
+                child: const Icon(Icons.auto_awesome_rounded),
+              ),
             ),
           ),
         ),
