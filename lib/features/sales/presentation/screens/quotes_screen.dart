@@ -299,6 +299,12 @@ class _LookupOption {
       );
 }
 
+_LookupOption _lookupTenant(String id, String label) =>
+    _LookupOption(id: id, label: label);
+
+_LookupOption _lookupSeller(String id, String label) =>
+    _LookupOption(id: id, label: label);
+
 class _QuoteProductOption {
   final String id;
   final String name;
@@ -411,12 +417,23 @@ final _quoteTenantsProvider =
   return PaginatedResponse.fromJson(resp.data, _LookupOption.tenant).items;
 });
 
-_LookupOption _lookupTenant(String id, String label) =>
-    _LookupOption(id: id, label: label);
-
 final _quoteSellersProvider = FutureProvider.autoDispose
     .family<List<_LookupOption>, String>((ref, tenantId) async {
   if (tenantId.trim().isEmpty) return const [];
+  final auth = ref.watch(authNotifierProvider);
+  if (!auth.isAdminGlobal) {
+    final sellerId = auth.sellerId?.trim();
+    if (sellerId != null && sellerId.isNotEmpty) {
+      return [_lookupSeller(sellerId, 'Seller asociado')];
+    }
+    final sellerIds = auth.sellerIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toList();
+    if (sellerIds.length == 1) {
+      return [_lookupSeller(sellerIds.first, 'Seller asociado')];
+    }
+  }
   final resp = await ref.watch(dioProvider).get(
     '/v1/sellers',
     queryParameters: {
@@ -474,6 +491,30 @@ class _QuoteCreateSheetState extends ConsumerState<_QuoteCreateSheet> {
   bool _saving = false;
 
   @override
+  void initState() {
+    super.initState();
+    final auth = ref.read(authNotifierProvider);
+    if (!auth.isAdminGlobal) {
+      final tenantId = auth.tenantId?.trim();
+      if (tenantId != null && tenantId.isNotEmpty) {
+        _tenantId = tenantId;
+      }
+      final sellerId = auth.sellerId?.trim();
+      if (sellerId != null && sellerId.isNotEmpty) {
+        _sellerId = sellerId;
+      } else {
+        final sellerIds = auth.sellerIds
+            .map((id) => id.trim())
+            .where((id) => id.isNotEmpty)
+            .toList();
+        if (sellerIds.length == 1) {
+          _sellerId = sellerIds.first;
+        }
+      }
+    }
+  }
+
+  @override
   void dispose() {
     for (final ctrl in [
       _firstName,
@@ -497,6 +538,21 @@ class _QuoteCreateSheetState extends ConsumerState<_QuoteCreateSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = ref.watch(authNotifierProvider);
+    if (!auth.isAdminGlobal &&
+        (_tenantId == null || _tenantId!.trim().isEmpty) &&
+        auth.tenantId?.trim().isNotEmpty == true) {
+      _tenantId = auth.tenantId!.trim();
+    }
+    if (!auth.isAdminGlobal &&
+        (_sellerId == null || _sellerId!.trim().isEmpty)) {
+      final sellerId = auth.sellerId?.trim();
+      if (sellerId != null && sellerId.isNotEmpty) {
+        _sellerId = sellerId;
+      } else if (auth.sellerIds.length == 1) {
+        _sellerId = auth.sellerIds.first.trim();
+      }
+    }
     final tenantsAsync = ref.watch(_quoteTenantsProvider);
     final sellersAsync = _tenantId == null || _tenantId!.trim().isEmpty
         ? const AsyncData<List<_LookupOption>>([])
@@ -534,6 +590,19 @@ class _QuoteCreateSheetState extends ConsumerState<_QuoteCreateSheet> {
                 if (_tenantId == null && tenants.length == 1) {
                   _tenantId = tenants.first.id;
                 }
+                if (!auth.isAdminGlobal && _tenantId != null) {
+                  _LookupOption? tenant;
+                  for (final item in tenants) {
+                    if (item.id == _tenantId) {
+                      tenant = item;
+                      break;
+                    }
+                  }
+                  return _ReadOnlyScopeField(
+                    label: 'Empresa',
+                    value: tenant?.label ?? 'Empresa asociada',
+                  );
+                }
                 return DropdownButtonFormField<String>(
                   initialValue: _tenantId,
                   decoration: const InputDecoration(labelText: 'Empresa *'),
@@ -562,6 +631,14 @@ class _QuoteCreateSheetState extends ConsumerState<_QuoteCreateSheet> {
               data: (sellers) {
                 if (_sellerId == null && sellers.length == 1) {
                   _sellerId = sellers.first.id;
+                }
+                if (!auth.isAdminGlobal &&
+                    _sellerId != null &&
+                    sellers.length == 1) {
+                  return _ReadOnlyScopeField(
+                    label: 'Seller',
+                    value: sellers.first.label,
+                  );
                 }
                 return DropdownButtonFormField<String>(
                   initialValue: _sellerId,
@@ -735,14 +812,32 @@ class _QuoteCreateSheetState extends ConsumerState<_QuoteCreateSheet> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    final auth = ref.read(authNotifierProvider);
+    if (!auth.isAdminGlobal) {
+      _tenantId ??= auth.tenantId?.trim();
+      _sellerId ??= auth.sellerId?.trim();
+      if ((_sellerId == null || _sellerId!.trim().isEmpty) &&
+          auth.sellerIds.length == 1) {
+        _sellerId = auth.sellerIds.first.trim();
+      }
+    }
+    if (_tenantId == null || _tenantId!.trim().isEmpty) {
+      _showSnack(context, 'No pudimos resolver la empresa de la sesión.');
+      return;
+    }
+    if (_sellerId == null || _sellerId!.trim().isEmpty) {
+      _showSnack(context, 'Seleccioná un seller para crear la cotización.');
+      return;
+    }
     setState(() => _saving = true);
     try {
       final quantity =
           double.tryParse(_quantity.text.replaceAll(',', '.')) ?? 1;
       final price = double.tryParse(_price.text.replaceAll(',', '.')) ?? 0;
       final payload = {
-        'tenantId': _tenantId,
-        'sellerId': _sellerId,
+        'tenantId': _tenantId!.trim(),
+        'companyId': _tenantId!.trim(),
+        'sellerId': _sellerId!.trim(),
         'customerFirstName': _firstName.text.trim(),
         'customerLastName': _lastName.text.trim(),
         'customerPhone': _phone.text.trim(),
@@ -794,6 +889,32 @@ class _SectionTitle extends StatelessWidget {
           ),
         ),
       );
+}
+
+class _ReadOnlyScopeField extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _ReadOnlyScopeField({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InputDecorator(
+      decoration: InputDecoration(labelText: label),
+      child: Text(
+        value,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: AppColors.ink,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
 }
 
 class _StatusFilters extends StatefulWidget {
