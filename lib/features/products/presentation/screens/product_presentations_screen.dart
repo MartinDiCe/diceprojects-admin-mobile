@@ -5,7 +5,6 @@ import 'package:app_diceprojects_admin/core/ui/layout/app_page_scaffold.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/empty_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/error_state.dart';
 import 'package:app_diceprojects_admin/core/ui/widgets/loading_state.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -53,9 +52,10 @@ class _PresentationDto {
         barcode: json['barcode']?.toString(),
         presentationTypeCode: json['presentationTypeCode']?.toString() ?? '',
         baseUnitCode: json['baseUnitCode']?.toString() ?? '',
-        conversionToBaseQty: (json['conversionToBaseQty'] as num?)?.toDouble()
-            ?? (json['unitQuantity'] as num?)?.toDouble()
-            ?? 1.0,
+        conversionToBaseQty:
+            (json['conversionToBaseQty'] as num?)?.toDouble() ??
+                (json['unitQuantity'] as num?)?.toDouble() ??
+                1.0,
         isDefault: json['isDefault'] == true,
         allowsSale: json['allowsSale'] != false,
         allowsPurchase: json['allowsPurchase'] == true,
@@ -135,8 +135,9 @@ class _ProductPresentationsScreenState
           await dio.get('/v1/products/${widget.productId}/presentations');
       final list = resp.data is List ? resp.data as List : [];
       setState(() {
-        _presentations =
-            list.map((e) => _PresentationDto.fromJson(e as Map<String, dynamic>)).toList();
+        _presentations = list
+            .map((e) => _PresentationDto.fromJson(e as Map<String, dynamic>))
+            .toList();
         _loading = false;
       });
     } catch (e) {
@@ -159,8 +160,8 @@ class _ProductPresentationsScreenState
               child: const Text('Cancelar')),
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Eliminar',
-                  style: TextStyle(color: Colors.red))),
+              child:
+                  const Text('Eliminar', style: TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -197,8 +198,7 @@ class _ProductPresentationsScreenState
   @override
   Widget build(BuildContext context) {
     return AppPageScaffold(
-      title:
-          widget.productName != null ? 'Presentaciones' : 'Presentaciones',
+      title: widget.productName != null ? 'Presentaciones' : 'Presentaciones',
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.accent,
@@ -273,8 +273,8 @@ class _PresentationCard extends StatelessWidget {
                   ),
                 ),
                 if (item.isDefault)
-                  _Chip('Principal', Colors.green.shade700,
-                      Colors.green.shade50),
+                  _Chip(
+                      'Principal', Colors.green.shade700, Colors.green.shade50),
                 if (!item.active)
                   _Chip('Inactiva', Colors.grey.shade600, Colors.grey.shade100),
                 if (item.hasMovements)
@@ -344,10 +344,11 @@ class _Chip extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         margin: const EdgeInsets.only(left: 6),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-            color: bg, borderRadius: BorderRadius.circular(20)),
+        decoration:
+            BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
         child: Text(label,
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
+            style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
       );
 }
 
@@ -470,8 +471,8 @@ class _PresentationFormSheetState
       List<_CatOption> presTypes, List<_CatOption> uomList) async {
     if (!_formKey.currentState!.validate()) return;
 
-    final typeCode =
-        _presentationTypeCode ?? (presTypes.isNotEmpty ? presTypes.first.code : '');
+    final typeCode = _presentationTypeCode ??
+        (presTypes.isNotEmpty ? presTypes.first.code : '');
     final uomCode =
         _baseUnitCode ?? (uomList.isNotEmpty ? uomList.first.code : '');
 
@@ -487,9 +488,8 @@ class _PresentationFormSheetState
 
     try {
       final dio = ref.read(dioProvider);
-      final barcode = _barcodeCtrl.text.trim().isEmpty
-          ? null
-          : _barcodeCtrl.text.trim();
+      final barcode =
+          _barcodeCtrl.text.trim().isEmpty ? null : _barcodeCtrl.text.trim();
       final factor = double.tryParse(_factorCtrl.text.trim()) ?? 1.0;
 
       if (!_isEdit) {
@@ -627,13 +627,12 @@ class _PresentationFormSheetState
                     items: types
                         .map((t) => DropdownMenuItem(
                             value: t.code,
-                            child: Text(t.name,
-                                overflow: TextOverflow.ellipsis)))
+                            child:
+                                Text(t.name, overflow: TextOverflow.ellipsis)))
                         .toList(),
                     onChanged: _hasMovements
                         ? null
-                        : (v) =>
-                            setState(() => _presentationTypeCode = v),
+                        : (v) => setState(() => _presentationTypeCode = v),
                     validator: (v) =>
                         (v == null || v.isEmpty) ? 'Requerido' : null,
                   );
@@ -663,8 +662,8 @@ class _PresentationFormSheetState
                     items: uomList
                         .map((u) => DropdownMenuItem(
                             value: u.code,
-                            child: Text(u.name,
-                                overflow: TextOverflow.ellipsis)))
+                            child:
+                                Text(u.name, overflow: TextOverflow.ellipsis)))
                         .toList(),
                     onChanged: _hasMovements
                         ? null
@@ -687,8 +686,7 @@ class _PresentationFormSheetState
                 enabled: !_hasMovements,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
-                decoration: _dec(
-                    'Factor de conversión a unidad base *', '1',
+                decoration: _dec('Factor de conversión a unidad base *', '1',
                     helper: _hasMovements
                         ? 'No editable: existen movimientos'
                         : 'Cantidad de unidad base que contiene esta presentación'),
@@ -784,6 +782,5 @@ InputDecoration _dec(String label, String hint, {String? helper}) =>
       helperMaxLines: 2,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       filled: true,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     );

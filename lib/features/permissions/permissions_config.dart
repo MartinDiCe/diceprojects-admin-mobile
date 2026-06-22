@@ -126,15 +126,9 @@ const Map<String, List<String>> permissionGates = {
     'IAM.Invitations.Send',
     'IAM.Users.Admin',
   ],
-  '/iam/users': ['IAM.Users.List', 'IAM.Users.View', 'IAM.Users.Admin'],
+  '/iam/users': ['IAM.Users.List'],
   '/iam/invitations': ['IAM.Invitations.List', 'IAM.Invitations.Send'],
-  '/authorization': [
-    'IAM.Roles.List',
-    'IAM.Roles.View',
-    'IAM.Roles.Admin',
-    'IAM.Admin',
-    'Authorization.Admin',
-  ],
+  '/authorization': ['IAM.Roles.List'],
 
   // Logs
   '/logs/audit': ['IAM.Audit.List'],

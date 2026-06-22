@@ -5,12 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class PermissionsService {
   final Set<String> _permissions;
   final bool _isAdminGlobal;
-  final bool _hasAdministratorRole;
 
   const PermissionsService(
     this._permissions,
     this._isAdminGlobal,
-    this._hasAdministratorRole,
   );
 
   bool hasPermission(String code) {
@@ -39,6 +37,20 @@ class PermissionsService {
       if (route == entry.key || route.startsWith('${entry.key}/')) {
         return hasAnyPermission(entry.value) ||
             _hasRouteModuleAccess(route, entry.value);
+      }
+    }
+    return false;
+  }
+
+  bool canShowMenuRoute(String route) {
+    if (_canBypassPermissionChecks) return true;
+    if (_isAlwaysAllowedRoute(route)) return true;
+
+    final gates = permissionGates.entries.toList()
+      ..sort((a, b) => b.key.length.compareTo(a.key.length));
+    for (final entry in gates) {
+      if (route == entry.key || route.startsWith('${entry.key}/')) {
+        return hasAnyPermission(entry.value);
       }
     }
     return false;
@@ -77,8 +89,7 @@ class PermissionsService {
     return '/manual';
   }
 
-  bool get _canBypassPermissionChecks =>
-      _isAdminGlobal || _hasAdministratorRole;
+  bool get _canBypassPermissionChecks => _isAdminGlobal;
 
   bool get hasLocalPermissionData =>
       _canBypassPermissionChecks || _permissions.isNotEmpty;
@@ -111,9 +122,18 @@ class PermissionsService {
 
   bool _allowsModuleFallback(String route) {
     final normalized = route.toLowerCase();
+    if (_isSensitiveRoute(normalized)) return false;
     return !normalized.contains('/new') &&
         !normalized.contains('/edit') &&
         !normalized.contains('/import');
+  }
+
+  bool _isSensitiveRoute(String normalizedRoute) {
+    return normalizedRoute.startsWith('/iam') ||
+        normalizedRoute.startsWith('/authorization') ||
+        normalizedRoute.startsWith('/logs') ||
+        normalizedRoute.startsWith('/admin/tenants') ||
+        normalizedRoute.startsWith('/admin/branches');
   }
 
   String? _moduleToken(String normalizedPermission) {
@@ -149,6 +169,5 @@ final permissionsProvider = Provider<PermissionsService>((ref) {
   return PermissionsService(
     auth.permissions,
     auth.isAdminGlobal,
-    auth.hasAdministratorRole,
   );
 });

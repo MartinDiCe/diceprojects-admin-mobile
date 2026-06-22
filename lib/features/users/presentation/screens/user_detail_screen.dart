@@ -27,12 +27,14 @@ class _RoleLookupDto {
   final String code;
   final String name;
 
-  const _RoleLookupDto({required this.id, required this.code, required this.name});
+  const _RoleLookupDto(
+      {required this.id, required this.code, required this.name});
 
   factory _RoleLookupDto.fromJson(Map<String, dynamic> json) => _RoleLookupDto(
         id: (json['id'])?.toString() ?? '',
         code: (json['code'])?.toString() ?? '',
-        name: (json['code'] ?? json['name'] ?? json['description'] ?? '').toString(),
+        name: (json['code'] ?? json['name'] ?? json['description'] ?? '')
+            .toString(),
       );
 }
 
@@ -81,8 +83,8 @@ class UserRoleRef {
       final map = Map<String, dynamic>.from(raw);
       final id = (map['roleId'] ?? map['id'])?.toString();
       final code = (map['role'] ?? map['code'] ?? map['roleCode'])?.toString();
-      final label = (code ?? map['name'] ?? map['description'] ?? id ?? 'Rol')
-          .toString();
+      final label =
+          (code ?? map['name'] ?? map['description'] ?? id ?? 'Rol').toString();
       return UserRoleRef(id: id, code: code, label: label);
     }
     final text = raw?.toString() ?? '';
@@ -125,8 +127,9 @@ class UserDetailDto {
 
   String get fullName {
     final parts = [firstName, lastName]
-        .where((p) => p != null && p!.trim().isNotEmpty)
-        .map((p) => p!.trim())
+        .whereType<String>()
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
         .toList();
     return parts.join(' ');
   }
@@ -154,8 +157,12 @@ class UserDetailDto {
           .toList(),
       createdAt: json['createdAt']?.toString(),
       updatedAt: json['updatedAt']?.toString(),
-      firstName: (json['firstName'] ?? json['personFirstName'] ?? person?['firstName'])?.toString(),
-      lastName: (json['lastName'] ?? json['personLastName'] ?? person?['lastName'])?.toString(),
+      firstName:
+          (json['firstName'] ?? json['personFirstName'] ?? person?['firstName'])
+              ?.toString(),
+      lastName:
+          (json['lastName'] ?? json['personLastName'] ?? person?['lastName'])
+              ?.toString(),
     );
   }
 }
@@ -179,7 +186,8 @@ class UserDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(userDetailProvider(userId));
     final rolesLookupAsync = ref.watch(_rolesLookupProvider);
-    final rolesLookup = rolesLookupAsync.maybeWhen(data: (d) => d, orElse: () => null);
+    final rolesLookup =
+        rolesLookupAsync.maybeWhen(data: (d) => d, orElse: () => null);
 
     return AppPageScaffold(
       title: 'Detalle de Usuario',
@@ -252,20 +260,22 @@ class _HeaderCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(user.displayName,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                  Text(
+                    user.displayName,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
-                  Text(user.email,
-                      style: TextStyle(
-                          color: AppColors.textSecondary, fontSize: 13),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                  Text(
+                    user.email,
+                    style:
+                        TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 8),
                   StatusBadge(status: user.status),
@@ -327,13 +337,12 @@ class _InfoRow extends StatelessWidget {
           SizedBox(
             width: 100,
             child: Text(label,
-                style: TextStyle(
-                    color: AppColors.textSecondary, fontSize: 13)),
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
           ),
           Expanded(
             child: Text(value,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w500, fontSize: 13)),
+                style:
+                    const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
           ),
         ],
       ),
@@ -425,11 +434,13 @@ class _RolesCardState extends ConsumerState<_RolesCard> {
                 items: availableRoles
                     .map((role) => DropdownMenuItem(
                           value: role.id,
-                          child: Text(role.name, overflow: TextOverflow.ellipsis),
+                          child:
+                              Text(role.name, overflow: TextOverflow.ellipsis),
                         ))
                     .toList(),
-                onChanged:
-                    _saving ? null : (value) => setState(() => _selectedRoleId = value),
+                onChanged: _saving
+                    ? null
+                    : (value) => setState(() => _selectedRoleId = value),
               ),
               const SizedBox(height: 10),
               AppButton(

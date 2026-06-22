@@ -262,47 +262,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final isAdminGlobal = tenantId == null || tenantId.trim().isEmpty;
     var hasAdministratorRole = _hasAdministratorRole(roles);
 
-    // Prefer effective permissions for current principal.
-    // Fallback to per-role permissions (legacy/web strategy) if backend doesn't support it.
-    final allPermissions = <String>{
-      ...JwtDecoder.getPermissions(token),
-      ...roles,
-    };
-    var mePermissionsFetched = false;
-    if (!hasAdministratorRole) {
-      try {
-        final resp = await _dio.get('/v1/me/permissions');
-        final data = resp.data;
-        final perms = data is Map ? data['permissions'] : data;
-        final parsed = _parsePermissionCodes(perms);
-        allPermissions.addAll(parsed);
-        mePermissionsFetched = parsed.isNotEmpty;
-      } catch (_) {
-        // ignore — fallback below
-      }
+    final allPermissions = await _resolveEffectivePermissions(
+      token: token,
+      tenantId: tenantId,
+      roles: roles,
+    );
 
-      if (!mePermissionsFetched) {
-        final results = await Future.wait(
-          roles.map((roleCode) async {
-            try {
-              final resp = await _dio.get('/v1/roles/$roleCode/permissions');
-              final data = resp.data;
-              // Response shape: { roleCode: string, permissions: [...] }
-              final perms = data is Map ? data['permissions'] : data;
-              return _parsePermissionCodes(perms);
-            } catch (_) {
-              // graceful degradation — same as web
-            }
-            return <String>{};
-          }),
-        );
-        for (final set in results) {
-          allPermissions.addAll(set);
-        }
-      }
-
-      hasAdministratorRole = _hasAdministratorPermissions(allPermissions);
-    }
+    hasAdministratorRole =
+        hasAdministratorRole || _hasAdministratorPermissions(allPermissions);
 
     state = AuthState(
       token: token,
@@ -406,6 +373,185 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final out = <String>{};
     _collectPermissionCodes(permissions, out);
     return out;
+  }
+
+  Future<Set<String>> _resolveEffectivePermissions({
+    required String token,
+    required String? tenantId,
+    required List<String> roles,
+  }) async {
+    final tokenPermissions = _parseTokenPermissionClaims(token, tenantId);
+
+    final effective = await _fetchCurrentUserPermissions(token, tenantId);
+    if (effective != null) {
+      return {
+        ...tokenPermissions,
+        ...effective,
+      };
+    }
+
+    return {
+      ...tokenPermissions,
+      ...await _fetchPermissionsByRoles(token, tenantId, roles),
+    };
+  }
+
+  static Set<String> _parseTokenPermissionClaims(
+    String token,
+    String? tenantId,
+  ) {
+    final payload = JwtDecoder.decode(token);
+    final scoped = _parseTenantAwarePermissionCodes(payload, tenantId);
+    if (scoped.isNotEmpty) return scoped;
+    return JwtDecoder.getPermissions(token);
+  }
+
+  Future<Set<String>?> _fetchCurrentUserPermissions(
+    String token,
+    String? tenantId,
+  ) async {
+    try {
+      final resp = await _dio.get(
+        '/v1/me/permissions',
+        options: _tenantAwareOptions(token, tenantId),
+      );
+      return _parseTenantAwarePermissionCodes(resp.data, tenantId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Set<String>> _fetchPermissionsByRoles(
+    String token,
+    String? tenantId,
+    List<String> roles,
+  ) async {
+    final results = await Future.wait(
+      roles.map((roleCode) async {
+        try {
+          final resp = await _dio.get(
+            '/v1/roles/$roleCode/permissions',
+            options: _tenantAwareOptions(token, tenantId),
+          );
+          return _parseTenantAwarePermissionCodes(resp.data, tenantId);
+        } catch (_) {
+          // Fallback compatible con versiones anteriores del backend.
+        }
+        return <String>{};
+      }),
+    );
+
+    return results.fold<Set<String>>(
+      <String>{},
+      (acc, set) => acc..addAll(set),
+    );
+  }
+
+  Options _tenantAwareOptions(String token, String? tenantId) {
+    final tenant = tenantId?.trim();
+    return Options(
+      headers: {
+        'Authorization': 'Bearer $token',
+        if (tenant != null && tenant.isNotEmpty) 'X-Tenant-Id': tenant,
+      },
+      extra: const {'skipUnauthorizedHandler': true},
+    );
+  }
+
+  static Set<String> _parseTenantAwarePermissionCodes(
+    dynamic raw,
+    String? tenantId,
+  ) {
+    final scoped = _extractTenantScopedPermissions(raw, tenantId);
+    if (scoped != null) return _parsePermissionCodes(scoped);
+
+    if (raw is Map) {
+      for (final key in const [
+        'permissions',
+        'permissionCodes',
+        'codes',
+        'grants',
+        'access',
+      ]) {
+        final parsed = _parsePermissionCodes(raw[key]);
+        if (parsed.isNotEmpty) return parsed;
+      }
+      return <String>{};
+    }
+
+    return _parsePermissionCodes(raw);
+  }
+
+  static dynamic _extractTenantScopedPermissions(
+      dynamic raw, String? tenantId) {
+    final tenant = tenantId?.trim();
+    if (tenant == null || tenant.isEmpty || raw is! Map) return null;
+
+    for (final key in const [
+      'permissionsByTenant',
+      'tenantPermissions',
+      'permissionsByTenantId',
+      'byTenant',
+    ]) {
+      final value = raw[key];
+      if (value is Map) {
+        final scoped = _lookupTenantEntry(value, tenant);
+        if (scoped != null) return scoped;
+      }
+      if (value is List) {
+        final scoped = _lookupTenantEntryList(value, tenant);
+        if (scoped != null) return scoped;
+      }
+    }
+
+    final tenants = raw['tenants'] ?? raw['memberships'];
+    if (tenants is List) {
+      final scoped = _lookupTenantEntryList(tenants, tenant);
+      if (scoped != null) return scoped;
+    }
+
+    if (_mapTenantId(raw) == tenant) {
+      return raw['permissions'] ??
+          raw['permissionCodes'] ??
+          raw['codes'] ??
+          raw;
+    }
+
+    return null;
+  }
+
+  static dynamic _lookupTenantEntry(Map value, String tenantId) {
+    for (final entry in value.entries) {
+      if (entry.key.toString().trim() == tenantId) return entry.value;
+    }
+    return null;
+  }
+
+  static dynamic _lookupTenantEntryList(List value, String tenantId) {
+    for (final item in value) {
+      if (item is! Map || _mapTenantId(item) != tenantId) continue;
+      return item['permissions'] ??
+          item['permissionCodes'] ??
+          item['codes'] ??
+          item['grants'] ??
+          item;
+    }
+    return null;
+  }
+
+  static String? _mapTenantId(Map value) {
+    for (final key in const ['tenantId', 'companyId', 'tenant', 'company']) {
+      final raw = value[key];
+      if (raw == null) continue;
+      if (raw is Map) {
+        final nested = _mapTenantId(raw);
+        if (nested != null && nested.isNotEmpty) return nested;
+        continue;
+      }
+      final text = raw.toString().trim();
+      if (text.isNotEmpty) return text;
+    }
+    return null;
   }
 
   static void _collectPermissionCodes(dynamic raw, Set<String> out) {
