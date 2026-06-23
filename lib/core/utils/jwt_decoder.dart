@@ -42,6 +42,27 @@ class JwtDecoder {
     return values.toList(growable: false);
   }
 
+  static List<String> getRolesForTenant(String token, String? tenantId) {
+    final payload = decode(token);
+    final values = <String>{...getRoles(token)};
+    final tenant = tenantId?.trim();
+    if (tenant == null || tenant.isEmpty) return values.toList(growable: false);
+
+    final scoped = _findTenantScopedMap(payload, tenant);
+    if (scoped != null) {
+      for (final key in const [
+        'roles',
+        'roleCodes',
+        'roleCode',
+        'assignedRoles',
+        'authorities',
+      ]) {
+        _collectRoleValues(scoped[key], values);
+      }
+    }
+    return values.toList(growable: false);
+  }
+
   static Set<String> getPermissions(String token) {
     final payload = decode(token);
     final values = <String>{};
@@ -67,7 +88,16 @@ class JwtDecoder {
       return;
     }
     if (raw is Map) {
-      for (final key in const ['role', 'code', 'name', 'authority']) {
+      for (final key in const [
+        'role',
+        'roles',
+        'roleCode',
+        'roleCodes',
+        'code',
+        'name',
+        'authority',
+        'authorities',
+      ]) {
         _collectRoleValues(raw[key], values);
       }
       return;
@@ -113,5 +143,58 @@ class JwtDecoder {
     final sellerId = payload['sellerId']?.toString();
     if (sellerId != null && sellerId.trim().isNotEmpty) return [sellerId];
     return [];
+  }
+
+  static Map? _findTenantScopedMap(
+      Map<String, dynamic> payload, String tenantId) {
+    for (final key in const [
+      'memberships',
+      'tenants',
+      'tenantMemberships',
+      'accesses',
+    ]) {
+      final raw = payload[key];
+      if (raw is List) {
+        for (final item in raw) {
+          if (item is Map && _mapTenantId(item) == tenantId) return item;
+        }
+      }
+    }
+
+    for (final key in const [
+      'rolesByTenant',
+      'tenantRoles',
+      'rolesByTenantId',
+      'permissionsByTenant',
+      'tenantPermissions',
+      'permissionsByTenantId',
+      'byTenant',
+    ]) {
+      final raw = payload[key];
+      if (raw is Map) {
+        for (final entry in raw.entries) {
+          if (entry.key.toString().trim() != tenantId) continue;
+          final value = entry.value;
+          if (value is Map) return value;
+          return {'roles': value, 'permissions': value};
+        }
+      }
+    }
+    return null;
+  }
+
+  static String? _mapTenantId(Map value) {
+    for (final key in const ['tenantId', 'companyId', 'tenant', 'company']) {
+      final raw = value[key];
+      if (raw == null) continue;
+      if (raw is Map) {
+        final nested = _mapTenantId(raw);
+        if (nested != null && nested.isNotEmpty) return nested;
+        continue;
+      }
+      final text = raw.toString().trim();
+      if (text.isNotEmpty) return text;
+    }
+    return null;
   }
 }

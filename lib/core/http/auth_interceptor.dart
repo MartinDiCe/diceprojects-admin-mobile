@@ -23,6 +23,8 @@ class AuthInterceptor extends Interceptor {
         path.endsWith('/v1/users/forgot-password') ||
         path == '/v1/users/reset-password' ||
         path.endsWith('/v1/users/reset-password') ||
+        path == '/v1/auth/select-context' ||
+        path.endsWith('/v1/auth/select-context') ||
         path == '/auth/mobile/refresh' ||
         path.endsWith('/auth/mobile/refresh') ||
         path.contains('/auth/oauth2/');

@@ -131,11 +131,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       // Defensive parsing — avoids hard-cast TypeError if response shape is unexpected
       final data = response.data;
-      final token = data is Map ? data['token']?.toString() : null;
+      var token = data is Map ? data['token']?.toString() : null;
+      if ((token == null || token.isEmpty) &&
+          data is Map &&
+          data['status']?.toString() == 'SELECTION_REQUIRED') {
+        token = await _selectDefaultContext(data);
+      }
       if (token == null || token.isEmpty) {
         state = state.copyWith(
           isLoading: false,
-          error: 'Respuesta inesperada del servidor. Contactá soporte.',
+          error:
+              'No pudimos completar el contexto de acceso. Elegí empresa y vendedor desde la web o contactá soporte.',
         );
         return false;
       }
@@ -271,8 +277,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return;
     }
     final username = JwtDecoder.getUsername(token);
-    final roles = JwtDecoder.getRoles(token);
     final tenantId = JwtDecoder.getTenantId(token);
+    final roles = JwtDecoder.getRolesForTenant(token, tenantId);
     final sellerId = JwtDecoder.getSellerId(token);
     final sellerScope = JwtDecoder.getSellerScope(token);
     final sellerIds = JwtDecoder.getSellerIds(token);
@@ -310,6 +316,56 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await _storage.delete(AppConfig.refreshTokenKey);
     await _storage.delete(AppConfig.refreshDeviceIdKey);
     state = const AuthState(isInitialized: true);
+  }
+
+  Future<String?> _selectDefaultContext(Map data) async {
+    final contextSelectionId = data['contextSelectionId']?.toString().trim();
+    final membershipsRaw = data['memberships'];
+    if (contextSelectionId == null ||
+        contextSelectionId.isEmpty ||
+        membershipsRaw is! List ||
+        membershipsRaw.isEmpty) {
+      return null;
+    }
+
+    final defaultTenantId = data['defaultTenantId']?.toString().trim();
+    Map? selected;
+    for (final membership in membershipsRaw) {
+      if (membership is! Map || _truthy(membership['deleted'])) continue;
+      final tenantId = _mapTenantId(membership);
+      if (tenantId == null || tenantId.isEmpty) continue;
+      if (defaultTenantId != null &&
+          defaultTenantId.isNotEmpty &&
+          tenantId == defaultTenantId) {
+        selected = membership;
+        break;
+      }
+      selected ??= membership;
+    }
+    if (selected == null) return null;
+
+    final tenantId = _mapTenantId(selected);
+    if (tenantId == null || tenantId.isEmpty) return null;
+
+    final sellerScope =
+        selected['sellerScope']?.toString().trim().toUpperCase() ?? 'NONE';
+    final sellerIds = _readStringList(selected['sellerIds']);
+    String? sellerId;
+    if (sellerScope != 'NONE' && sellerIds.length == 1) {
+      sellerId = sellerIds.first;
+    }
+
+    final response = await _dio.post(
+      '/v1/auth/select-context',
+      data: {
+        'contextSelectionId': contextSelectionId,
+        'tenantId': tenantId,
+        if (sellerId != null && sellerId.isNotEmpty) 'sellerId': sellerId,
+      },
+    ).timeout(_authRequestTimeout);
+
+    final responseData = response.data;
+    return responseData is Map ? responseData['token']?.toString() : null;
   }
 
   Future<void> expireSession() async {
@@ -494,7 +550,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     String? tenantId,
   ) {
     final scoped = _extractTenantScopedPermissions(raw, tenantId);
-    if (scoped != null) return _parsePermissionCodes(scoped);
+    if (scoped.found) return _parsePermissionCodes(scoped.value);
 
     if (raw is Map) {
       for (final key in const [
@@ -513,10 +569,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
     return _parsePermissionCodes(raw);
   }
 
-  static dynamic _extractTenantScopedPermissions(
-      dynamic raw, String? tenantId) {
+  static _ScopedPermissions _extractTenantScopedPermissions(
+    dynamic raw,
+    String? tenantId,
+  ) {
     final tenant = tenantId?.trim();
-    if (tenant == null || tenant.isEmpty || raw is! Map) return null;
+    if (tenant == null || tenant.isEmpty || raw is! Map) {
+      return const _ScopedPermissions.notFound();
+    }
 
     for (final key in const [
       'permissionsByTenant',
@@ -527,47 +587,51 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final value = raw[key];
       if (value is Map) {
         final scoped = _lookupTenantEntry(value, tenant);
-        if (scoped != null) return scoped;
+        if (scoped.found) return scoped;
       }
       if (value is List) {
         final scoped = _lookupTenantEntryList(value, tenant);
-        if (scoped != null) return scoped;
+        if (scoped.found) return scoped;
       }
     }
 
     final tenants = raw['tenants'] ?? raw['memberships'];
     if (tenants is List) {
       final scoped = _lookupTenantEntryList(tenants, tenant);
-      if (scoped != null) return scoped;
+      if (scoped.found) return scoped;
     }
 
     if (_mapTenantId(raw) == tenant) {
-      return raw['permissions'] ??
-          raw['permissionCodes'] ??
-          raw['codes'] ??
-          raw;
+      return _ScopedPermissions(
+        raw['permissions'] ?? raw['permissionCodes'] ?? raw['codes'] ?? raw,
+      );
     }
 
-    return null;
+    return const _ScopedPermissions.notFound();
   }
 
-  static dynamic _lookupTenantEntry(Map value, String tenantId) {
+  static _ScopedPermissions _lookupTenantEntry(Map value, String tenantId) {
     for (final entry in value.entries) {
-      if (entry.key.toString().trim() == tenantId) return entry.value;
+      if (entry.key.toString().trim() == tenantId) {
+        return _ScopedPermissions(entry.value);
+      }
     }
-    return null;
+    return const _ScopedPermissions.notFound();
   }
 
-  static dynamic _lookupTenantEntryList(List value, String tenantId) {
+  static _ScopedPermissions _lookupTenantEntryList(
+      List value, String tenantId) {
     for (final item in value) {
       if (item is! Map || _mapTenantId(item) != tenantId) continue;
-      return item['permissions'] ??
-          item['permissionCodes'] ??
-          item['codes'] ??
-          item['grants'] ??
-          item;
+      return _ScopedPermissions(
+        item['permissions'] ??
+            item['permissionCodes'] ??
+            item['codes'] ??
+            item['grants'] ??
+            item,
+      );
     }
-    return null;
+    return const _ScopedPermissions.notFound();
   }
 
   static String? _mapTenantId(Map value) {
@@ -583,6 +647,28 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (text.isNotEmpty) return text;
     }
     return null;
+  }
+
+  static bool _truthy(dynamic value) {
+    if (value is bool) return value;
+    final text = value?.toString().trim().toLowerCase();
+    return text == 'true' || text == '1' || text == 'yes';
+  }
+
+  static List<String> _readStringList(dynamic raw) {
+    if (raw is List) {
+      return raw
+          .map((value) => value.toString().trim())
+          .where((value) => value.isNotEmpty)
+          .toList(growable: false);
+    }
+    final text = raw?.toString().trim();
+    if (text == null || text.isEmpty) return const [];
+    return text
+        .split(RegExp(r'[\s,;]+'))
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
   }
 
   static void _collectPermissionCodes(dynamic raw, Set<String> out) {
@@ -632,3 +718,13 @@ final authNotifierProvider = StateNotifierProvider<AuthNotifier, AuthState>(
     ref.read(dioProvider),
   ),
 );
+
+class _ScopedPermissions {
+  final bool found;
+  final dynamic value;
+
+  const _ScopedPermissions(this.value) : found = true;
+  const _ScopedPermissions.notFound()
+      : found = false,
+        value = null;
+}
