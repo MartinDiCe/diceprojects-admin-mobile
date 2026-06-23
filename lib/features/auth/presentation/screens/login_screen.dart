@@ -285,6 +285,113 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  Future<void> _openForgotPasswordDialog() async {
+    final emailCtrl = TextEditingController(text: _usernameCtrl.text.trim());
+    var sending = false;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Recuperar contraseña'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Ingresá tu email y te vamos a enviar las instrucciones para recuperar el acceso.',
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.done,
+                autofillHints: const [AutofillHints.email],
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  prefixIcon: Icon(Icons.mail_outline_rounded),
+                ),
+                onSubmitted: (_) async {
+                  if (!sending) {
+                    await _sendPasswordRecovery(
+                      ctx,
+                      emailCtrl.text,
+                      setDialogState,
+                      (value) => sending = value,
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: sending ? null : () => Navigator.of(ctx).pop(),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: sending
+                  ? null
+                  : () => _sendPasswordRecovery(
+                        ctx,
+                        emailCtrl.text,
+                        setDialogState,
+                        (value) => sending = value,
+                      ),
+              child: Text(sending ? 'Enviando...' : 'Enviar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    emailCtrl.dispose();
+  }
+
+  Future<void> _sendPasswordRecovery(
+    BuildContext dialogContext,
+    String email,
+    StateSetter setDialogState,
+    ValueChanged<bool> setSending,
+  ) async {
+    final normalized = email.trim().toLowerCase();
+    if (normalized.isEmpty || !normalized.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingresá un email válido.')),
+      );
+      return;
+    }
+    setDialogState(() => setSending(true));
+    var dialogClosed = false;
+    try {
+      await ref.read(dioProvider).post(
+        '/v1/users/forgot-password',
+        data: {'email': normalized},
+      );
+      if (!mounted || !dialogContext.mounted) return;
+      dialogClosed = true;
+      Navigator.of(dialogContext).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Si existe una cuenta con ese email, vas a recibir las instrucciones para recuperar el acceso.',
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No pudimos enviar la recuperación ahora. Intentá nuevamente en unos minutos.',
+          ),
+        ),
+      );
+    } finally {
+      if (!dialogClosed && dialogContext.mounted) {
+        setDialogState(() => setSending(false));
+      }
+    }
+  }
+
   Future<void> _hydratePackageInfo() async {
     try {
       final info = await PackageInfo.fromPlatform();
@@ -583,26 +690,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   ),
                                   const SizedBox(height: 6),
                                   TextButton(
-                                    onPressed: () {
-                                      showDialog<void>(
-                                        context: context,
-                                        builder: (ctx) => AlertDialog(
-                                          title: const Text(
-                                            'Recuperar contraseña',
-                                          ),
-                                          content: const Text(
-                                            'Por ahora la recuperación de contraseña no está disponible desde la app.\n\nContactá a soporte o a un administrador para resetear tu acceso.',
-                                          ),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.of(ctx).pop(),
-                                              child: const Text('Entendido'),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    },
+                                    onPressed: _openForgotPasswordDialog,
                                     style: TextButton.styleFrom(
                                       foregroundColor: AppColors.accent,
                                       padding: const EdgeInsets.symmetric(

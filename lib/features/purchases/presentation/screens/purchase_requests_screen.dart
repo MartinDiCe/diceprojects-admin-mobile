@@ -18,7 +18,8 @@ import 'package:url_launcher/url_launcher.dart';
 final _purchaseSearchProvider = StateProvider.autoDispose<String>((_) => '');
 final _purchaseSourceProvider = StateProvider.autoDispose<String?>((_) => null);
 
-final _purchaseRequestsProvider = FutureProvider.autoDispose<List<_PurchaseRequestDto>>((ref) async {
+final _purchaseRequestsProvider =
+    FutureProvider.autoDispose<List<_PurchaseRequestDto>>((ref) async {
   final search = ref.watch(_purchaseSearchProvider).trim().toLowerCase();
   final sourceType = ref.watch(_purchaseSourceProvider);
   final response = await ref.watch(dioProvider).get(
@@ -39,19 +40,28 @@ final _purchaseRequestsProvider = FutureProvider.autoDispose<List<_PurchaseReque
 
 final _purchaseRequestDetailProvider = FutureProvider.autoDispose
     .family<Map<String, dynamic>, String>((ref, requestId) async {
-  final response = await ref.watch(dioProvider).get('/v1/purchase-requests/$requestId');
+  final response =
+      await ref.watch(dioProvider).get('/v1/purchase-requests/$requestId');
   return Map<String, dynamic>.from(response.data as Map);
 });
 
-final _purchaseSuppliersProvider = FutureProvider.autoDispose<List<_LookupOption>>((ref) async {
+final _purchaseSuppliersProvider =
+    FutureProvider.autoDispose<List<_LookupOption>>((ref) async {
   final response = await ref.watch(dioProvider).get(
     '/v1/suppliers',
-    queryParameters: const {'page': 0, 'size': 200, 'pageSize': 200, 'status': 'ACTIVE'},
+    queryParameters: const {
+      'page': 0,
+      'size': 200,
+      'pageSize': 200,
+      'status': 'ACTIVE'
+    },
   );
-  return PaginatedResponse.fromJson(response.data, _LookupOption.supplier).items;
+  return PaginatedResponse.fromJson(response.data, _LookupOption.supplier)
+      .items;
 });
 
-final _purchaseProductsProvider = FutureProvider.autoDispose<List<_ProductOption>>((ref) async {
+final _purchaseProductsProvider =
+    FutureProvider.autoDispose<List<_ProductOption>>((ref) async {
   final response = await ref.watch(dioProvider).get(
     '/v1/products',
     queryParameters: const {'page': 0, 'size': 300, 'pageSize': 300},
@@ -63,7 +73,20 @@ final _purchaseProductsProvider = FutureProvider.autoDispose<List<_ProductOption
 });
 
 const _currencyOptions = ['ARS', 'USD', 'EUR', 'BRL'];
-const _unitOptions = ['UN', 'KG', 'GR', 'LT', 'ML', 'M', 'CM', 'M2', 'M3', 'CAJA', 'BOLSA', 'ROLLO'];
+const _unitOptions = [
+  'UN',
+  'KG',
+  'GR',
+  'LT',
+  'ML',
+  'M',
+  'CM',
+  'M2',
+  'M3',
+  'CAJA',
+  'BOLSA',
+  'ROLLO'
+];
 
 class PurchaseRequestsScreen extends ConsumerWidget {
   const PurchaseRequestsScreen({super.key});
@@ -72,12 +95,14 @@ class PurchaseRequestsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final requests = ref.watch(_purchaseRequestsProvider);
     final perms = ref.watch(permissionsProvider);
-    final canCreate = perms.hasAnyPermission(['Purchases.Requests.Create', 'Purchases.Admin']);
+    final canCreate = perms
+        .hasAnyPermission(['Purchases.Requests.Create', 'Purchases.Admin']);
 
     return AppPageScaffold(
       title: 'Solicitudes de presupuesto',
       searchHint: 'Buscar solicitud...',
-      onSearch: (value) => ref.read(_purchaseSearchProvider.notifier).state = value,
+      onSearch: (value) =>
+          ref.read(_purchaseSearchProvider.notifier).state = value,
       actions: [
         IconButton(
           tooltip: 'Actualizar',
@@ -98,16 +123,17 @@ class PurchaseRequestsScreen extends ConsumerWidget {
         children: [
           _SourceFilters(
             selected: ref.watch(_purchaseSourceProvider),
-            onChanged: (value) => ref.read(_purchaseSourceProvider.notifier).state = value,
+            onChanged: (value) =>
+                ref.read(_purchaseSourceProvider.notifier).state = value,
           ),
           Expanded(
             child: requests.when(
-        loading: () => const LoadingState(),
-        error: (error, _) => ErrorState(
-          message: 'No se pudieron cargar las solicitudes.',
-          onRetry: () => ref.invalidate(_purchaseRequestsProvider),
-        ),
-        data: (items) => _PurchaseRequestsList(items: items),
+              loading: () => const LoadingState(),
+              error: (error, _) => ErrorState(
+                message: 'No se pudieron cargar las solicitudes.',
+                onRetry: () => ref.invalidate(_purchaseRequestsProvider),
+              ),
+              data: (items) => _PurchaseRequestsList(items: items),
             ),
           ),
         ],
@@ -190,12 +216,14 @@ class _PurchaseRequestsList extends ConsumerWidget {
               onTap: () async {
                 await showDialog<void>(
                   context: context,
-                  builder: (_) => _PurchaseRequestDetailDialog(requestId: item.id),
+                  builder: (_) =>
+                      _PurchaseRequestDetailDialog(requestId: item.id),
                 );
                 ref.invalidate(_purchaseRequestsProvider);
               },
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 child: Row(
                   children: [
                     Container(
@@ -205,7 +233,8 @@ class _PurchaseRequestsList extends ConsumerWidget {
                         color: AppColors.accentLight,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.assignment_turned_in_rounded, color: AppColors.accent),
+                      child: const Icon(Icons.assignment_turned_in_rounded,
+                          color: AppColors.accent),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -216,14 +245,16 @@ class _PurchaseRequestsList extends ConsumerWidget {
                             item.title.isNotEmpty ? item.title : item.number,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w800, fontSize: 14),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             '${item.number} · ${item.documentType} · ${item.currency}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                            style: TextStyle(
+                                color: AppColors.textSecondary, fontSize: 12),
                           ),
                         ],
                       ),
@@ -249,11 +280,15 @@ class _PurchaseRequestDetailDialog extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final detail = ref.watch(_purchaseRequestDetailProvider(requestId));
-    final suppliers = ref.watch(_purchaseSuppliersProvider).asData?.value ?? const <_LookupOption>[];
+    final suppliers = ref.watch(_purchaseSuppliersProvider).asData?.value ??
+        const <_LookupOption>[];
     final perms = ref.watch(permissionsProvider);
-    final canSend = perms.hasAnyPermission(['Purchases.Requests.Send', 'Purchases.Admin']);
-    final canQuote = perms.hasAnyPermission(['Purchases.SupplierQuotes.Create', 'Purchases.Admin']);
-    final canAward = perms.hasAnyPermission(['Purchases.Requests.Award', 'Purchases.Admin']);
+    final canSend =
+        perms.hasAnyPermission(['Purchases.Requests.Send', 'Purchases.Admin']);
+    final canQuote = perms.hasAnyPermission(
+        ['Purchases.SupplierQuotes.Create', 'Purchases.Admin']);
+    final canAward =
+        perms.hasAnyPermission(['Purchases.Requests.Award', 'Purchases.Admin']);
 
     return Dialog(
       insetPadding: const EdgeInsets.all(16),
@@ -263,17 +298,21 @@ class _PurchaseRequestDetailDialog extends ConsumerWidget {
           loading: () => const SizedBox(height: 360, child: LoadingState()),
           error: (_, __) => ErrorState(
             message: 'No se pudo cargar el detalle.',
-            onRetry: () => ref.invalidate(_purchaseRequestDetailProvider(requestId)),
+            onRetry: () =>
+                ref.invalidate(_purchaseRequestDetailProvider(requestId)),
           ),
           data: (data) {
-            final request = Map<String, dynamic>.from(data['request'] as Map? ?? const {});
+            final request =
+                Map<String, dynamic>.from(data['request'] as Map? ?? const {});
             final items = _list(data['items']);
             final requestSuppliers = _list(data['suppliers']);
             final quotes = _list(data['supplierQuotes']);
             final awards = _list(data['awards']);
             final number = request['number']?.toString() ?? requestId;
             final title = request['title']?.toString() ?? '';
-            final suppliersById = {for (final supplier in suppliers) supplier.id: supplier};
+            final suppliersById = {
+              for (final supplier in suppliers) supplier.id: supplier
+            };
 
             return Column(
               children: [
@@ -289,7 +328,8 @@ class _PurchaseRequestDetailDialog extends ConsumerWidget {
                               title.isNotEmpty ? title : number,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                              style: const TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.w900),
                             ),
                             const SizedBox(height: 2),
                             Text(
@@ -299,7 +339,8 @@ class _PurchaseRequestDetailDialog extends ConsumerWidget {
                           ],
                         ),
                       ),
-                      StatusBadge(status: request['status']?.toString() ?? 'DRAFT'),
+                      StatusBadge(
+                          status: request['status']?.toString() ?? 'DRAFT'),
                       IconButton(
                         tooltip: 'Cerrar',
                         icon: const Icon(Icons.close_rounded),
@@ -317,28 +358,42 @@ class _PurchaseRequestDetailDialog extends ConsumerWidget {
                         title: 'Items solicitados',
                         children: items
                             .map((item) => _InfoLine(
-                                  title: item['description']?.toString() ?? 'Item',
-                                  subtitle: 'Cantidad ${item['quantity'] ?? '-'}',
+                                  title:
+                                      item['description']?.toString() ?? 'Item',
+                                  subtitle:
+                                      'Cantidad ${item['quantity'] ?? '-'}',
                                   icon: Icons.inventory_2_outlined,
                                 ))
                             .toList(),
                       ),
                       _DetailSection(
                         title: 'Proveedores invitados',
-                        emptyText: 'Sin proveedores. Agregá uno antes de enviar.',
+                        emptyText:
+                            'Sin proveedores. Agregá uno antes de enviar.',
                         headerAction: AppButton.secondary(
                           label: 'Agregar proveedor',
                           icon: Icons.add_rounded,
-                          onPressed: suppliers.isEmpty ? null : () => _addSupplier(context, ref, requestSuppliers, suppliers),
+                          onPressed: suppliers.isEmpty
+                              ? null
+                              : () => _addSupplier(
+                                  context, ref, requestSuppliers, suppliers),
                         ),
                         children: requestSuppliers
                             .map((item) => _InfoLine(
-                                  title: _supplierLabel(item['supplier_id']?.toString() ?? item['supplierId']?.toString(), suppliers),
-                                  subtitle: item['status']?.toString() ?? 'DRAFT',
+                                  title: _supplierLabel(
+                                      item['supplier_id']?.toString() ??
+                                          item['supplierId']?.toString(),
+                                      suppliers),
+                                  subtitle:
+                                      item['status']?.toString() ?? 'DRAFT',
                                   icon: Icons.local_shipping_outlined,
                                   trailing: _SupplierContactActions(
-                                    supplier: suppliersById[item['supplier_id']?.toString() ?? item['supplierId']?.toString()],
-                                    publicToken: item['public_token']?.toString() ?? item['publicToken']?.toString(),
+                                    supplier: suppliersById[
+                                        item['supplier_id']?.toString() ??
+                                            item['supplierId']?.toString()],
+                                    publicToken:
+                                        item['public_token']?.toString() ??
+                                            item['publicToken']?.toString(),
                                     number: number,
                                   ),
                                 ))
@@ -369,8 +424,11 @@ class _PurchaseRequestDetailDialog extends ConsumerWidget {
                           title: 'Adjudicaciones',
                           children: awards
                               .map((award) => _InfoLine(
-                                    title: _supplierLabel(award['supplier_id']?.toString(), suppliers),
-                                    subtitle: '${award['mode'] ?? 'FULL'} · ${award['awarded_total'] ?? '-'}',
+                                    title: _supplierLabel(
+                                        award['supplier_id']?.toString(),
+                                        suppliers),
+                                    subtitle:
+                                        '${award['mode'] ?? 'FULL'} · ${award['awarded_total'] ?? '-'}',
                                     icon: Icons.emoji_events_outlined,
                                   ))
                               .toList(),
@@ -396,7 +454,8 @@ class _PurchaseRequestDetailDialog extends ConsumerWidget {
                         AppButton(
                           label: 'Cargar presupuesto',
                           icon: Icons.price_change_rounded,
-                          onPressed: () => _openQuoteForm(context, ref, items, requestSuppliers, suppliers),
+                          onPressed: () => _openQuoteForm(
+                              context, ref, items, requestSuppliers, suppliers),
                         ),
                     ],
                   ),
@@ -421,12 +480,18 @@ class _PurchaseRequestDetailDialog extends ConsumerWidget {
     List<_LookupOption> suppliers,
   ) async {
     final linkedIds = requestSuppliers
-        .map((item) => item['supplier_id']?.toString() ?? item['supplierId']?.toString() ?? '')
+        .map((item) =>
+            item['supplier_id']?.toString() ??
+            item['supplierId']?.toString() ??
+            '')
         .where((id) => id.isNotEmpty)
         .toSet();
-    final available = suppliers.where((supplier) => !linkedIds.contains(supplier.id)).toList();
+    final available = suppliers
+        .where((supplier) => !linkedIds.contains(supplier.id))
+        .toList();
     if (available.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No quedan proveedores disponibles para agregar.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No quedan proveedores disponibles para agregar.')));
       return;
     }
     final selected = await showModalBottomSheet<_LookupOption>(
@@ -435,7 +500,11 @@ class _PurchaseRequestDetailDialog extends ConsumerWidget {
       builder: (_) => ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
         children: [
-          Text('Agregar proveedor', style: TextStyle(color: AppColors.ink, fontSize: 20, fontWeight: FontWeight.w900)),
+          Text('Agregar proveedor',
+              style: TextStyle(
+                  color: AppColors.ink,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900)),
           const SizedBox(height: 12),
           ...available.map((supplier) => ListTile(
                 leading: const Icon(Icons.local_shipping_outlined),
@@ -485,7 +554,8 @@ class _PurchaseRequestDetailDialog extends ConsumerWidget {
     ref.invalidate(_purchaseRequestDetailProvider(requestId));
   }
 
-  static String _publicSupplierUrl(String token) => 'https://backoffice.diceprojects.com/public/purchases/$token';
+  static String _publicSupplierUrl(String token) =>
+      'https://backoffice.diceprojects.com/public/purchases/$token';
 
   static String _supplierMessage(String number, String token) =>
       'Hola, te enviamos la solicitud de presupuesto $number. Podés completar precios acá: ${_publicSupplierUrl(token)}';
@@ -514,7 +584,10 @@ class _SupplierContactActions extends StatelessWidget {
         IconButton(
           tooltip: 'Abrir link',
           icon: const Icon(Icons.link_rounded),
-          onPressed: () => _launchExternal(context, Uri.parse(_PurchaseRequestDetailDialog._publicSupplierUrl(token)), 'No se pudo abrir el link.'),
+          onPressed: () => _launchExternal(
+              context,
+              Uri.parse(_PurchaseRequestDetailDialog._publicSupplierUrl(token)),
+              'No se pudo abrir el link.'),
         ),
         IconButton(
           tooltip: phone.isEmpty ? 'Proveedor sin teléfono' : 'WhatsApp',
@@ -523,7 +596,8 @@ class _SupplierContactActions extends StatelessWidget {
               ? null
               : () => _launchExternal(
                     context,
-                    Uri.parse('https://api.whatsapp.com/send/?phone=$phone&text=${Uri.encodeComponent(_PurchaseRequestDetailDialog._supplierMessage(number, token))}&type=phone_number&app_absent=0'),
+                    Uri.parse(
+                        'https://api.whatsapp.com/send/?phone=$phone&text=${Uri.encodeComponent(_PurchaseRequestDetailDialog._supplierMessage(number, token))}&type=phone_number&app_absent=0'),
                     'No se pudo abrir WhatsApp.',
                   ),
         ),
@@ -539,7 +613,8 @@ class _SupplierContactActions extends StatelessWidget {
                       path: email,
                       queryParameters: {
                         'subject': 'Solicitud de presupuesto $number',
-                        'body': _PurchaseRequestDetailDialog._supplierMessage(number, token),
+                        'body': _PurchaseRequestDetailDialog._supplierMessage(
+                            number, token),
                       },
                     ),
                     'No se pudo abrir el email.',
@@ -554,10 +629,12 @@ class _PurchaseRequestCreateSheet extends ConsumerStatefulWidget {
   const _PurchaseRequestCreateSheet();
 
   @override
-  ConsumerState<_PurchaseRequestCreateSheet> createState() => _PurchaseRequestCreateSheetState();
+  ConsumerState<_PurchaseRequestCreateSheet> createState() =>
+      _PurchaseRequestCreateSheetState();
 }
 
-class _PurchaseRequestCreateSheetState extends ConsumerState<_PurchaseRequestCreateSheet> {
+class _PurchaseRequestCreateSheetState
+    extends ConsumerState<_PurchaseRequestCreateSheet> {
   final _formKey = GlobalKey<FormState>();
   final _title = TextEditingController();
   final _description = TextEditingController();
@@ -592,11 +669,17 @@ class _PurchaseRequestCreateSheetState extends ConsumerState<_PurchaseRequestCre
           controller: controller,
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
           children: [
-            Text('Nueva solicitud de presupuesto', style: TextStyle(color: AppColors.ink, fontSize: 22, fontWeight: FontWeight.w900)),
+            Text('Nueva solicitud de presupuesto',
+                style: TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900)),
             const SizedBox(height: 6),
-            Text('Tipo de comprobante: PRESUPUESTO', style: TextStyle(color: AppColors.textSecondary)),
+            Text('Tipo de comprobante: PRESUPUESTO',
+                style: TextStyle(color: AppColors.textSecondary)),
             const SizedBox(height: 16),
-            AppTextField(label: 'Titulo *', controller: _title, validator: _required),
+            AppTextField(
+                label: 'Titulo *', controller: _title, validator: _required),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -604,9 +687,15 @@ class _PurchaseRequestCreateSheetState extends ConsumerState<_PurchaseRequestCre
                   child: DropdownButtonFormField<String>(
                     initialValue: _currency,
                     decoration: const InputDecoration(labelText: 'Moneda'),
-                    items: _currencyOptions.map((code) => DropdownMenuItem(value: code, child: Text(code))).toList(),
-                    onChanged: _saving ? null : (value) => setState(() => _currency = value ?? 'ARS'),
-                    validator: (value) => value == null || value.isEmpty ? 'Requerido' : null,
+                    items: _currencyOptions
+                        .map((code) =>
+                            DropdownMenuItem(value: code, child: Text(code)))
+                        .toList(),
+                    onChanged: _saving
+                        ? null
+                        : (value) => setState(() => _currency = value ?? 'ARS'),
+                    validator: (value) =>
+                        value == null || value.isEmpty ? 'Requerido' : null,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -614,7 +703,8 @@ class _PurchaseRequestCreateSheetState extends ConsumerState<_PurchaseRequestCre
               ],
             ),
             const SizedBox(height: 10),
-            AppTextField(label: 'Descripcion', controller: _description, maxLines: 3),
+            AppTextField(
+                label: 'Descripcion', controller: _description, maxLines: 3),
             const SizedBox(height: 18),
             _SheetTitle(
               title: 'Proveedores',
@@ -626,7 +716,8 @@ class _PurchaseRequestCreateSheetState extends ConsumerState<_PurchaseRequestCre
             ),
             suppliersAsync.when(
               loading: () => const LinearProgressIndicator(),
-              error: (_, __) => const Text('No se pudieron cargar proveedores.'),
+              error: (_, __) =>
+                  const Text('No se pudieron cargar proveedores.'),
               data: (suppliers) => _SupplierMultiSelector(
                 suppliers: suppliers,
                 selectedIds: _supplierIds,
@@ -639,7 +730,8 @@ class _PurchaseRequestCreateSheetState extends ConsumerState<_PurchaseRequestCre
               action: IconButton(
                 tooltip: 'Agregar item',
                 icon: const Icon(Icons.add_rounded),
-                onPressed: () => setState(() => _items.add(_RequestItemDraft())),
+                onPressed: () =>
+                    setState(() => _items.add(_RequestItemDraft())),
               ),
             ),
             for (var i = 0; i < _items.length; i++) ...[
@@ -678,18 +770,34 @@ class _PurchaseRequestCreateSheetState extends ConsumerState<_PurchaseRequestCre
     );
   }
 
-  String? _required(String? value) => value == null || value.trim().isEmpty ? 'Requerido' : null;
+  String? _required(String? value) =>
+      value == null || value.trim().isEmpty ? 'Requerido' : null;
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    final auth = ref.read(authNotifierProvider);
+    final tenantId = auth.tenantId?.trim();
+    final sellerId = auth.sellerId?.trim().isNotEmpty == true
+        ? auth.sellerId!.trim()
+        : auth.sellerIds.length == 1
+            ? auth.sellerIds.first.trim()
+            : null;
+    if (!auth.isAdminGlobal && (tenantId == null || tenantId.isEmpty)) {
+      _showSnack(context, 'No pudimos resolver la empresa de la sesión.');
+      return;
+    }
+    if (!auth.isAdminGlobal && (sellerId == null || sellerId.isEmpty)) {
+      _showSnack(context, 'No pudimos resolver el seller de la sesión.');
+      return;
+    }
     setState(() => _saving = true);
     try {
-      final auth = ref.read(authNotifierProvider);
       await ref.read(dioProvider).post(
         '/v1/purchase-requests',
         data: {
-          'tenantId': auth.tenantId,
-          'sellerId': auth.sellerId,
+          'tenantId': tenantId,
+          'companyId': tenantId,
+          'sellerId': sellerId,
           'documentType': 'PRESUPUESTO',
           'title': _title.text.trim(),
           'description': _emptyToNull(_description.text),
@@ -719,7 +827,8 @@ class _SupplierQuoteSheet extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<_SupplierQuoteSheet> createState() => _SupplierQuoteSheetState();
+  ConsumerState<_SupplierQuoteSheet> createState() =>
+      _SupplierQuoteSheetState();
 }
 
 class _SupplierQuoteSheetState extends ConsumerState<_SupplierQuoteSheet> {
@@ -772,28 +881,48 @@ class _SupplierQuoteSheetState extends ConsumerState<_SupplierQuoteSheet> {
           controller: controller,
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
           children: [
-            Text('Cargar presupuesto proveedor', style: TextStyle(color: AppColors.ink, fontSize: 22, fontWeight: FontWeight.w900)),
+            Text('Cargar presupuesto proveedor',
+                style: TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900)),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              initialValue: suppliers.any((supplier) => supplier.id == _supplierId) ? _supplierId : null,
+              initialValue:
+                  suppliers.any((supplier) => supplier.id == _supplierId)
+                      ? _supplierId
+                      : null,
               decoration: const InputDecoration(labelText: 'Proveedor *'),
               items: suppliers
                   .map((supplier) => DropdownMenuItem(
                         value: supplier.id,
-                        child: Text(supplier.label, overflow: TextOverflow.ellipsis),
+                        child: Text(supplier.label,
+                            overflow: TextOverflow.ellipsis),
                       ))
                   .toList(),
-              validator: (value) => value == null || value.isEmpty ? 'Requerido' : null,
-              onChanged: _saving ? null : (value) => setState(() => _supplierId = value),
+              validator: (value) =>
+                  value == null || value.isEmpty ? 'Requerido' : null,
+              onChanged: _saving
+                  ? null
+                  : (value) => setState(() => _supplierId = value),
             ),
             const SizedBox(height: 10),
-            AppTextField(label: 'Numero de presupuesto', controller: _quoteNumber),
+            AppTextField(
+                label: 'Numero de presupuesto', controller: _quoteNumber),
             const SizedBox(height: 10),
             Row(
               children: [
-                Expanded(child: AppTextField(label: 'Impuestos', controller: _taxes, keyboardType: TextInputType.number)),
+                Expanded(
+                    child: AppTextField(
+                        label: 'Impuestos',
+                        controller: _taxes,
+                        keyboardType: TextInputType.number)),
                 const SizedBox(width: 10),
-                Expanded(child: AppTextField(label: 'Entrega dias', controller: _deliveryDays, keyboardType: TextInputType.number)),
+                Expanded(
+                    child: AppTextField(
+                        label: 'Entrega dias',
+                        controller: _deliveryDays,
+                        keyboardType: TextInputType.number)),
               ],
             ),
             const SizedBox(height: 10),
@@ -827,11 +956,16 @@ class _SupplierQuoteSheetState extends ConsumerState<_SupplierQuoteSheet> {
 
   List<_LookupOption> _allowedSuppliers() {
     final invitedIds = widget.requestSuppliers
-        .map((item) => item['supplier_id']?.toString() ?? item['supplierId']?.toString() ?? '')
+        .map((item) =>
+            item['supplier_id']?.toString() ??
+            item['supplierId']?.toString() ??
+            '')
         .where((id) => id.isNotEmpty)
         .toSet();
     if (invitedIds.isEmpty) return widget.suppliers;
-    return widget.suppliers.where((supplier) => invitedIds.contains(supplier.id)).toList();
+    return widget.suppliers
+        .where((supplier) => invitedIds.contains(supplier.id))
+        .toList();
   }
 
   String? _requiredNumber(String? value) {
@@ -892,7 +1026,8 @@ class _SupplierMultiSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (suppliers.isEmpty) {
-      return Text('No hay proveedores activos para seleccionar.', style: TextStyle(color: AppColors.textSecondary));
+      return Text('No hay proveedores activos para seleccionar.',
+          style: TextStyle(color: AppColors.textSecondary));
     }
     return Column(
       children: suppliers
@@ -947,7 +1082,9 @@ class _RequestItemEditor extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text('Item ${index + 1}', style: const TextStyle(fontWeight: FontWeight.w800))),
+              Expanded(
+                  child: Text('Item ${index + 1}',
+                      style: const TextStyle(fontWeight: FontWeight.w800))),
               if (canRemove)
                 IconButton(
                   tooltip: 'Quitar',
@@ -957,12 +1094,16 @@ class _RequestItemEditor extends StatelessWidget {
             ],
           ),
           DropdownButtonFormField<String>(
-            initialValue: products.any((product) => product.id == item.productId) ? item.productId : null,
+            initialValue:
+                products.any((product) => product.id == item.productId)
+                    ? item.productId
+                    : null,
             decoration: const InputDecoration(labelText: 'Artículo *'),
             items: products
                 .map((product) => DropdownMenuItem(
                       value: product.id,
-                      child: Text(product.label, overflow: TextOverflow.ellipsis),
+                      child:
+                          Text(product.label, overflow: TextOverflow.ellipsis),
                     ))
                 .toList(),
             onChanged: (value) {
@@ -977,20 +1118,33 @@ class _RequestItemEditor extends StatelessWidget {
               if (selected != null) item.description.text = selected.name;
               onChanged();
             },
-            validator: (value) => value == null || value.isEmpty ? 'Requerido' : null,
+            validator: (value) =>
+                value == null || value.isEmpty ? 'Requerido' : null,
           ),
           const SizedBox(height: 10),
-          AppTextField(label: 'Nombre para proveedor *', controller: item.description, validator: _required),
+          AppTextField(
+              label: 'Nombre para proveedor *',
+              controller: item.description,
+              validator: _required),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: AppTextField(label: 'Cantidad *', controller: item.quantity, keyboardType: TextInputType.number, validator: _requiredNumber)),
+              Expanded(
+                  child: AppTextField(
+                      label: 'Cantidad *',
+                      controller: item.quantity,
+                      keyboardType: TextInputType.number,
+                      validator: _requiredNumber)),
               const SizedBox(width: 10),
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  initialValue: _unitOptions.contains(item.unit) ? item.unit : 'UN',
+                  initialValue:
+                      _unitOptions.contains(item.unit) ? item.unit : 'UN',
                   decoration: const InputDecoration(labelText: 'Unidad'),
-                  items: _unitOptions.map((unit) => DropdownMenuItem(value: unit, child: Text(unit))).toList(),
+                  items: _unitOptions
+                      .map((unit) =>
+                          DropdownMenuItem(value: unit, child: Text(unit)))
+                      .toList(),
                   onChanged: (value) {
                     item.unit = value ?? 'UN';
                     onChanged();
@@ -1006,7 +1160,8 @@ class _RequestItemEditor extends StatelessWidget {
     );
   }
 
-  String? _required(String? value) => value == null || value.trim().isEmpty ? 'Requerido' : null;
+  String? _required(String? value) =>
+      value == null || value.trim().isEmpty ? 'Requerido' : null;
 
   String? _requiredNumber(String? value) {
     final parsed = double.tryParse((value ?? '').replaceAll(',', '.'));
@@ -1036,7 +1191,11 @@ class _DetailSection extends StatelessWidget {
   final Widget? headerAction;
   final String? emptyText;
 
-  const _DetailSection({required this.title, required this.children, this.headerAction, this.emptyText});
+  const _DetailSection(
+      {required this.title,
+      required this.children,
+      this.headerAction,
+      this.emptyText});
 
   @override
   Widget build(BuildContext context) {
@@ -1047,13 +1206,16 @@ class _DetailSection extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w900))),
+              Expanded(
+                  child: Text(title,
+                      style: const TextStyle(fontWeight: FontWeight.w900))),
               if (headerAction != null) headerAction!,
             ],
           ),
           const SizedBox(height: 8),
           if (children.isEmpty)
-            Text(emptyText ?? 'Sin datos.', style: TextStyle(color: AppColors.textSecondary))
+            Text(emptyText ?? 'Sin datos.',
+                style: TextStyle(color: AppColors.textSecondary))
           else
             ...children,
         ],
@@ -1098,7 +1260,9 @@ class _SheetTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w900))),
+        Expanded(
+            child: Text(title,
+                style: const TextStyle(fontWeight: FontWeight.w900))),
         if (action != null) action!,
       ],
     );
@@ -1126,7 +1290,9 @@ class _PurchaseRequestDto {
     return _PurchaseRequestDto(
       id: json['id']?.toString() ?? '',
       number: json['number']?.toString() ?? 'Sin numero',
-      documentType: (json['document_type'] ?? json['documentType'])?.toString() ?? 'PRESUPUESTO',
+      documentType:
+          (json['document_type'] ?? json['documentType'])?.toString() ??
+              'PRESUPUESTO',
       title: json['title']?.toString() ?? '',
       status: json['status']?.toString() ?? 'DRAFT',
       currency: json['currency']?.toString() ?? 'ARS',
@@ -1140,10 +1306,13 @@ class _LookupOption {
   final String? phone;
   final String? email;
 
-  const _LookupOption({required this.id, required this.label, this.phone, this.email});
+  const _LookupOption(
+      {required this.id, required this.label, this.phone, this.email});
 
   factory _LookupOption.supplier(Map<String, dynamic> json) {
-    final name = json['businessName']?.toString() ?? json['tradeName']?.toString() ?? 'Proveedor';
+    final name = json['businessName']?.toString() ??
+        json['tradeName']?.toString() ??
+        'Proveedor';
     final code = json['code']?.toString() ?? '';
     return _LookupOption(
       id: (json['supplierId'] ?? json['id'])?.toString() ?? '',
@@ -1159,7 +1328,8 @@ class _ProductOption {
   final String name;
   final String sku;
 
-  const _ProductOption({required this.id, required this.name, required this.sku});
+  const _ProductOption(
+      {required this.id, required this.name, required this.sku});
 
   String get label => sku.isEmpty ? name : '$name · $sku';
 
@@ -1196,10 +1366,16 @@ class _RequestItemDraft {
 
 List<Map<String, dynamic>> _list(Object? raw) {
   if (raw is List) {
-    return raw.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
+    return raw
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
   }
   if (raw is Map && raw['content'] is List) {
-    return (raw['content'] as List).whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
+    return (raw['content'] as List)
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
   }
   return const [];
 }
@@ -1217,7 +1393,8 @@ String? _emptyToNull(String value) {
   return text.isEmpty ? null : text;
 }
 
-String _normalizeWhatsappPhone(String? value, {String defaultCountryCode = '54'}) {
+String _normalizeWhatsappPhone(String? value,
+    {String defaultCountryCode = '54'}) {
   var digits = (value ?? '').replaceAll(RegExp(r'[^0-9]'), '');
   if (digits.isEmpty) return '';
   if (digits.startsWith('00')) digits = digits.substring(2);
@@ -1226,11 +1403,18 @@ String _normalizeWhatsappPhone(String? value, {String defaultCountryCode = '54'}
   return '$defaultCountryCode$digits';
 }
 
-Future<void> _launchExternal(BuildContext context, Uri uri, String errorMessage) async {
+Future<void> _launchExternal(
+    BuildContext context, Uri uri, String errorMessage) async {
   final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
   if (!opened && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMessage)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(errorMessage)));
   }
+}
+
+void _showSnack(BuildContext context, String message) {
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
 
 double? _num(Object? value) {
