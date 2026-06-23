@@ -86,6 +86,9 @@ class AuthState {
 // ─── Auth Notifier ────────────────────────────────────────────────────────────
 
 class AuthNotifier extends StateNotifier<AuthState> {
+  static const Duration _authRequestTimeout = Duration(seconds: 18);
+  static const Duration _permissionRequestTimeout = Duration(seconds: 6);
+
   final SecureStorageService _storage;
   final Dio _dio;
 
@@ -124,7 +127,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           'deviceId': await _getOrCreateDeviceId(),
           'deviceName': 'DiceProjects mobile',
         },
-      );
+      ).timeout(_authRequestTimeout);
 
       // Defensive parsing — avoids hard-cast TypeError if response shape is unexpected
       final data = response.data;
@@ -163,6 +166,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
             : ErrorHandler.handle(e).message;
       }
       state = state.copyWith(isLoading: false, error: message);
+      return false;
+    } on TimeoutException {
+      state = state.copyWith(
+        isLoading: false,
+        error:
+            'El inicio de sesión tardó demasiado. Revisá la conexión e intentá nuevamente.',
+      );
       return false;
     } catch (e) {
       state = state.copyWith(
@@ -212,7 +222,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           'refreshToken': refreshToken,
           'deviceId': deviceId,
         },
-      );
+      ).timeout(_authRequestTimeout);
       final data = response.data;
       final token = data is Map ? data['token']?.toString() : null;
       if (token == null || token.isEmpty || JwtDecoder.isExpired(token)) {
@@ -236,6 +246,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = const AuthState(
         isInitialized: true,
         error: 'Sesión expirada. Iniciá sesión nuevamente.',
+      );
+      return false;
+    } on TimeoutException {
+      await _storage.delete(AppConfig.tokenKey);
+      state = const AuthState(
+        isInitialized: true,
+        error: 'No pudimos validar la sesión. Iniciá sesión nuevamente.',
       );
       return false;
     } catch (_) {
@@ -403,7 +420,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final payload = JwtDecoder.decode(token);
     final scoped = _parseTenantAwarePermissionCodes(payload, tenantId);
     if (scoped.isNotEmpty) return scoped;
-    return JwtDecoder.getPermissions(token);
+    return JwtDecoder.getPermissions(token)
+        .map(_normalizePermissionCode)
+        .where((code) => code.isNotEmpty)
+        .toSet();
   }
 
   Future<Set<String>?> _fetchCurrentUserPermissions(
@@ -411,10 +431,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
     String? tenantId,
   ) async {
     try {
-      final resp = await _dio.get(
-        '/v1/me/permissions',
-        options: _tenantAwareOptions(token, tenantId),
-      );
+      final resp = await _dio
+          .get(
+            '/v1/me/permissions',
+            options: _tenantAwareOptions(token, tenantId),
+          )
+          .timeout(_permissionRequestTimeout);
       return _parseTenantAwarePermissionCodes(resp.data, tenantId);
     } catch (_) {
       return null;
@@ -426,13 +448,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
     String? tenantId,
     List<String> roles,
   ) async {
+    final roleCodes = roles
+        .map((role) => role.trim())
+        .where((role) => role.isNotEmpty)
+        .toSet();
+    if (roleCodes.isEmpty) return <String>{};
+
     final results = await Future.wait(
-      roles.map((roleCode) async {
+      roleCodes.map((roleCode) async {
         try {
-          final resp = await _dio.get(
-            '/v1/roles/$roleCode/permissions',
-            options: _tenantAwareOptions(token, tenantId),
-          );
+          final safeRoleCode = Uri.encodeComponent(roleCode.trim());
+          final resp = await _dio
+              .get(
+                '/v1/roles/$safeRoleCode/permissions',
+                options: _tenantAwareOptions(token, tenantId),
+              )
+              .timeout(_permissionRequestTimeout);
           return _parseTenantAwarePermissionCodes(resp.data, tenantId);
         } catch (_) {
           // Fallback compatible con versiones anteriores del backend.
@@ -558,7 +589,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (raw == null) return;
     if (raw is String) {
       for (final part in raw.split(RegExp(r'[\s,;]+'))) {
-        final value = part.trim();
+        final value = _normalizePermissionCode(part);
         if (value.isNotEmpty) out.add(value);
       }
       return;
@@ -585,6 +616,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
     }
   }
+
+  static String _normalizePermissionCode(String value) => value
+      .trim()
+      .toUpperCase()
+      .replaceAll(RegExp(r'[-_:\s]+'), '.')
+      .replaceAll(RegExp(r'\.+'), '.');
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
