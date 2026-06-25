@@ -272,7 +272,7 @@ class _BackofficeCopilotPanelState
         fromUser: false,
         title: 'Elegí una empresa para operar',
         body:
-            '$contextLine\n\nPuedo explicarte módulos globales y permisos, pero para operar clientes, proveedores, productos, ventas o proyectos necesito que elijas una empresa. Así evito mezclar datos entre organizaciones.',
+            '$contextLine\n\nPuedo explicarte módulos globales y permisos, pero para operar clientes, proveedores, productos, ventas, proyectos, propiedades o casos necesito que elijas una empresa. Así evito mezclar datos entre organizaciones.',
         actions: const [
           _ChatAction('Ver manuales', '/manual', null),
           _ChatAction('Ir al dashboard', '/dashboard', null),
@@ -407,6 +407,48 @@ class _BackofficeCopilotPanelState
       );
     }
 
+    if (_hasAny(text, [
+      'propiedad',
+      'propiedades',
+      'inmueble',
+      'inmobiliaria',
+      'alquiler',
+      'venta inmueble',
+      'amenity',
+      'amenities',
+      'publicar propiedad'
+    ])) {
+      return _guideOnlyAnswer(
+        contextLine: contextLine,
+        perms: perms,
+        manualId: 'properties',
+        gateRoute: '/properties/list',
+        action:
+            'Propiedades permite administrar inmuebles por empresa: operación, tipo, amenities, estado comercial, cliente asociado, caso relacionado, ficha pública e historial. La APK hoy lo acompaña con permisos y manual; la operación completa queda en la webapp hasta tener pantalla nativa.',
+      );
+    }
+
+    if (_hasAny(text, [
+      'caseflow',
+      'caso',
+      'casos',
+      'expediente',
+      'expedientes',
+      'plantilla documental',
+      'documento legal',
+      'vencimiento caso',
+      'tarea caso'
+    ])) {
+      return _guideOnlyAnswer(
+        contextLine: contextLine,
+        perms: perms,
+        manualId: 'caseflow',
+        gateRoute: '/caseflow/cases',
+        action:
+            'Gestión de casos ordena expedientes por empresa: tipo de caso, estado, tareas, documentos, vencimientos, costos, notas e historial. La APK respeta los permisos nuevos y guía el flujo; la pantalla operativa completa sigue en la webapp.',
+      );
+    }
+
     if (_hasAny(text, ['cotizacion', 'cotizar', 'venta'])) {
       if (_hasAny(
           text, ['generar', 'crear', 'nueva', 'nuevo', 'hacer', 'armar'])) {
@@ -522,7 +564,7 @@ class _BackofficeCopilotPanelState
       fromUser: false,
       title: 'Puedo ayudarte con estos flujos',
       body:
-          '$contextLine\n\nDecime qué querés lograr y te marco el camino: crear o buscar clientes, proveedores y productos; revisar usuarios, roles e invitaciones; cotizar ventas; pedir precios; armar obras o proyectos; revisar marketing, notificaciones, agenda, salud o almacenes.',
+          '$contextLine\n\nDecime qué querés lograr y te marco el camino: crear o buscar clientes, proveedores y productos; revisar usuarios, roles e invitaciones; cotizar ventas; pedir precios; armar obras o proyectos; revisar propiedades, casos, marketing, notificaciones, agenda, salud o almacenes.',
       actions: [
         const _ChatAction('Qué puedo hacer', null, 'que podes hacer'),
         const _ChatAction('Ver manuales', '/manual', null),
@@ -739,6 +781,56 @@ class _BackofficeCopilotPanelState
       ],
     );
   }
+
+  _ChatMessage _guideOnlyAnswer({
+    required String contextLine,
+    required PermissionsService perms,
+    required String manualId,
+    required String gateRoute,
+    required String action,
+  }) {
+    final manual = _manualById(manualId);
+    final allowed = perms.canAccessRoute(gateRoute);
+    final tenantId = effectiveTenantId(ref);
+    final missingTenant = _requiresTenant(gateRoute) &&
+        (tenantId == null || tenantId.trim().isEmpty);
+
+    if (!allowed) {
+      return _ChatMessage(
+        fromUser: false,
+        title: 'No tenés permiso para ese módulo',
+        body:
+            '$contextLine\n\nPuedo explicar el flujo, pero no voy a abrir ni consultar datos de ${manual?.title ?? 'este módulo'} porque tu sesión no tiene el permiso requerido.',
+        actions: [
+          if (manual != null)
+            _ChatAction('Ver manual', '/manual/${manual.id}', null),
+        ],
+      );
+    }
+
+    if (missingTenant) {
+      return _ChatMessage(
+        fromUser: false,
+        title: 'Falta elegir empresa',
+        body:
+            '$contextLine\n\nEste flujo trabaja con datos de una empresa. Elegí una empresa en el dashboard y después puedo guiarte dentro de ese alcance.',
+        actions: const [
+          _ChatAction('Ir al dashboard', '/dashboard', null),
+        ],
+      );
+    }
+
+    return _ChatMessage(
+      fromUser: false,
+      title: manual?.title ?? 'Guía operativa',
+      body:
+          '$contextLine\n\n$action\n\n${manual?.keyExample ?? ''}\n\nTenés permisos para este flujo. En mobile te dejo guía y manual para no llevarte a una pantalla que todavía no existe nativa.',
+      actions: [
+        if (manual != null)
+          _ChatAction('Ver manual', '/manual/${manual.id}', null),
+      ],
+    );
+  }
 }
 
 class _CopilotContextCard extends StatelessWidget {
@@ -858,6 +950,8 @@ class _QuickPromptBar extends StatelessWidget {
       'Buscar proveedor',
       'Buscar cliente',
       'Buscar producto',
+      'Propiedades',
+      'Casos',
       'Cómo cuida tokens',
     ];
     return SizedBox(
@@ -1312,7 +1406,9 @@ bool _requiresTenant(String route) {
       route.startsWith('/partners') ||
       route.startsWith('/sales') ||
       route.startsWith('/purchases') ||
-      route.startsWith('/projects');
+      route.startsWith('/projects') ||
+      route.startsWith('/properties') ||
+      route.startsWith('/caseflow');
 }
 
 List<Map<String, dynamic>> _itemsFromPayload(dynamic data) {
@@ -1604,6 +1700,50 @@ const _manuals = [
       'Ventas usa productos para cotizar.',
       'Almacenes controla stock físico.',
       'Marketing mide vistas, likes y productos destacados.',
+    ],
+  ),
+  _ManualDefinition(
+    id: 'properties',
+    title: 'Manual Propiedades',
+    subtitle: 'Inmuebles, publicación, amenities, estado e historial.',
+    icon: Icons.home_work_rounded,
+    purpose:
+        'Administra propiedades por empresa para operación inmobiliaria o comercial: ficha del inmueble, tipo de operación, amenities, estado, cliente asociado, caso relacionado e historial.',
+    keyExample:
+        'Una inmobiliaria puede cargar un departamento, marcarlo en alquiler o venta, publicar ficha web, asociar un interesado como cliente y vincular un expediente de reserva o documentación.',
+    quickStart: [
+      'Elegí la empresa antes de operar propiedades.',
+      'Configurá tipos de operación, tipos de propiedad y amenities.',
+      'Creá la propiedad con ubicación, precio, estado e imágenes.',
+      'Asociá cliente o caso cuando exista una negociación activa.',
+      'Usá historial para auditar cambios de estado, precio y publicación.',
+    ],
+    related: [
+      'Clientes contiene interesados y propietarios.',
+      'Gestión de casos puede seguir reserva, documentación o cierre.',
+      'Marketing puede publicar formularios o leads inmobiliarios.',
+    ],
+  ),
+  _ManualDefinition(
+    id: 'caseflow',
+    title: 'Manual Gestión de casos',
+    subtitle: 'Expedientes, tareas, documentos, vencimientos y costos.',
+    icon: Icons.business_center_rounded,
+    purpose:
+        'Ordena procesos por empresa que necesitan seguimiento formal: casos, tipos, estados, tareas, documentos, plantillas, vencimientos, costos, notas e historial.',
+    keyExample:
+        'Un caso de reserva inmobiliaria puede tener tareas de documentación, vencimientos, costos, notas internas y documentos generados desde plantillas antes del cierre.',
+    quickStart: [
+      'Elegí empresa para trabajar dentro del tenant correcto.',
+      'Configurá tipos de caso y estados si el flujo lo requiere.',
+      'Creá el caso con cliente, responsable, prioridad y referencia externa.',
+      'Agregá tareas, documentos, vencimientos, costos y notas.',
+      'Revisá historial para entender cambios y decisiones tomadas.',
+    ],
+    related: [
+      'Propiedades puede vincular inmuebles a casos activos.',
+      'Clientes identifica interesados, titulares o contactos.',
+      'Notificaciones puede avisar vencimientos y cambios relevantes.',
     ],
   ),
   _ManualDefinition(

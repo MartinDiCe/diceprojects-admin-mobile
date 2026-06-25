@@ -119,6 +119,16 @@ const Map<String, List<String>> permissionGates = {
     'Projects.Integral.Projects.View',
     'Projects.Admin',
   ],
+  '/properties/dashboard': [
+    'Properties.Access',
+    'Properties.Dashboard.View',
+    'Properties.Admin',
+  ],
+  '/caseflow/dashboard': [
+    'CaseFlow.Access',
+    'CaseFlow.Dashboard.View',
+    'CaseFlow.Admin',
+  ],
 
   // Seguridad
   '/iam/users/new': [
@@ -458,6 +468,66 @@ const Map<String, List<String>> permissionGates = {
     'Projects.Integral.ProjectTemplates.List',
     'Projects.Integral.ProjectTemplates.View',
     'Projects.Admin',
+  ],
+
+  // Propiedades
+  '/properties/list': [
+    'Properties.Access',
+    'Properties.Properties.List',
+    'Properties.Properties.View',
+    'Properties.Admin',
+  ],
+  '/properties/settings': [
+    'Properties.Access',
+    'Properties.PropertyTypes.List',
+    'Properties.Amenities.List',
+    'Properties.OperationTypes.List',
+    'Properties.Admin',
+  ],
+  '/properties/operation-types': [
+    'Properties.Access',
+    'Properties.OperationTypes.List',
+    'Properties.Admin',
+  ],
+  '/properties/property-types': [
+    'Properties.Access',
+    'Properties.PropertyTypes.List',
+    'Properties.Admin',
+  ],
+  '/properties/amenities': [
+    'Properties.Access',
+    'Properties.Amenities.List',
+    'Properties.Admin',
+  ],
+  '/properties': [
+    'Properties.Access',
+    'Properties.Properties.List',
+    'Properties.Properties.View',
+    'Properties.Admin',
+  ],
+
+  // CaseFlow
+  '/caseflow/cases': [
+    'CaseFlow.Access',
+    'CaseFlow.Cases.List',
+    'CaseFlow.Cases.View',
+    'CaseFlow.Admin',
+  ],
+  '/caseflow/types': [
+    'CaseFlow.Access',
+    'CaseFlow.Types.List',
+    'CaseFlow.Types.Edit',
+    'CaseFlow.Admin',
+  ],
+  '/caseflow/templates': [
+    'CaseFlow.Access',
+    'CaseFlow.Documents.List',
+    'CaseFlow.Documents.Edit',
+    'CaseFlow.Admin',
+  ],
+  '/caseflow': [
+    'CaseFlow.Access',
+    'CaseFlow.Admin',
   ],
 
   // Warehouse
