@@ -486,17 +486,23 @@ class AuthNotifier extends StateNotifier<AuthState> {
     String token,
     String? tenantId,
   ) async {
-    try {
-      final resp = await _dio
-          .get(
-            '/v1/me/permissions',
-            options: _tenantAwareOptions(token, tenantId),
-          )
-          .timeout(_permissionRequestTimeout);
-      return _parseTenantAwarePermissionCodes(resp.data, tenantId);
-    } catch (_) {
-      return null;
+    for (final path in const [
+      '/v1/me/permissions/compact',
+      '/v1/me/permissions',
+    ]) {
+      try {
+        final resp = await _dio
+            .get(
+              path,
+              options: _tenantAwareOptions(token, tenantId),
+            )
+            .timeout(_permissionRequestTimeout);
+        return _parseTenantAwarePermissionCodes(resp.data, tenantId);
+      } catch (_) {
+        // Fallback to the legacy endpoint while older backends finish rolling out.
+      }
     }
+    return null;
   }
 
   Future<Set<String>> _fetchPermissionsByRoles(
