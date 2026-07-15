@@ -531,6 +531,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     PermissionsService perms,
     String route,
   ) {
+    if (route == '/logs/apitraces' && !auth.isAdminGlobal) {
+      return false;
+    }
     if (_isSellerScopedUser(auth) &&
         !_isAllowedPathForSellerOperational(route)) {
       return false;

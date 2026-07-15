@@ -476,8 +476,8 @@ final dashboardDataProvider =
   final canIam = perms.canAccessRoute('/iam/users');
   final canWarehouse = perms.canAccessRoute('/dashboard/warehouse') ||
       perms.canAccessRoute('/warehouse/stock');
-  final canApiTraces = perms
-      .hasAnyPermission(['Logs.ApiTraces.List', 'Logs.Admin', 'IAM.Admin']);
+  final canApiTraces = auth.isAdminGlobal &&
+      perms.hasAnyPermission(['Logs.ApiTraces.List', 'Logs.Admin', 'IAM.Admin']);
 
   final products = canProducts
       ? await _getPage(dio, '/v1/products',
