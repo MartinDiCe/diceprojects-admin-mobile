@@ -205,6 +205,64 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await _buildStateFromToken(safeToken);
   }
 
+  Future<bool> switchTenant(String? tenantId) async {
+    final normalizedTenantId = tenantId?.trim();
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final response = await _dio.post(
+        '/auth/switch-tenant',
+        data: {
+          'tenantId': normalizedTenantId == null || normalizedTenantId.isEmpty
+              ? null
+              : normalizedTenantId,
+        },
+      ).timeout(_authRequestTimeout);
+
+      final data = response.data;
+      final token = data is Map ? data['token']?.toString() : null;
+      if (token == null || token.isEmpty || JwtDecoder.isExpired(token)) {
+        state = state.copyWith(
+          isLoading: false,
+          error: 'No pudimos activar la empresa seleccionada.',
+        );
+        return false;
+      }
+
+      await _storage.write(AppConfig.tokenKey, token);
+      await _buildStateFromToken(token);
+      return true;
+    } on DioException catch (e) {
+      final responseData = e.response?.data;
+      final backendMsg = responseData is Map
+          ? (responseData['detail'] ??
+                  responseData['message'] ??
+                  responseData['error'])
+              ?.toString()
+          : null;
+      state = state.copyWith(
+        isLoading: false,
+        error: backendMsg?.isNotEmpty == true
+            ? backendMsg
+            : 'No pudimos activar la empresa seleccionada.',
+      );
+      return false;
+    } on TimeoutException {
+      state = state.copyWith(
+        isLoading: false,
+        error: 'El cambio de empresa tardó demasiado. Intentá nuevamente.',
+      );
+      return false;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: kDebugMode
+            ? 'Error: ${e.toString().split('\n').first}'
+            : 'No pudimos activar la empresa seleccionada.',
+      );
+      return false;
+    }
+  }
+
   Future<bool> refreshMobileSession() async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
@@ -541,11 +599,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Options _tenantAwareOptions(String token, String? tenantId) {
-    final tenant = tenantId?.trim();
     return Options(
       headers: {
         'Authorization': 'Bearer $token',
-        if (tenant != null && tenant.isNotEmpty) 'X-Tenant-Id': tenant,
       },
       extra: const {'skipUnauthorizedHandler': true},
     );

@@ -5,10 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class PermissionsService {
   final Set<String> _permissions;
   final bool _isAdminGlobal;
+  final bool _hasAdministratorRole;
 
   const PermissionsService(
     this._permissions,
     this._isAdminGlobal,
+    this._hasAdministratorRole,
   );
 
   bool hasPermission(String code) {
@@ -89,7 +91,8 @@ class PermissionsService {
     return '/manual';
   }
 
-  bool get _canBypassPermissionChecks => _isAdminGlobal;
+  bool get _canBypassPermissionChecks =>
+      _isAdminGlobal || _hasAdministratorRole;
 
   bool get hasLocalPermissionData =>
       _canBypassPermissionChecks || _permissions.isNotEmpty;
@@ -169,5 +172,6 @@ final permissionsProvider = Provider<PermissionsService>((ref) {
   return PermissionsService(
     auth.permissions,
     auth.isAdminGlobal,
+    auth.hasAdministratorRole,
   );
 });

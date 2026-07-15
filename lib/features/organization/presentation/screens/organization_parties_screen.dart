@@ -337,9 +337,14 @@ class _PartyScopeBar extends ConsumerWidget {
                     ),
                   )
                   .toList(),
-              onChanged: (value) => ref
-                  .read(operationalContextProvider.notifier)
-                  .setTenant(value),
+              onChanged: (value) async {
+                final ok = await ref
+                    .read(authNotifierProvider.notifier)
+                    .switchTenant(value);
+                if (!ok) return;
+                ref.read(operationalContextProvider.notifier).setTenant(value);
+                ref.invalidate(sellerScopeOptionsProvider);
+              },
             ),
           ),
           sellers.when(

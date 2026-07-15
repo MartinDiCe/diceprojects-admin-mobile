@@ -1070,15 +1070,8 @@ Future<Map<String, dynamic>> _marketingScope(
   return params;
 }
 
-Map<String, String>? _marketingHeaders(AuthState auth, {String? tenantId}) {
-  final headers = <String, String>{};
-  if (auth.roles.isNotEmpty) headers['X-Roles'] = auth.roles.join(',');
-  final tenant = tenantId?.trim();
-  if (tenant != null && tenant.isNotEmpty) {
-    headers['X-Tenant-Id'] = tenant;
-  }
-  return headers.isEmpty ? null : headers;
-}
+Map<String, String>? _marketingHeaders(AuthState auth, {String? tenantId}) =>
+    null;
 
 Map<String, dynamic> _dashboardScope(
   AuthState auth, {
@@ -1181,13 +1174,14 @@ Future<_PageData> _getPage(
   Map<String, dynamic>? extra,
   Map<String, String>? headers,
 }) async {
+  final safeSize = _allowedPageSize(size);
   try {
     final resp = await dio.get(
       path,
       queryParameters: {
         'page': 0,
-        'size': size,
-        'pageSize': size,
+        'size': safeSize,
+        'pageSize': safeSize,
         if (extra != null) ...extra,
       },
       options: headers == null ? null : Options(headers: headers),
@@ -1208,6 +1202,14 @@ Future<_PageData> _getPage(
     return const _PageData(items: [], total: 0);
   }
   return const _PageData(items: [], total: 0);
+}
+
+int _allowedPageSize(int requested) {
+  const allowed = [10, 20, 50, 100, 200, 500, 1000];
+  for (final size in allowed) {
+    if (requested <= size) return size;
+  }
+  return allowed.last;
 }
 
 Future<Map<String, dynamic>> _getMap(
@@ -2836,11 +2838,17 @@ class _DashboardScopeSelector extends ConsumerWidget {
                     .toList(),
                 onChanged: lockTenant
                     ? null
-                    : (value) {
+                    : (value) async {
+                        final ok = await ref
+                            .read(authNotifierProvider.notifier)
+                            .switchTenant(value);
+                        if (!ok) return;
                         ref.read(marketingTenantFilterProvider.notifier).state =
                             value;
                         ref.read(marketingSellerFilterProvider.notifier).state =
                             null;
+                        ref.invalidate(dashboardDataProvider);
+                        ref.invalidate(_dashboardSellersProvider);
                       },
               );
             },
