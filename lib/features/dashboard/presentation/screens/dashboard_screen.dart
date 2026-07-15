@@ -521,9 +521,14 @@ final dashboardDataProvider =
   final warehouses = canWarehouse
       ? await _getPage(dio, '/v1/warehouses', size: 1)
       : const _PageData(items: [], total: 0);
-  final stock = canWarehouse
-      ? await _getPage(dio, '/v1/warehouse/stock', size: 1)
-      : const _PageData(items: [], total: 0);
+  final warehouseSummary = canWarehouse
+      ? await _getMap(
+          dio,
+          '/v1/warehouse/reporting/summary',
+          extra: scope,
+          headers: headers,
+        )
+      : const <String, dynamic>{};
   final traces = canApiTraces
       ? await _getPage(dio, '/v1/apitraces', size: 120)
       : const _PageData(items: [], total: 0);
@@ -563,7 +568,7 @@ final dashboardDataProvider =
     people: people.total,
     users: users.total,
     warehouses: warehouses.total,
-    stockRows: stock.total,
+    stockRows: _intAny(warehouseSummary, ['stockItems', 'stockRows']),
     apiRequests: traceItems.length,
     api2xx: traceItems.where((item) {
       final status = _intAny(item, ['httpResponseCode', 'status']);
@@ -723,14 +728,12 @@ final warehouseDashboardDetailsProvider = FutureProvider.autoDispose
   if (summary.isEmpty) {
     final warehouses = await _getPage(dio, '/v1/warehouses',
         size: 200, extra: scope, headers: headers);
-    final stock = await _getPage(dio, '/v1/warehouse/stock',
-        size: 200, extra: scope, headers: headers);
     return WarehouseDashboardDetails(
       warehouses: warehouses.total,
       activeWarehouses: warehouses.items
           .where((item) => _boolAny(item, ['active', 'enabled']))
           .length,
-      stockRows: stock.total,
+      stockRows: 0,
       movements: 0,
     );
   }
